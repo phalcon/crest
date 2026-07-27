@@ -28,8 +28,8 @@ use function sprintf;
  *
  * Package discovery is deferred: withDiscovery() records the composer key but
  * scans nothing. The scan happens on the first name that misses the seeded map,
- * or when all() is called, so `crest about` never pays for reading every
- * installed package's composer metadata.
+ * or when all() is called, so running a seeded command never pays for reading
+ * every installed package's composer metadata.
  *
  * Aliases resolve through get()/has() but never appear in all(), so `list`
  * shows one row per command.
@@ -107,8 +107,8 @@ final class Registry
      * Scans nothing: discovery runs on the first lookup that misses the seeded
      * map, or on all().
      *
-     * This is how phalcon/migrations contributes `migration:*` without crest
-     * knowing it exists.
+     * This is how phalcon/migrations contributes `migration:*` without the
+     * owning tool knowing it exists.
      */
     public function withDiscovery(string $key): static
     {

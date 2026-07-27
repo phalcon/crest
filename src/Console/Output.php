@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Crest\Console;
 
+use Crest\Console\Parsing\Definition;
+
 use function fwrite;
 use function getenv;
 use function implode;
@@ -98,6 +100,63 @@ final class Output
             }
 
             $this->line(rtrim(implode('  ', $cells)));
+        }
+    }
+
+    /**
+     * Renders a command's usage block from its definition. Presentation lives
+     * here rather than on Definition so the schema stays a pure data structure
+     * when it is promoted into cli-options-parser.
+     */
+    public function usage(string $tool, Definition $definition): void
+    {
+        $line = 'Usage: ' . $tool . ' ' . $definition->getName();
+
+        foreach ($definition->getArguments() as $argument) {
+            $line .= true === $argument->required
+                ? ' <' . $argument->name . '>'
+                : ' [' . $argument->name . ']';
+        }
+
+        if ([] !== $definition->getOptions()) {
+            $line .= ' [options]';
+        }
+
+        if ('' !== $definition->getDescription()) {
+            $this->line($definition->getDescription());
+            $this->line();
+        }
+
+        $this->line($line);
+
+        if ([] !== $definition->getArguments()) {
+            $this->line();
+            $this->line('Arguments:');
+
+            $rows = [];
+            foreach ($definition->getArguments() as $argument) {
+                $rows[] = ['  ' . $argument->name, $argument->description];
+            }
+
+            $this->table(['', ''], $rows, false);
+        }
+
+        if ([] !== $definition->getOptions()) {
+            $this->line();
+            $this->line('Options:');
+
+            $rows = [];
+            foreach ($definition->getOptions() as $option) {
+                $flag = '  --' . $option->name;
+
+                if (null !== $option->short) {
+                    $flag .= ', -' . $option->short;
+                }
+
+                $rows[] = [$flag, $option->description];
+            }
+
+            $this->table(['', ''], $rows, false);
         }
     }
 

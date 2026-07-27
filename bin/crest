@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * This file is part of the Phalcon Crest.
+ *
+ * (c) Phalcon Team <team@phalcon.io>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+use Crest\Commands;
+use Crest\Console\Kernel;
+
+// Dev checkout: bin/../vendor; installed dependency: vendor/phalcon/crest/bin -> vendor.
+foreach ([dirname(__DIR__) . '/vendor/autoload.php', dirname(__DIR__, 3) . '/autoload.php'] as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+
+if (!class_exists(Kernel::class)) {
+    fwrite(STDERR, 'crest: could not locate the composer autoloader.' . PHP_EOL);
+    exit(1);
+}
+
+$kernel = new Kernel(Commands::NAME, Commands::registry(), Commands::PACKAGE);
+
+exit($kernel->handle($_SERVER['argv'] ?? []));
