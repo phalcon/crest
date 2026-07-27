@@ -15,9 +15,17 @@ namespace Crest\Console\Parsing;
 
 use Crest\Console\Parsing\Exceptions\Exception;
 
+use function array_key_exists;
+use function array_keys;
+use function array_shift;
+use function count;
 use function explode;
 use function sprintf;
 use function str_contains;
+use function str_split;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * A command's schema. Declared once, then used for three things: binding argv
@@ -65,6 +73,56 @@ final class Definition
         $this->arguments[] = new Argument($name, $required, $default, $description);
 
         return $this;
+    }
+
+    /**
+     * Binds raw tokens against this schema. The schema is consulted *during*
+     * tokenization: without it, `--force GET` would consume `GET` as the value
+     * of a flag and lose the positional entirely.
+     *
+     * @param list<string> $tokens argv minus the script name and command name
+     */
+    public function bind(array $tokens): Bound
+    {
+        $options     = [];
+        $positionals = [];
+        $literal     = false;
+
+        while ([] !== $tokens) {
+            $token = array_shift($tokens);
+
+            if (true === $literal) {
+                $positionals[] = $token;
+
+                continue;
+            }
+
+            if ('--' === $token) {
+                $literal = true;
+
+                continue;
+            }
+
+            if (true === str_starts_with($token, '--')) {
+                $this->bindLongOption(substr($token, 2), $tokens, $options);
+
+                continue;
+            }
+
+            if (true === str_starts_with($token, '-') && strlen($token) > 1) {
+                $this->bindShortOptions(substr($token, 1), $tokens, $options);
+
+                continue;
+            }
+
+            $positionals[] = $token;
+        }
+
+        return new Bound(
+            $this->resolveArguments($positionals),
+            $this->resolveOptions($options),
+            array_keys($options)
+        );
     }
 
     public function findOption(string $name): ?Option
@@ -154,6 +212,51 @@ final class Definition
         return $this;
     }
 
+    /**
+     * @param list<string>         $tokens
+     * @param array<string, mixed> $options
+     */
+    private function bindLongOption(string $token, array &$tokens, array &$options): void
+    {
+        $value = null;
+        if (true === str_contains($token, '=')) {
+            [$token, $value] = explode('=', $token, 2);
+        }
+
+        $option = $this->findOption($token);
+        if (null === $option) {
+            throw new Exception(sprintf("unknown option '--%s'", $token));
+        }
+
+        $options[$option->name] = $this->valueFor($option, $value, $tokens, true);
+    }
+
+    /**
+     * @param list<string>         $tokens
+     * @param array<string, mixed> $options
+     */
+    private function bindShortOptions(string $cluster, array &$tokens, array &$options): void
+    {
+        $letters = str_split($cluster);
+        $last    = count($letters) - 1;
+
+        foreach ($letters as $index => $letter) {
+            $option = $this->findOption($letter);
+            if (null === $option) {
+                throw new Exception(sprintf("unknown option '-%s'", $letter));
+            }
+
+            // Only the final letter in a cluster may consume the next token:
+            // in `-fq value`, `value` belongs to `q`, never to `f`.
+            $options[$option->name] = $this->valueFor(
+                $option,
+                null,
+                $tokens,
+                $index === $last
+            );
+        }
+    }
+
     private function guardAgainstCollision(Option $option): void
     {
         if (null !== $this->findOption($option->name)) {
@@ -163,5 +266,102 @@ final class Definition
         if (null !== $option->short && null !== $this->findOption($option->short)) {
             throw new Exception(sprintf("option '-%s' is already declared", $option->short));
         }
+    }
+
+    /**
+     * @param list<string> $positionals
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveArguments(array $positionals): array
+    {
+        $resolved = [];
+
+        foreach ($this->arguments as $index => $argument) {
+            if (true === array_key_exists($index, $positionals)) {
+                $resolved[$argument->name] = $positionals[$index];
+
+                continue;
+            }
+
+            if (true === $argument->required) {
+                throw new Exception(sprintf("missing required argument '%s'", $argument->name));
+            }
+
+            $resolved[$argument->name] = $argument->default;
+        }
+
+        $extra = count($positionals) - count($this->arguments);
+        if ($extra > 0) {
+            throw new Exception(
+                sprintf("unexpected argument '%s'", $positionals[count($this->arguments)])
+            );
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param array<string, mixed> $supplied
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveOptions(array $supplied): array
+    {
+        $resolved = [];
+
+        foreach ($this->options as $option) {
+            $resolved[$option->name] = $supplied[$option->name]
+                ?? ($option->mode === OptionMode::None ? false : $option->default);
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param list<string> $tokens     Remaining tokens, shifted in place when
+     *                                 this option takes the next one as its
+     *                                 value.
+     * @param bool         $mayConsume False for a non-final letter in a short
+     *                                 cluster, which can never own the next
+     *                                 token.
+     */
+    private function valueFor(
+        Option $option,
+        ?string $attached,
+        array &$tokens,
+        bool $mayConsume,
+    ): mixed {
+        if ($option->mode === OptionMode::None) {
+            if (null !== $attached) {
+                throw new Exception(sprintf("option '--%s' takes no value", $option->name));
+            }
+
+            return true;
+        }
+
+        $value = $attached;
+
+        if (null === $value && true === $mayConsume && [] !== $tokens) {
+            $next = $tokens[0];
+
+            if ('--' !== $next && false === str_starts_with($next, '-')) {
+                $value = array_shift($tokens);
+            }
+        }
+
+        if (null === $value) {
+            if ($option->mode === OptionMode::Optional) {
+                return $option->default;
+            }
+
+            throw new Exception(sprintf("option '--%s' requires a value", $option->name));
+        }
+
+        if ($option->mode === OptionMode::List) {
+            return explode(',', $value);
+        }
+
+        return $value;
     }
 }
