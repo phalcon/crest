@@ -63,15 +63,13 @@ jobs:
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --ignore-platform-reqs is required, not cosmetic: phalcon/talon pulls
-      # symfony/browser-kit, which needs PHP >= 8.2, so a plain install refuses
-      # to run on the 8.1 floor. Nothing in this suite loads browser-kit - the
-      # browser traits are unused here - so the constraint is a dev-tooling
-      # artifact rather than a real floor for crest itself.
+      # No --ignore-platform-reqs: composer.json pins config.platform.php to
+      # 8.1.0, so the lock resolves against the floor and installs cleanly on
+      # every matrix cell.
       - name: "Install dependencies with Composer"
         uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
         with:
-          composer-options: "--prefer-dist --ignore-platform-reqs"
+          composer-options: "--prefer-dist"
 
       - name: "PHPCS"
         run: composer cs
@@ -117,15 +115,13 @@ jobs:
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --ignore-platform-reqs is required, not cosmetic: phalcon/talon pulls
-      # symfony/browser-kit, which needs PHP >= 8.2, so a plain install refuses
-      # to run on the 8.1 floor. Nothing in this suite loads browser-kit - the
-      # browser traits are unused here - so the constraint is a dev-tooling
-      # artifact rather than a real floor for crest itself.
+      # No --ignore-platform-reqs: composer.json pins config.platform.php to
+      # 8.1.0, so the lock resolves against the floor and installs cleanly on
+      # every matrix cell.
       - name: "Install dependencies with Composer"
         uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
         with:
-          composer-options: "--prefer-dist --ignore-platform-reqs"
+          composer-options: "--prefer-dist"
 
       - name: "Unit tests"
         run: composer test
