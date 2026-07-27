@@ -115,6 +115,69 @@ final class ActionCommandTest extends TestCase
         $this->assertStringContainsString("\$id = \$request->getAttributes()->get('id');", $contents);
     }
 
+    public function testUnknownResponderIsRejected(): void
+    {
+        $status = $this->runCommand(['GET', '/health', '--responder', 'xml']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "unknown responder 'xml'; expected json or view",
+            $this->readStderr()
+        );
+    }
+
+    public function testResponderNameIsCaseInsensitive(): void
+    {
+        $status = $this->runCommand(['GET', '/privacy', '--responder', 'VIEW']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'ViewResponder $responder',
+            (string) file_get_contents($this->root . '/src/Action/Privacy/GetPrivacy.php')
+        );
+    }
+
+    public function testExistingLowerPrecedenceCandidateIsReported(): void
+    {
+        // Crest\Tests\Support\Action\Company\GetCompany exists, and the router
+        // lists it as a candidate for GET /company/all behind GetCompanyAll.
+        // Generating that route must say so.
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['namespaces' => "
+            . "['action' => 'Crest\\\\Tests\\\\Support\\\\Action']];\n"
+        );
+
+        $status = $this->runCommand(['GET', '/company/all']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'Note: Crest\Tests\Support\Action\Company\GetCompany also matches this route',
+            $this->readStdout()
+        );
+    }
+
+    public function testNothingIsReportedWhenNoOtherCandidateExists(): void
+    {
+        $status = $this->runCommand(['GET', '/company/all']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringNotContainsString('Note:', $this->readStdout());
+    }
+
+    public function testCreatedPathAndRouteAreReported(): void
+    {
+        $this->runCommand(['GET', '/company/all']);
+
+        $output = $this->readStdout();
+
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/src/Action/Company/GetCompanyAll.php',
+            $output
+        );
+        $this->assertStringContainsString('Answers GET /company/all', $output);
+    }
+
     /**
      * @param list<string> $arguments
      */

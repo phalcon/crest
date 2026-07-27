@@ -131,6 +131,102 @@ final class ConfigTest extends TestCase
         $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
+    public function testNamespaceForReturnsThePrefixAloneWhenThePathIsTheRoot(): void
+    {
+        // paths.action equals the psr-4 directory exactly, so there is no
+        // remainder to append.
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => 'src']];\n"
+        );
+
+        $this->assertSame('App', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testNamespaceForKeepsTheLongestMatchWhenAShorterOneComesLater(): void
+    {
+        // Declaration order puts the deeper directory first, so the second,
+        // shorter match must not displace it.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"Deep\\\\":"src/Action/","App\\\\":"src/"}}}'
+        );
+        mkdir($this->root . '/src/Action/Company', 0o775, true);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => 'src/Action/Company']];\n"
+        );
+
+        $this->assertSame('Deep\Company', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testCrestPhpWithoutAComposerJsonHasAnEmptyPsr4Map(): void
+    {
+        // No composer.json at all: crest.php still loads, but namespaceFor()
+        // has nothing to resolve against and must say so rather than guess.
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['namespace' => 'Shop'];\n"
+        );
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame('Shop', $config->namespace());
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("no psr-4 autoload entry covers 'src/Action'");
+
+        $config->namespaceFor('action');
+    }
+
+    public function testNoUsablePsr4EntryThrows(): void
+    {
+        // composer.json exists but every declared directory is missing, so
+        // there is nothing to infer a root namespace from.
+        $this->writeComposerJson(['Ghost\\' => 'missing/']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('no crest.php and no usable psr-4 autoload entry found');
+
+        Config::discover($this->root);
+    }
+
+    public function testPsr4TargetMayBeDeclaredAsAList(): void
+    {
+        // composer allows "App\\": ["src/", "lib/"]; the first entry wins.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"App\\\\":["src/","lib/"]}}}'
+        );
+
+        $this->assertSame('App', Config::discover($this->root)->namespace());
+    }
+
+    public function testPsr4EntryWithAnEmptyTargetIsSkipped(): void
+    {
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"Empty\\\\":"","App\\\\":"src/"}}}'
+        );
+
+        $this->assertSame('App', Config::discover($this->root)->namespace());
+    }
+
+    public function testUnknownFlavorThrows(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['flavor' => 'nope'];\n"
+        );
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown flavor 'nope'");
+
+        Config::discover($this->root);
+    }
+
     public function testUnknownPathKeyThrows(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);

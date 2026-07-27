@@ -17,7 +17,10 @@ use Crest\Console\Kernel;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\Console\FakeCommand;
+use Crest\Tests\Support\Console\ThrowingCommand;
 use PHPUnit\Framework\TestCase;
+
+use function strpos;
 
 use const PHP_EOL;
 
@@ -107,9 +110,108 @@ final class KernelTest extends TestCase
         $this->assertStringContainsString('demo', $this->readStdout());
     }
 
+    public function testDoubleDashShieldsALaterHelpFlagFromTheKernel(): void
+    {
+        // `--` makes everything after it literal, so a positional of '--help'
+        // must reach the command instead of printing usage.
+        $status = $this->kernel()->handle(['demo', 'fake', '--', '--help']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame('hello --help' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testDoubleDashShieldsALaterTraceFlagFromTheKernel(): void
+    {
+        // Same rule for --trace: after `--` it is a value, so the failure below
+        // must still render as a single line with no stack frames.
+        $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b', '--', '--trace']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringNotContainsString('#0', $this->readStderr());
+    }
+
+    public function testListCommandsIsSortedByName(): void
+    {
+        $registry = (new Registry())
+            ->add('zebra', FakeCommand::class)
+            ->add('alpha', ThrowingCommand::class);
+
+        $kernel = new Kernel('demo', $registry, 'phalcon/crest', $this->stdout, $this->stderr, false);
+
+        $kernel->handle(['demo']);
+
+        $output = $this->readStdout();
+
+        $this->assertLessThan(strpos($output, 'zebra'), strpos($output, 'alpha'));
+    }
+
+    public function testListingShowsEachCommandDescription(): void
+    {
+        $this->kernel()->handle(['demo']);
+
+        $this->assertStringContainsString('A command that exists only for tests', $this->readStdout());
+    }
+
+    public function testShortHelpFlagAlsoRendersUsage(): void
+    {
+        $status = $this->kernel()->handle(['demo', 'fake', '-h']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('Usage: demo fake', $this->readStdout());
+    }
+
+    public function testShortVersionFlagMatchesTheLongOne(): void
+    {
+        $status = $this->kernel()->handle(['demo', '-V']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringStartsWith('demo ', $this->readStdout());
+    }
+
+    public function testTraceAddsStackFramesToABindingError(): void
+    {
+        $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b', '--trace']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('#0', $this->readStderr());
+    }
+
+    public function testUnexpectedThrowableIsAlsoOneCleanLine(): void
+    {
+        $status = $this->throwingKernel()->handle(['demo', 'boom']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('demo: the wheels came off', $this->readStderr());
+        $this->assertStringNotContainsString('#0', $this->readStderr());
+    }
+
+    public function testUnexpectedThrowableHonoursTrace(): void
+    {
+        $status = $this->throwingKernel()->handle(['demo', 'boom', '--trace']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('#0', $this->readStderr());
+    }
+
+    public function testVersionLineCarriesAResolvedVersion(): void
+    {
+        $this->kernel()->handle(['demo', '--version']);
+
+        // 'demo ' plus something - an empty version would mean the package
+        // lookup silently failed.
+        $this->assertMatchesRegularExpression('/^demo \S+/', $this->readStdout());
+    }
+
     private function kernel(): Kernel
     {
         $registry = (new Registry())->add('fake', FakeCommand::class);
+
+        return new Kernel('demo', $registry, 'phalcon/crest', $this->stdout, $this->stderr, false);
+    }
+
+    private function throwingKernel(): Kernel
+    {
+        $registry = (new Registry())->add('boom', ThrowingCommand::class);
 
         return new Kernel('demo', $registry, 'phalcon/crest', $this->stdout, $this->stderr, false);
     }

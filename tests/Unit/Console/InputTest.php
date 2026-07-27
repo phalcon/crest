@@ -40,6 +40,27 @@ final class InputTest extends TestCase
         $this->assertSame(['id', 'name'], $input->option('fields'));
     }
 
+    public function testCommandNameIsExposed(): void
+    {
+        $this->assertSame('make:action', $this->input()->command);
+    }
+
+    public function testHasOptionDelegatesToWhatWasSupplied(): void
+    {
+        $input = $this->input();
+
+        $this->assertTrue($input->hasOption('responder'));
+        $this->assertFalse($input->hasOption('force'));
+    }
+
+    public function testOptionAndArgumentReturnRawValues(): void
+    {
+        $input = $this->input();
+
+        $this->assertFalse($input->option('force'));
+        $this->assertSame('/company/all', $input->argument('path'));
+    }
+
     public function testOptionStringIsEmptyWhenAbsent(): void
     {
         $this->assertSame('', $this->input()->optionString('missing'));

@@ -117,6 +117,19 @@ final class DefinitionTest extends TestCase
             ->argument('path', true);
     }
 
+    public function testDescriptionIsExposed(): void
+    {
+        $this->assertSame('Make it', Definition::for('make:action', 'Make it')->getDescription());
+    }
+
+    public function testUnknownModeSuffixIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown option mode '=x'");
+
+        Definition::for('make:action')->option('stub=x', 'Stub');
+    }
+
     public function testUnknownOptionReturnsNull(): void
     {
         $definition = Definition::for('about');

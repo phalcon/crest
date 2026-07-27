@@ -113,6 +113,72 @@ final class BindTest extends TestCase
         $this->assertSame('view', $bound->option('responder'));
     }
 
+    public function testFlagWithAnAttachedValueIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("option '--force' takes no value");
+
+        $this->definition()->bind(['GET', '/health', '--force=yes']);
+    }
+
+    public function testOptionalValueOptionFallsBackToItsDefaultWhenBare(): void
+    {
+        $definition = Definition::for('make:action')->option('output=s?', 'Output', 'stdout');
+
+        $this->assertSame('stdout', $definition->bind(['--output'])->option('output'));
+    }
+
+    public function testOnlyTheFinalLetterOfAClusterConsumesTheNextToken(): void
+    {
+        $definition = Definition::for('serve')
+            ->option('force|f', 'Force', false)
+            ->option('output|o=s', 'Output', '');
+
+        $bound = $definition->bind(['-fo', 'build']);
+
+        // 'build' belongs to -o, the last letter; -f stays a bare flag.
+        $this->assertTrue($bound->option('force'));
+        $this->assertSame('build', $bound->option('output'));
+    }
+
+    public function testUnknownShortOptionThrows(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown option '-z'");
+
+        $this->definition()->bind(['GET', '/health', '-z']);
+    }
+
+    public function testValueOptionDoesNotSwallowAFollowingOption(): void
+    {
+        $definition = Definition::for('make:action')
+            ->option('output=s?', 'Output', 'stdout')
+            ->option('force', 'Force', false);
+
+        $bound = $definition->bind(['--output', '--force']);
+
+        // '--force' looks like the next token but is an option, so --output
+        // falls back to its default rather than eating it.
+        $this->assertSame('stdout', $bound->option('output'));
+        $this->assertTrue($bound->option('force'));
+    }
+
+    public function testOptionalArgumentFallsBackToItsDeclaredDefault(): void
+    {
+        $definition = Definition::for('greet')
+            ->argument('subject', false, 'Who', 'world');
+
+        $this->assertSame('world', $definition->bind([])->argument('subject'));
+    }
+
+    public function testSuppliedOptionsAreDistinguishedFromDefaulted(): void
+    {
+        $bound = $this->definition()->bind(['GET', '/health', '--force']);
+
+        $this->assertTrue($bound->hasOption('force'));
+        $this->assertFalse($bound->hasOption('responder'));
+    }
+
     private function definition(): Definition
     {
         return Definition::for('make:action')
