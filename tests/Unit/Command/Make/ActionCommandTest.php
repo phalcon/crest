@@ -115,6 +115,55 @@ final class ActionCommandTest extends TestCase
         $this->assertStringContainsString("\$id = \$request->getAttributes()->get('id');", $contents);
     }
 
+    public function testAttributeAccessorsAreSeparatedFromTheBodyByABlankLine(): void
+    {
+        $this->runCommand(['GET', '/company/{id}/users/{userId}']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
+
+        // Exact block: one accessor per placeholder, then a single blank line
+        // before the body the stub already carries.
+        $expected = "        \$id = \$request->getAttributes()->get('id');\n"
+            . "        \$userId = \$request->getAttributes()->get('userId');\n"
+            . "\n"
+            . "        \$payload = Payload::success([]);";
+
+        $this->assertStringContainsString($expected, $contents);
+    }
+
+    public function testViewTemplateStripsPlaceholderBraces(): void
+    {
+        $this->runCommand(['GET', '/company/{id}', '--responder=view']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
+
+        // Braces must not survive into the template name: dropping either
+        // str_replace would leave 'company/{id/index' or 'company/id}/index'.
+        $this->assertStringContainsString("withTemplate('company/id/index')", $contents);
+    }
+
+    public function testRootRouteGetsTheIndexTemplate(): void
+    {
+        $this->runCommand(['GET', '/', '--responder=view']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Get.php');
+
+        $this->assertStringContainsString("withTemplate('index/index')", $contents);
+    }
+
+    public function testActionWithNoPlaceholdersHasNoAccessorBlock(): void
+    {
+        $this->runCommand(['GET', '/health']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php');
+
+        $this->assertStringNotContainsString('getAttributes()', $contents);
+        $this->assertStringContainsString(
+            "    {\n        \$payload = Payload::success([]);",
+            $contents
+        );
+    }
+
     public function testUnknownResponderIsRejected(): void
     {
         $status = $this->runCommand(['GET', '/health', '--responder', 'xml']);

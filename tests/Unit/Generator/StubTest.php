@@ -74,6 +74,49 @@ final class StubTest extends TestCase
         }
     }
 
+    public function testTrailingSlashesOnEitherRootAreIgnored(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+        file_put_contents($this->root . '/project/resources/stubs/adr/action.stub', 'project');
+
+        $stub = new Stub($this->root . '/packaged/', $this->root . '/project/');
+
+        // Without the rtrim both paths would carry a doubled separator and
+        // neither file would be found.
+        $this->assertSame('project', $stub->render('adr', 'action', []));
+    }
+
+    public function testPackagedRootIsUsedWhenNoProjectRootIsGivenAtAll(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged {{ class }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->assertSame('packaged X', $stub->render('adr', 'action', ['class' => 'X']));
+    }
+
+    public function testResolveReturnsTheWinningPath(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+        file_put_contents($this->root . '/project/resources/stubs/adr/action.stub', 'project');
+
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertSame(
+            $this->root . '/project/resources/stubs/adr/action.stub',
+            $stub->resolve('adr', 'action')
+        );
+    }
+
+    public function testUnreplacedPlaceholdersAreLeftAlone(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ a }}|{{ b }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->assertSame('X|{{ b }}', $stub->render('adr', 'action', ['a' => 'X']));
+    }
+
     public function testUnknownStubThrows(): void
     {
         $stub = new Stub($this->root . '/packaged', $this->root . '/project');

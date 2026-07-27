@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Console;
 
 use Crest\Console\Kernel;
+use Crest\Console\PackageVersion;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\Console\FakeCommand;
@@ -145,11 +146,19 @@ final class KernelTest extends TestCase
         $this->assertLessThan(strpos($output, 'zebra'), strpos($output, 'alpha'));
     }
 
-    public function testListingShowsEachCommandDescription(): void
+    public function testListingIsBannerBlankLineThenTable(): void
     {
         $this->kernel()->handle(['demo']);
 
-        $this->assertStringContainsString('A command that exists only for tests', $this->readStdout());
+        // Asserted whole: the banner is concatenated and the blank line and
+        // header row are each a separate call, so substring checks let a
+        // dropped separator or a missing row through.
+        $expected = 'demo ' . PackageVersion::of('phalcon/crest') . PHP_EOL
+            . PHP_EOL
+            . 'COMMAND  DESCRIPTION' . PHP_EOL
+            . 'fake     A command that exists only for tests' . PHP_EOL;
+
+        $this->assertSame($expected, $this->readStdout());
     }
 
     public function testShortHelpFlagAlsoRendersUsage(): void

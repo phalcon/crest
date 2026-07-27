@@ -180,6 +180,24 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
     }
 
+    public function testContributedCommandResolvesThroughGetWithoutListingFirst(): void
+    {
+        // get() misses the seeded map, so resolve() itself has to trigger the
+        // scan - nothing has called all() to do it beforehand.
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+
+        $registry = (new Registry())->withDiscovery(self::KEY);
+
+        $this->assertSame(FakeCommand::class, $registry->get('fake'));
+    }
+
+    public function testContributedCommandIsVisibleToHasWithoutListingFirst(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+
+        $this->assertTrue((new Registry())->withDiscovery(self::KEY)->has('fake'));
+    }
+
     public function testDiscoveryIsSkippedEntirelyWithoutAKey(): void
     {
         $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);

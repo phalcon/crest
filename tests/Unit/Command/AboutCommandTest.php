@@ -14,12 +14,18 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command;
 
 use Crest\Command\AboutCommand;
+use Crest\Commands;
 use Crest\Console\Input;
 use Crest\Console\Output;
+use Crest\Console\PackageVersion;
 use Crest\Console\Parsing\Bound;
 use Crest\Tests\Support\CapturesOutput;
 use PHPUnit\Framework\TestCase;
 
+use function extension_loaded;
+use function phpversion;
+
+use const PHP_EOL;
 use const PHP_VERSION;
 
 final class AboutCommandTest extends TestCase
@@ -43,16 +49,62 @@ final class AboutCommandTest extends TestCase
 
     public function testReportsPhalconPhpAndCrestRows(): void
     {
+        $status = $this->about();
+
+        // Asserted whole rather than by substring: the row values are built by
+        // concatenation, and a loose assertion lets a dropped separator or a
+        // reordered operand through unnoticed.
+        $expected = 'ITEM     VALUE' . PHP_EOL
+            . 'PHP      ' . PHP_VERSION . PHP_EOL
+            . 'Phalcon  ' . $this->expectedPhalcon() . PHP_EOL
+            . 'Crest    ' . PackageVersion::of(Commands::PACKAGE) . PHP_EOL;
+
+        $this->assertSame(0, $status);
+        $this->assertSame($expected, $this->readStdout());
+    }
+
+    public function testPhalconRowNamesTheSourceItResolvedFrom(): void
+    {
+        $this->about();
+
+        $text = $this->readStdout();
+
+        // Whichever variant is installed, the row has to say which one - that
+        // is the whole point of the command.
+        if (true === extension_loaded('phalcon')) {
+            $this->assertStringContainsString(' (ext-phalcon)', $text);
+
+            return;
+        }
+
+        $this->assertStringContainsString(' (phalcon/phalcon)', $text);
+    }
+
+    public function testCrestRowResolvesToARealVersion(): void
+    {
+        $this->about();
+
+        $this->assertStringContainsString(
+            'Crest    ' . PackageVersion::of(Commands::PACKAGE),
+            $this->readStdout()
+        );
+        $this->assertNotSame(PackageVersion::UNKNOWN, PackageVersion::of(Commands::PACKAGE));
+    }
+
+    private function about(): int
+    {
         $output = new Output($this->stdout, $this->stderr, false);
         $input  = new Input('about', new Bound([], [], []));
 
-        $status = (new AboutCommand())->handle($input, $output);
-        $text   = $this->readStdout();
+        return (new AboutCommand())->handle($input, $output);
+    }
 
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString('PHP', $text);
-        $this->assertStringContainsString(PHP_VERSION, $text);
-        $this->assertStringContainsString('Phalcon', $text);
-        $this->assertStringContainsString('Crest', $text);
+    private function expectedPhalcon(): string
+    {
+        if (true === extension_loaded('phalcon')) {
+            return (string) phpversion('phalcon') . ' (ext-phalcon)';
+        }
+
+        return PackageVersion::of('phalcon/phalcon') . ' (phalcon/phalcon)';
     }
 }
