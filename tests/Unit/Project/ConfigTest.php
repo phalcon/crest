@@ -280,6 +280,24 @@ final class ConfigTest extends TestCase
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
 
+    public function testScanKeepsLookingAfterRejectingAShorterMatch(): void
+    {
+        // Order matters: a longer match sits behind a shorter one, so the
+        // rejection has to skip that entry rather than end the search.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"Mid\\\\":"src/Action/","App\\\\":"src/",'
+            . '"Deepest\\\\":"src/Action/Company/"}}}'
+        );
+        mkdir($this->root . '/src/Action/Company', 0o775, true);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => 'src/Action/Company']];\n"
+        );
+
+        $this->assertSame('Deepest', Config::discover($this->root)->namespaceFor('action'));
+    }
+
     public function testFirstDeclarationWinsWhenTwoPsr4DirectoriesTie(): void
     {
         // Equal-length matches: the earlier declaration keeps the win, so the

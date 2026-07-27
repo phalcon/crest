@@ -180,6 +180,46 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
     }
 
+    public function testScanContinuesPastAPackageWithANonArrayExtraEntry(): void
+    {
+        // A malformed contributor must be skipped, not abort the whole scan.
+        $this->installTwoPackages(
+            [self::KEY => 'nonsense'],
+            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
+        );
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testScanContinuesPastAPackageWithANonArrayCommandsEntry(): void
+    {
+        $this->installTwoPackages(
+            [self::KEY => ['commands' => 'nonsense']],
+            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
+        );
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testScanContinuesPastANumericCommandName(): void
+    {
+        // The bad entry comes first, so a break would hide the good one.
+        $this->installExtra([
+            self::KEY => ['commands' => [FakeCommand::class, 'fake' => FakeCommand::class]],
+        ]);
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testScanContinuesPastAnUnloadableClass(): void
+    {
+        $this->installExtra([
+            self::KEY => ['commands' => ['ghost' => 'No\\Such\\CommandClass', 'fake' => FakeCommand::class]],
+        ]);
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
     public function testContributedCommandResolvesThroughGetWithoutListingFirst(): void
     {
         // get() misses the seeded map, so resolve() itself has to trigger the
@@ -232,6 +272,24 @@ final class RegistryTest extends TestCase
         InstalledVersions::reload([
             'root'     => $this->installed['root'],
             'versions' => ['vendor/pkg' => ['dev_requirement' => false, 'extra' => $extra]],
+        ]);
+    }
+
+    /**
+     * Two packages in scan order, so a guard that aborts the loop instead of
+     * skipping one entry is visible.
+     *
+     * @param array<string, mixed> $first
+     * @param array<string, mixed> $second
+     */
+    private function installTwoPackages(array $first, array $second): void
+    {
+        InstalledVersions::reload([
+            'root'     => $this->installed['root'],
+            'versions' => [
+                'vendor/bad'  => ['dev_requirement' => false, 'extra' => $first],
+                'vendor/good' => ['dev_requirement' => false, 'extra' => $second],
+            ],
         ]);
     }
 }

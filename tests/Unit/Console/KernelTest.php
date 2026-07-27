@@ -146,6 +146,20 @@ final class KernelTest extends TestCase
         $this->assertLessThan(strpos($output, 'zebra'), strpos($output, 'alpha'));
     }
 
+    public function testGlobalsAreDeclaredOnceAndPubliclyReadable(): void
+    {
+        // Public because a tool embedding the kernel needs to document the
+        // options it inherits without re-declaring them.
+        $globals = Kernel::globals();
+
+        $this->assertSame('', $globals->getName());
+        $this->assertNotNull($globals->findOption('config'));
+        $this->assertNotNull($globals->findOption('directory'));
+        $this->assertNotNull($globals->findOption('trace'));
+        $this->assertSame('help', $globals->findOption('h')?->name);
+        $this->assertSame('quiet', $globals->findOption('q')?->name);
+    }
+
     public function testListingIsBannerBlankLineThenTable(): void
     {
         $this->kernel()->handle(['demo']);

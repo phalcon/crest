@@ -21,23 +21,37 @@ use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function chdir;
 use function file_get_contents;
 use function file_put_contents;
+use function getcwd;
 
 final class ActionCommandTest extends TestCase
 {
     use CapturesOutput;
     use ScratchDirectory;
 
+    private string $previousCwd = '';
+
     protected function setUp(): void
     {
         $this->makeScratchDirectory('make-action', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
         $this->captureStreams();
+
+        // The command writes real files, and Config::discover() falls back to
+        // the working directory when --directory does not reach it. Under
+        // mutation testing that fallback is reachable, and from the repository
+        // root it would generate into the actual src/ tree. Running from the
+        // scratch directory keeps even the fallback contained.
+        $this->previousCwd = (string) getcwd();
+        chdir($this->root);
     }
 
     protected function tearDown(): void
     {
+        chdir($this->previousCwd);
+
         $this->closeStreams();
         $this->removeScratchDirectory();
     }
@@ -162,6 +176,22 @@ final class ActionCommandTest extends TestCase
             "    {\n        \$payload = Payload::success([]);",
             $contents
         );
+    }
+
+    public function testPathArgumentIsRequired(): void
+    {
+        $status = $this->runCommand(['GET']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("missing required argument 'path'", $this->readStderr());
+    }
+
+    public function testMethodArgumentIsRequired(): void
+    {
+        $status = $this->runCommand([]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("missing required argument 'method'", $this->readStderr());
     }
 
     public function testUnknownResponderIsRejected(): void

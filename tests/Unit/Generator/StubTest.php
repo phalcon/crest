@@ -81,9 +81,13 @@ final class StubTest extends TestCase
 
         $stub = new Stub($this->root . '/packaged/', $this->root . '/project/');
 
-        // Without the rtrim both paths would carry a doubled separator and
-        // neither file would be found.
-        $this->assertSame('project', $stub->render('adr', 'action', []));
+        // Asserted on the resolved path, not the contents: a doubled separator
+        // still opens the right file, so only the path itself shows the rtrim
+        // is doing its job.
+        $this->assertSame(
+            $this->root . '/project/resources/stubs/adr/action.stub',
+            $stub->resolve('adr', 'action')
+        );
     }
 
     public function testPackagedRootIsUsedWhenNoProjectRootIsGivenAtAll(): void
@@ -93,6 +97,18 @@ final class StubTest extends TestCase
         $stub = new Stub($this->root . '/packaged');
 
         $this->assertSame('packaged X', $stub->render('adr', 'action', ['class' => 'X']));
+    }
+
+    public function testPackagedRootIsAlsoStrippedOfATrailingSlash(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+
+        $stub = new Stub($this->root . '/packaged/');
+
+        $this->assertSame(
+            $this->root . '/packaged/adr/action.stub',
+            $stub->resolve('adr', 'action')
+        );
     }
 
     public function testResolveReturnsTheWinningPath(): void

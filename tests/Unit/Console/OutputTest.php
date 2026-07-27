@@ -158,6 +158,17 @@ final class OutputTest extends TestCase
         $this->assertSame('a           b' . PHP_EOL, $this->readStdout());
     }
 
+    public function testTableGivesAnEntirelyEmptyColumnNoWidth(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        // Column 0 is empty in both the header and the row, so it must occupy
+        // no characters at all - only the separator remains before 'x'.
+        $output->table(['', '', ''], [['', 'x', 'y']], false);
+
+        $this->assertSame('  x  y' . PHP_EOL, $this->readStdout());
+    }
+
     public function testTableTrimsTrailingPaddingFromTheLastColumn(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);

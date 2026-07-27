@@ -130,6 +130,39 @@ final class DefinitionTest extends TestCase
         Definition::for('make:action')->option('stub=x', 'Stub');
     }
 
+    public function testArgumentsAreOptionalUnlessAskedToBeRequired(): void
+    {
+        // No explicit second argument: the default must leave it optional, so
+        // binding nothing is legal.
+        $definition = Definition::for('greet')->argument('subject');
+
+        $this->assertNull($definition->bind([])->argument('subject'));
+    }
+
+    public function testDuplicateOptionOnTheSameDefinitionIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("option '--force' is already declared");
+
+        Definition::for('make:action')->option('force')->option('force');
+    }
+
+    public function testModeSuffixIsTakenWholeNotUpToTheSecondEquals(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown option mode '=s=x'");
+
+        Definition::for('make:action')->option('stub=s=x', 'Stub');
+    }
+
+    public function testShortAliasIsEverythingAfterTheFirstPipe(): void
+    {
+        $definition = Definition::for('about')->option('help|h|x', 'Help');
+
+        $this->assertSame('help', $definition->findOption('h|x')?->name);
+        $this->assertNull($definition->findOption('h'));
+    }
+
     public function testUnknownOptionReturnsNull(): void
     {
         $definition = Definition::for('about');

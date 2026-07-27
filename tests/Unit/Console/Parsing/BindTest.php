@@ -179,6 +179,53 @@ final class BindTest extends TestCase
         $this->assertFalse($bound->hasOption('responder'));
     }
 
+    public function testALoneDashIsAPositionalNotAnOption(): void
+    {
+        // Conventionally '-' means stdin; it is one character, so the short
+        // option branch must not claim it.
+        $definition = Definition::for('cat')->argument('file', false);
+
+        $this->assertSame('-', $definition->bind(['-'])->argument('file'));
+    }
+
+    public function testEveryTokenAfterTheDoubleDashIsKept(): void
+    {
+        $bound = $this->definition()->bind(['--', 'GET', '/health']);
+
+        $this->assertSame('GET', $bound->argument('method'));
+        $this->assertSame('/health', $bound->argument('path'));
+    }
+
+    public function testParsingContinuesAfterAShortOptionCluster(): void
+    {
+        $definition = Definition::for('make:action')
+            ->argument('method', true)
+            ->argument('path', true)
+            ->option('force|f', 'Overwrite', false);
+
+        $bound = $definition->bind(['-f', 'GET', '/health']);
+
+        $this->assertTrue($bound->option('force'));
+        $this->assertSame('GET', $bound->argument('method'));
+        $this->assertSame('/health', $bound->argument('path'));
+    }
+
+    public function testAttachedValueMayItselfContainAnEqualsSign(): void
+    {
+        $bound = $this->definition()->bind(['GET', '/health', '--responder=a=b']);
+
+        $this->assertSame('a=b', $bound->option('responder'));
+    }
+
+    public function testAnAttachedValueStopsTheOptionConsumingTheNextToken(): void
+    {
+        $bound = $this->definition()->bind(['--responder=view', 'GET', '/health']);
+
+        $this->assertSame('view', $bound->option('responder'));
+        $this->assertSame('GET', $bound->argument('method'));
+        $this->assertSame('/health', $bound->argument('path'));
+    }
+
     private function definition(): Definition
     {
         return Definition::for('make:action')

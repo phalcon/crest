@@ -10,10 +10,104 @@
         "summary": "../tests/_output/infection/summary.log"
     },
     "tmpDir": "../tests/_output/infection/tmp",
+    // The suite is at 100% on both. Set as a floor so a regression fails the
+    // run instead of quietly lowering the score.
+    "minMsi": 100,
+    "minCoveredMsi": 100,
     "phpUnit": {
         "configDir": "."
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        "ArrayItemRemoval": {
+            // usage() aligns two untitled columns by passing an empty header
+            // row. Both cells are '', so they contribute no width and dropping
+            // one changes nothing that is printed.
+            "ignore": ["Crest\\Console\\Output::usage"]
+        },
+        "CastString": {
+            "ignore": [
+                // Guarded by is_file() immediately above, so file_get_contents()
+                // cannot return false on any path reaching the cast.
+                "Crest\\Generator\\Stub::render",
+                "Crest\\Project\\Config::psr4Map",
+                // getcwd() returns false only when the working directory is
+                // unreadable, which the suite cannot produce.
+                "Crest\\Project\\Config::discover",
+                // Environment branch: reachable only with ext-phalcon loaded,
+                // which the v6 image does not have. Covered by the v5 cell.
+                "Crest\\Command\\AboutCommand::phalcon"
+            ]
+        },
+        "CatchBlockRemoval": {
+            // The console-exception arm and the Throwable arm render the same
+            // one-line error and return the same status, so removing the
+            // narrower arm is unobservable. Kept because the distinction is
+            // deliberate: one is a user error, the other a bug.
+            "ignore": ["Crest\\Console\\Kernel::handle"]
+        },
+        "Catch_": {
+            "ignore": ["Crest\\Console\\Kernel::handle"]
+        },
+        "Concat": {
+            "ignore": [
+                // Phalcon-missing guard: unreachable while Phalcon is loadable,
+                // which it always is when the suite runs.
+                "Crest\\Adr\\PhalconRouterCandidates::candidatesFor",
+                "Crest\\Command\\AboutCommand::phalcon"
+            ]
+        },
+        "ConcatOperandRemoval": {
+            "ignore": [
+                "Crest\\Adr\\PhalconRouterCandidates::candidatesFor",
+                "Crest\\Command\\AboutCommand::phalcon"
+            ]
+        },
+        "Coalesce": {
+            // resolve() looks the alias up twice: once as a fast path that
+            // avoids discovery, once after it. Either lookup alone answers
+            // correctly, so swapping the operands of one is unobservable.
+            "ignore": ["Crest\\Console\\Registry::resolve"]
+        },
+        "DecrementInteger": {
+            "ignore": [
+                // mkdir() mode bits are masked by umask, so the created
+                // directory is identical either way.
+                "Crest\\Command\\Make\\ActionCommand::handle",
+                // The max() seed only has to be <= the shortest cell; any
+                // non-positive seed gives the same width.
+                "Crest\\Console\\Output::table"
+            ]
+        },
+        "FalseValue": {
+            "ignore": [
+                // A flag's declared default is dead: resolveOptions() supplies
+                // false for OptionMode::None without consulting it.
+                "Crest\\Command\\Make\\ActionCommand::define",
+                // NO_COLOR and the tty check both yield "undecorated" against
+                // the php://memory streams the suite uses, so the two branches
+                // cannot be told apart without a real terminal.
+                "Crest\\Console\\Output::detectDecoration"
+            ]
+        },
+        "IncrementInteger": {
+            "ignore": [
+                "Crest\\Command\\Make\\ActionCommand::handle",
+                // Widening the slice by one includes the '--' token itself,
+                // which is never '--trace', '--help' or '-h'.
+                "Crest\\Console\\Kernel::beforeLiteral"
+            ]
+        },
+        "NotIdentical": {
+            "ignore": ["Crest\\Console\\Output::detectDecoration"]
+        },
+        "Throw_": {
+            "ignore": ["Crest\\Adr\\PhalconRouterCandidates::candidatesFor"]
+        },
+        "UnwrapTrim": {
+            // is_dir() accepts a doubled separator, so trimming the psr-4
+            // target changes nothing about which directory is found.
+            "ignore": ["Crest\\Project\\Config::infer"]
+        }
     }
 }
