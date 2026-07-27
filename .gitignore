@@ -1,0 +1,6 @@
+/vendor/
+/.env
+/tests/_output/*
+!/tests/_output/.gitkeep
+/.phpunit.result.cache
+/.php-cs-fixer.cache
