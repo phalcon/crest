@@ -31,7 +31,6 @@ use function file_exists;
 use function file_put_contents;
 use function implode;
 use function is_dir;
-use function is_string;
 use function mkdir;
 use function sprintf;
 use function str_replace;
@@ -59,11 +58,11 @@ final class ActionCommand extends Command
     public function handle(Input $input, Output $output): int
     {
         $config = Config::discover(
-            is_string($input->option('directory')) ? $input->option('directory') : null,
-            is_string($input->option('config')) ? $input->option('config') : null
+            $input->optionStringOrNull('directory'),
+            $input->optionStringOrNull('config')
         );
 
-        $responder = strtolower($this->text($input->option('responder')));
+        $responder = strtolower($input->optionString('responder'));
 
         if (false === isset(self::RESPONDERS[$responder])) {
             throw new Exception(
@@ -73,8 +72,8 @@ final class ActionCommand extends Command
 
         $convention = new Convention($config->namespaceFor('action'), new PhalconRouterCandidates());
         $target     = $convention->target(
-            $this->text($input->argument('method')),
-            $this->text($input->argument('path'))
+            $input->argumentString('method'),
+            $input->argumentString('path')
         );
 
         $file = $config->path('action') . '/' . $target->relativePath;
@@ -134,16 +133,6 @@ final class ActionCommand extends Command
         $path = trim(str_replace('{', '', str_replace('}', '', $target->path)), '/');
 
         return ('' === $path ? 'index' : $path) . '/index';
-    }
-
-    /**
-     * Input values are mixed by design; PHPStan rejects casting mixed to
-     * string, so the string case is narrowed once here rather than at each
-     * call site.
-     */
-    private function text(mixed $value): string
-    {
-        return true === is_string($value) ? $value : '';
     }
 
     /**

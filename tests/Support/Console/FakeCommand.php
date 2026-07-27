@@ -18,8 +18,6 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 
-use function is_string;
-
 final class FakeCommand extends Command
 {
     public function define(): Definition
@@ -30,11 +28,7 @@ final class FakeCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        // argument() returns mixed; PHPStan rejects concatenating, casting and
-        // sprintf-ing it, so the string case is narrowed explicitly.
-        $subject = $input->argument('subject');
-
-        $output->line('hello ' . (true === is_string($subject) ? $subject : ''));
+        $output->line('hello ' . $input->argumentString('subject'));
 
         return 0;
     }
