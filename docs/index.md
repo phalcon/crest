@@ -2,10 +2,11 @@
 
 Command line application for Phalcon.
 
-## Install
+See the [README](../README.md) for installation, usage and configuration.
 
-    composer require --dev phalcon/crest
+## Slice 1 commands
 
-## Usage
-
-    vendor/bin/crest list
+| Command | Description |
+|---|---|
+| `about` (`info`, `i`) | environment and version report |
+| `make:action` | create an ADR action for a route |
