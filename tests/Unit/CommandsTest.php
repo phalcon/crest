@@ -16,6 +16,7 @@ namespace Crest\Tests\Unit;
 use Crest\Commands;
 use PHPUnit\Framework\TestCase;
 
+use function array_keys;
 use function sprintf;
 
 final class CommandsTest extends TestCase
@@ -50,5 +51,24 @@ final class CommandsTest extends TestCase
         $this->assertTrue($registry->has('about'));
         $this->assertTrue($registry->has('info'));
         $this->assertTrue($registry->has('i'));
+    }
+
+    public function testRegistryResolvesTheListAliases(): void
+    {
+        // devtools offered all three spellings; retiring it means answering to
+        // each of them.
+        $registry = Commands::registry();
+
+        $this->assertTrue($registry->has('list'));
+        $this->assertTrue($registry->has('commands'));
+        $this->assertTrue($registry->has('enumerate'));
+    }
+
+    public function testAliasesAreNotListedAsCommands(): void
+    {
+        $this->assertSame(
+            ['about', 'list', 'make:action'],
+            array_keys(Commands::registry()->all())
+        );
     }
 }

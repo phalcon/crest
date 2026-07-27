@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest;
 
 use Crest\Command\AboutCommand;
+use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
 use Crest\Console\Registry;
 
@@ -47,6 +48,7 @@ final class Commands
     {
         return (new Registry())
             ->add('about', AboutCommand::class, 'info', 'i')
+            ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)
             ->withDiscovery(self::KEY);
     }
