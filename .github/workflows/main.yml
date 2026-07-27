@@ -125,3 +125,100 @@ jobs:
 
       - name: "Unit tests"
         run: composer test
+
+  mutation:
+    name: "Mutation testing"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - unit-tests
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}
+          coverage: pcov
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      # resources/infection.json5 sets minMsi/minCoveredMsi to 100, so this
+      # step fails on any surviving mutant that is not documented there as
+      # equivalent. Infection is a temporary dependency: it comes back out of
+      # composer.json before release, at which point this job goes with it.
+      - name: "Infection"
+        run: composer infection
+
+  coverage:
+    name: "Coverage, SonarQube and octocov"
+
+    permissions:
+      contents: read # to fetch code (actions/checkout)
+      pull-requests: write # to comment coverage on PRs (octocov)
+      actions: read # to download prior coverage artifacts (octocov)
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - unit-tests
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # SonarQube needs the full history to attribute blame.
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}
+          coverage: pcov
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      # One clover file feeds both SonarQube and octocov, so the two dashboards
+      # can never disagree about the same run.
+      - name: "Tests with coverage"
+        run: composer test-coverage
+
+      - name: "SonarQube Scan"
+        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e # v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=phalcon
+            -Dsonar.projectKey=phalcon_crest
+            -Dsonar.sources=src
+            -Dsonar.tests=tests
+            -Dsonar.exclusions=resources/**
+            -Dsonar.php.coverage.reportPaths=tests/_output/coverage.xml
+
+      - name: "octocov"
+        uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
+        with:
+          config: ${{ github.event_name == 'pull_request' && 'resources/octocov.pr.yml' || 'resources/octocov.yml' }}
