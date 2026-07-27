@@ -1,0 +1,131 @@
+# This file is part of the Phalcon Crest.
+#
+# (c) Phalcon Team <team@phalcon.io>
+#
+# For the full copyright and license information, please view
+# the LICENSE file that was distributed with this source code.
+
+name: "Crest CI"
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # For tests
+  LANG: en_US.UTF-8
+  LANGUAGE: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
+  # PHP extensions required by Composer and the suite. No Phalcon extension:
+  # this workflow runs the v6 variant, where Phalcon arrives as the
+  # phalcon/phalcon composer dev dependency. When ext-phalcon 5.18 ships, the
+  # v5 variant is added by extending the matrix and installing the extension
+  # through setup-php's `extensions` input.
+  EXTENSIONS: mbstring, zip
+
+permissions: { }
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  # Code style and static analysis
+  quality:
+    name: "Validate code style and types"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      # Deliberately the floor, not the newest PHP. phpstan.neon sets no
+      # phpVersion, so PHPStan assumes whatever runs it; analyzing on 8.1 is
+      # what proves the ^8.1 constraint holds - a newer runtime would accept
+      # syntax the floor rejects.
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --ignore-platform-reqs is required, not cosmetic: phalcon/talon pulls
+      # symfony/browser-kit, which needs PHP >= 8.2, so a plain install refuses
+      # to run on the 8.1 floor. Nothing in this suite loads browser-kit - the
+      # browser traits are unused here - so the constraint is a dev-tooling
+      # artifact rather than a real floor for crest itself.
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist --ignore-platform-reqs"
+
+      - name: "PHPCS"
+        run: composer cs
+
+      - name: "PHPStan"
+        run: composer analyze
+
+  unit-tests:
+    name: "Unit tests"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    strategy:
+      # Every version reports, rather than stopping at the first failure - on a
+      # matrix this wide, knowing which versions break is the useful signal.
+      fail-fast: false
+      matrix:
+        php:
+          - '8.1'
+          - '8.2'
+          - '8.3'
+          - '8.4'
+          - '8.5'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ env.EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --ignore-platform-reqs is required, not cosmetic: phalcon/talon pulls
+      # symfony/browser-kit, which needs PHP >= 8.2, so a plain install refuses
+      # to run on the 8.1 floor. Nothing in this suite loads browser-kit - the
+      # browser traits are unused here - so the constraint is a dev-tooling
+      # artifact rather than a real floor for crest itself.
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist --ignore-platform-reqs"
+
+      - name: "Unit tests"
+        run: composer test
