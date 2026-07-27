@@ -118,6 +118,42 @@ final class Registry
     }
 
     /**
+     * Registers whatever one package contributes under the discovery key.
+     *
+     * Split out of discover() to keep the nesting shallow: walking datasets,
+     * packages and commands in one method put its cognitive complexity well
+     * past what the analyzers allow. Anything malformed is skipped rather than
+     * rejected - a broken contributor must not stop the scan.
+     *
+     * @param mixed $extra The package's `extra.<key>` value, whatever it holds.
+     */
+    private function addContributed(mixed $extra): void
+    {
+        if (false === is_array($extra)) {
+            return;
+        }
+
+        $commands = $extra['commands'] ?? null;
+
+        if (false === is_array($commands)) {
+            return;
+        }
+
+        foreach ($commands as $name => $class) {
+            if (false === is_string($name) || false === is_string($class)) {
+                continue;
+            }
+
+            if (false === class_exists($class)) {
+                continue;
+            }
+
+            /** @var class-string<Command> $class */
+            $this->add($name, $class);
+        }
+    }
+
+    /**
      * Folds in commands contributed by installed packages through
      * `extra.<key>.commands` in their composer.json. Runs at most once, and
      * only when something actually needs it.
@@ -140,32 +176,9 @@ final class Registry
             $versions = $dataset['versions'] ?? [];
 
             foreach ($versions as $package) {
-                // Unwrapped one offset at a time: `extra` holds mixed values, so
-                // $package['extra'][$key]['commands'] cannot be read in one go.
-                $extra = $package['extra'][$key] ?? null;
-
-                if (false === is_array($extra)) {
-                    continue;
-                }
-
-                $commands = $extra['commands'] ?? null;
-
-                if (false === is_array($commands)) {
-                    continue;
-                }
-
-                foreach ($commands as $name => $class) {
-                    if (false === is_string($name) || false === is_string($class)) {
-                        continue;
-                    }
-
-                    if (false === class_exists($class)) {
-                        continue;
-                    }
-
-                    /** @var class-string<Command> $class */
-                    $this->add($name, $class);
-                }
+                // `extra` holds mixed values, so the key is read one offset at
+                // a time and the rest of the unwrapping happens in the helper.
+                $this->addContributed($package['extra'][$key] ?? null);
             }
         }
     }
