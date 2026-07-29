@@ -1,4 +1,7 @@
 /vendor/
+# Local convenience symlink to a sibling phalcon checkout. Never committed:
+# it points outside the repository and only resolves on the machine that made it.
+/phalcon
 /.env
 /tests/_output/*
 !/tests/_output/.gitkeep
