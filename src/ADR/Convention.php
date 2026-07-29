@@ -11,7 +11,7 @@
 
 declare(strict_types=1);
 
-namespace Crest\Adr;
+namespace Crest\ADR;
 
 use Crest\Console\Exceptions\Exception;
 
@@ -30,56 +30,33 @@ use function trim;
 /**
  * Turns a route into somewhere to write a file.
  *
- * The route-to-class rules are the framework's and are reached through
- * CandidateSource; this class only splits placeholders off the path and turns
- * the winning class name into a relative file path.
+ * The route-to-class rule is the framework's and is reached through
+ * ActionResolver; this class only splits placeholders off the path and turns
+ * the resulting class name into a relative file path.
  */
 final class Convention
 {
     private readonly string $baseNamespace;
 
-    private readonly CandidateSource $source;
+    private readonly ActionResolver $resolver;
 
-    public function __construct(string $baseNamespace, CandidateSource $source)
+    public function __construct(string $baseNamespace, ActionResolver $resolver)
     {
         // Router::setBaseNamespace() rtrims backslashes; relativePath below
         // subtracts strlen($this->baseNamespace), so both ends must agree or
         // the path is off by one character.
         $this->baseNamespace = rtrim($baseNamespace, '\\');
-        $this->source        = $source;
+        $this->resolver      = $resolver;
     }
 
     /**
-     * Every class the router would try for this path, in try order. Used to
-     * warn when a generated action changes how an existing route resolves.
-     *
-     * @return list<string>
-     */
-    public function candidates(string $method, string $path): array
-    {
-        return $this->source->candidatesFor(
-            $this->baseNamespace,
-            $method,
-            $this->split($path)['path']
-        );
-    }
-
-    /**
-     * The class crest generates for a route: the first candidate the router
-     * would try for the path's static prefix.
+     * The class crest generates for a route.
      */
     public function target(string $method, string $path): Target
     {
-        $split      = $this->split($path);
-        $candidates = $this->source->candidatesFor($this->baseNamespace, $method, $split['path']);
+        $split = $this->split($path);
+        $fqcn  = $this->resolver->classFor($this->baseNamespace, $method, $split['path']);
 
-        if ([] === $candidates) {
-            throw new Exception(
-                sprintf("no action class could be derived for '%s %s'", $method, $path)
-            );
-        }
-
-        $fqcn      = $candidates[0];
         $position  = strrpos($fqcn, '\\');
         $namespace = false === $position ? '' : substr($fqcn, 0, $position);
         $class     = false === $position ? $fqcn : substr($fqcn, $position + 1);
@@ -112,13 +89,16 @@ final class Convention
     }
 
     /**
-     * One pass over the path, producing both halves at once: the static prefix
-     * that identifies the class, and every placeholder name that becomes a
-     * request attribute.
+     * One pass over the path, producing both halves at once: the static
+     * segments that identify the class, and every placeholder name that becomes
+     * a request attribute.
      *
-     * The prefix stops at the first placeholder because the framework camelizes
-     * segments blindly - camelize('{id}') is '{id}' - so a placeholder passed
-     * through would end up inside a class name.
+     * Placeholders must come last. The convention encodes which segments exist
+     * in the class name, not where a value sits among them, so a static segment
+     * after a placeholder cannot be expressed - `/album/{id}/edit` has no class
+     * name that describes it. Rejecting it here is the difference between
+     * telling the user and silently writing a file that answers a different URL
+     * from the one they asked for.
      *
      * @return array{path: string, attributes: list<string>}
      */
@@ -126,24 +106,53 @@ final class Convention
     {
         $attributes = [];
         $static     = [];
-        $stopped    = false;
 
         foreach ($this->segments($path) as $segment) {
             if (true === str_starts_with($segment, '{')) {
-                $stopped      = true;
                 $attributes[] = trim($segment, '{}');
 
                 continue;
             }
 
-            if (false === $stopped) {
-                $static[] = $segment;
+            if ([] !== $attributes) {
+                throw new Exception(
+                    sprintf(
+                        "'%s' cannot follow a placeholder; arguments come last, "
+                        . "so write the route as '%s'",
+                        $segment,
+                        $this->suggest($path)
+                    )
+                );
             }
+
+            $static[] = $segment;
         }
 
         return [
             'path'       => '/' . implode('/', $static),
             'attributes' => $attributes,
         ];
+    }
+
+    /**
+     * The same route with the placeholders moved to the end, which is how the
+     * convention spells it.
+     */
+    private function suggest(string $path): string
+    {
+        $static     = [];
+        $attributes = [];
+
+        foreach ($this->segments($path) as $segment) {
+            if (true === str_starts_with($segment, '{')) {
+                $attributes[] = $segment;
+
+                continue;
+            }
+
+            $static[] = $segment;
+        }
+
+        return '/' . implode('/', [...$static, ...$attributes]);
     }
 }

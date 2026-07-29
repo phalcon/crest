@@ -1,12 +1,12 @@
 # Phalcon Crest
 
-Command line application for Phalcon — generators, introspection and project tooling.
+Command line application for Phalcon - generators, introspection and project tooling.
 
 ## Requirements
 
 - PHP `^8.1`
 - Phalcon, either the `ext-phalcon` C extension (`^5`) or the `phalcon/phalcon` PHP
-  implementation (`^6`) — crest itself needs neither to run
+  implementation (`^6`) - crest itself needs neither to run
 
 ## Install
 
@@ -42,7 +42,7 @@ return [
 ];
 ```
 
-Namespaces are resolved from your psr-4 map, so a path must be covered by an autoload rule —
+Namespaces are resolved from your psr-4 map, so a path must be covered by an autoload rule -
 `src/Action` under `App\ => src/` becomes `App\Action`. If you write to a directory your
 autoloader does not cover, declare the namespace outright:
 

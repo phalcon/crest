@@ -49,7 +49,7 @@ final class ConfigTest extends TestCase
 
         $config = Config::discover($this->root);
 
-        $this->assertSame(Flavor::Mvc, $config->flavor());
+        $this->assertSame(Flavor::MVC, $config->flavor());
         $this->assertSame('Shop', $config->namespace());
         $this->assertSame($this->root . '/app/Handlers', $config->path('action'));
         $this->assertSame('Shop\Handlers', $config->namespaceFor('action'));
@@ -74,7 +74,7 @@ final class ConfigTest extends TestCase
 
         $config = Config::discover($this->root);
 
-        $this->assertSame(Flavor::Adr, $config->flavor());
+        $this->assertSame(Flavor::ADR, $config->flavor());
         $this->assertSame('App', $config->namespace());
         $this->assertSame($this->root . '/src/Action', $config->path('action'));
         $this->assertSame($this->root, $config->root());

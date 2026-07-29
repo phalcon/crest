@@ -14,7 +14,12 @@ declare(strict_types=1);
 namespace Crest;
 
 use Crest\Command\AboutCommand;
+use Crest\Command\ListCommand;
+use Crest\Command\Config\ShowCommand as ConfigShowCommand;
+use Crest\Command\Container\ListCommand as ContainerListCommand;
+use Crest\Command\Event\ListCommand as EventListCommand;
 use Crest\Command\Make\ActionCommand;
+use Crest\Command\Route\ListCommand as RouteListCommand;
 use Crest\Console\Registry;
 
 /**
@@ -47,7 +52,12 @@ final class Commands
     {
         return (new Registry())
             ->add('about', AboutCommand::class, 'info', 'i')
+            ->add('config:show', ConfigShowCommand::class)
+            ->add('container:list', ContainerListCommand::class)
+            ->add('event:list', EventListCommand::class)
+            ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)
+            ->add('route:list', RouteListCommand::class)
             ->withDiscovery(self::KEY);
     }
 }

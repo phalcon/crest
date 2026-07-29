@@ -34,10 +34,21 @@
                 // getcwd() returns false only when the working directory is
                 // unreadable, which the suite cannot produce.
                 "Crest\\Project\\Config::discover",
-                // Environment branch: reachable only with ext-phalcon loaded,
-                // which the v6 image does not have. Covered by the v5 cell.
+                // Environment branch. See the note on Identical below.
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
+        },
+        "Identical": {
+            // AboutCommand::phalcon() has three branches - ext-phalcon loaded,
+            // phalcon/phalcon installed, neither - and no single container can
+            // reach more than one. Whichever variant the image is built as,
+            // the other two are unreachable, so mutants on them are reported as
+            // uncovered rather than escaped. Ignored so the gate measures the
+            // suite rather than which variant the container happens to be.
+            "ignore": ["Crest\\Command\\AboutCommand::phalcon"]
+        },
+        "TrueValue": {
+            "ignore": ["Crest\\Command\\AboutCommand::phalcon"]
         },
         "CatchBlockRemoval": {
             // The console-exception arm and the Throwable arm render the same
@@ -53,13 +64,13 @@
             "ignore": [
                 // Phalcon-missing guard: unreachable while Phalcon is loadable,
                 // which it always is when the suite runs.
-                "Crest\\Adr\\PhalconRouterCandidates::candidatesFor",
+                "Crest\\ADR\\PhalconRouterResolver::router",
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
         },
         "ConcatOperandRemoval": {
             "ignore": [
-                "Crest\\Adr\\PhalconRouterCandidates::candidatesFor",
+                "Crest\\ADR\\PhalconRouterResolver::router",
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
         },
@@ -71,6 +82,10 @@
         },
         "DecrementInteger": {
             "ignore": [
+                // The exception code passed alongside the boot failure. Nothing
+                // reads it - the message and the previous exception carry the
+                // whole story - so any value behaves identically.
+                "Crest\\Project\\Bootstrap::container",
                 // mkdir() mode bits are masked by umask, so the created
                 // directory is identical either way.
                 "Crest\\Command\\Make\\ActionCommand::handle",
@@ -84,14 +99,29 @@
                 // A flag's declared default is dead: resolveOptions() supplies
                 // false for OptionMode::None without consulting it.
                 "Crest\\Command\\Make\\ActionCommand::define",
+                // class_exists()'s second argument only decides whether an
+                // autoloader runs. Crest does not autoload the target
+                // project's classes, so both values answer the same; false is
+                // chosen so a foreign autoloader is never invoked.
+                "Crest\\Command\\Route\\ListCommand::load",
                 // NO_COLOR and the tty check both yield "undecorated" against
                 // the php://memory streams the suite uses, so the two branches
                 // cannot be told apart without a real terminal.
                 "Crest\\Console\\Output::detectDecoration"
             ]
         },
+        "FunctionCallRemoval": {
+            // ksort() over the discovered routes. RecursiveDirectoryIterator
+            // returns entries in filesystem order, which on the test image is
+            // already sorted - so removing the sort changes nothing that can be
+            // observed here. It is not removable: the order is not guaranteed
+            // by anything, and a listing that reorders itself between machines
+            // would be worse than useless.
+            "ignore": ["Crest\\Command\\Route\\ListCommand::handle"]
+        },
         "IncrementInteger": {
             "ignore": [
+                "Crest\\Project\\Bootstrap::container",
                 "Crest\\Command\\Make\\ActionCommand::handle",
                 // Widening the slice by one includes the '--' token itself,
                 // which is never '--trace', '--help' or '-h'.
@@ -102,7 +132,14 @@
             "ignore": ["Crest\\Console\\Output::detectDecoration"]
         },
         "Throw_": {
-            "ignore": ["Crest\\Adr\\PhalconRouterCandidates::candidatesFor"]
+            "ignore": ["Crest\\ADR\\PhalconRouterResolver::router"]
+        },
+        "UnwrapArrayValues": {
+            // The routes are keyed by path so they can be sorted; table()
+            // iterates with foreach and ignores keys, so dropping the
+            // array_values() changes nothing at runtime. It stays because
+            // table() declares list<list<string>> and PHPStan holds it to that.
+            "ignore": ["Crest\\Command\\Route\\ListCommand::handle"]
         },
         "UnwrapTrim": {
             // is_dir() accepts a doubled separator, so trimming the psr-4

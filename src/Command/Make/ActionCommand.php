@@ -13,9 +13,9 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Adr\Convention;
-use Crest\Adr\PhalconRouterCandidates;
-use Crest\Adr\Target;
+use Crest\ADR\Convention;
+use Crest\ADR\PhalconRouterResolver;
+use Crest\ADR\Target;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
@@ -70,7 +70,10 @@ final class ActionCommand extends Command
             );
         }
 
-        $convention = new Convention($config->namespaceFor('action'), new PhalconRouterCandidates());
+        $convention = new Convention(
+            $config->namespaceFor('action'),
+            new PhalconRouterResolver()
+        );
         $target     = $convention->target(
             $input->argumentString('method'),
             $input->argumentString('path')
@@ -82,8 +85,6 @@ final class ActionCommand extends Command
             throw new Exception(sprintf('%s already exists; pass --force to overwrite', $file));
         }
 
-        $this->warnAboutCandidates($convention, $target, $output);
-
         $stub = new Stub(Paths::stubs(), $config->root());
 
         $contents = $stub->render(
@@ -93,6 +94,7 @@ final class ActionCommand extends Command
                 'namespace'  => $target->namespace,
                 'class'      => $target->class,
                 'attributes' => $this->attributeBlock($target),
+                'params'     => $this->paramsBlock($target),
                 'template'   => $this->template($target),
             ]
         );
@@ -128,35 +130,42 @@ final class ActionCommand extends Command
         return implode("\n", $lines) . "\n\n";
     }
 
+    /**
+     * The params() declaration for an Action's trailing attributes.
+     *
+     * Routing does not read this - the convention places arguments after the
+     * static path regardless. It exists so the attributes arrive constrained,
+     * cast and converted rather than as raw strings, which is why the emitted
+     * block is a starting point the user is expected to tighten.
+     */
+    private function paramsBlock(Target $target): string
+    {
+        if ([] === $target->attributes) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($target->attributes as $name) {
+            $lines[] = sprintf("            '%s' => ['type' => 'string'],", $name);
+        }
+
+        return "\n"
+            . "    /**\n"
+            . "     * Trailing route attributes, in path order. Constrains, casts and\n"
+            . "     * converts them after the route has matched.\n"
+            . "     */\n"
+            . "    public static function params(): array\n"
+            . "    {\n"
+            . "        return [\n"
+            . implode("\n", $lines) . "\n"
+            . "        ];\n"
+            . "    }\n";
+    }
+
     private function template(Target $target): string
     {
         $path = trim(str_replace('{', '', str_replace('}', '', $target->path)), '/');
 
         return ('' === $path ? 'index' : $path) . '/index';
-    }
-
-    /**
-     * The router returns the first class that exists, so a class other than
-     * the target already sitting on disk means this path's routing is already
-     * claimed - or that the new class will never be reached.
-     */
-    private function warnAboutCandidates(
-        Convention $convention,
-        Target $target,
-        Output $output,
-    ): void {
-        foreach ($convention->candidates($target->method, $target->path) as $candidate) {
-            if ($candidate === $target->fqcn) {
-                continue;
-            }
-
-            if (false === class_exists($candidate)) {
-                continue;
-            }
-
-            $output->line(
-                sprintf('Note: %s also matches this route and may take precedence', $candidate)
-            );
-        }
     }
 }

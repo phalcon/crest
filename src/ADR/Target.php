@@ -11,7 +11,7 @@
 
 declare(strict_types=1);
 
-namespace Crest\Adr;
+namespace Crest\ADR;
 
 /**
  * A route resolved to the class that will answer it.

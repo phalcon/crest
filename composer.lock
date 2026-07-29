@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6adf64d3eeef7db8de52e5cf796cd4ac",
+    "content-hash": "494a89480762e01e1244142655e7d09c",
     "packages": [
         {
             "name": "phalcon/cli-options-parser",
@@ -1614,16 +1614,16 @@
         },
         {
             "name": "phalcon/phalcon",
-            "version": "v6.0.0beta2",
+            "version": "v6.0.x-dev",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phalcon/phalcon.git",
-                "reference": "5b748dc8c36f35819922b0818d0d46d66f73fd2f"
+                "reference": "7e87395f5e1d100fef4976ef9d0603370c6bbc57"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/5b748dc8c36f35819922b0818d0d46d66f73fd2f",
-                "reference": "5b748dc8c36f35819922b0818d0d46d66f73fd2f",
+                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/7e87395f5e1d100fef4976ef9d0603370c6bbc57",
+                "reference": "7e87395f5e1d100fef4976ef9d0603370c6bbc57",
                 "shasum": ""
             },
             "require": {
@@ -1664,6 +1664,7 @@
                 "ext-redis": "to use Cache\\Adapter\\Redis, Session\\Adapter\\Redis, Storage\\Adapter\\Redis",
                 "ext-yaml": "to use Config\\Adapter\\Yaml"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -1681,7 +1682,7 @@
             ],
             "support": {
                 "issues": "https://github.com/phalcon/phalcon/issues",
-                "source": "https://github.com/phalcon/phalcon/tree/v6.0.0beta2"
+                "source": "https://github.com/phalcon/phalcon/tree/v6.0.x"
             },
             "funding": [
                 {
@@ -1693,7 +1694,7 @@
                     "type": "open_collective"
                 }
             ],
-            "time": "2026-07-27T02:04:28+00:00"
+            "time": "2026-07-29T00:19:31+00:00"
         },
         {
             "name": "phalcon/talon",
@@ -6554,7 +6555,7 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "phalcon/phalcon": 10
+        "phalcon/phalcon": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
