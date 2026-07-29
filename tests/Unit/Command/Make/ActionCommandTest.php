@@ -19,6 +19,7 @@ use Crest\Console\Kernel;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\ScratchDirectory;
+use Phalcon\ADR\Router\Router;
 use PHPUnit\Framework\TestCase;
 
 use function chdir;
@@ -97,14 +98,14 @@ final class ActionCommandTest extends TestCase
     {
         $status = $this->runCommand(['GET', '/company/all']);
 
-        $file = $this->root . '/src/Action/Company/GetCompanyAll.php';
+        $file = $this->root . '/src/Action/Company/All/GetCompanyAll.php';
 
         $this->assertSame(0, $status);
         $this->assertFileExists($file);
 
         $contents = (string) file_get_contents($file);
 
-        $this->assertStringContainsString('namespace App\Action\Company;', $contents);
+        $this->assertStringContainsString('namespace App\Action\Company\All;', $contents);
         $this->assertStringContainsString('final class GetCompanyAll implements Action', $contents);
         $this->assertStringContainsString('Responder $responder', $contents);
     }
@@ -131,9 +132,11 @@ final class ActionCommandTest extends TestCase
 
     public function testAttributeAccessorsAreSeparatedFromTheBodyByABlankLine(): void
     {
-        $this->runCommand(['GET', '/company/{id}/users/{userId}']);
+        $this->runCommand(['GET', '/company/users/{id}/{userId}']);
 
-        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Company/Users/GetCompanyUsers.php'
+        );
 
         // Exact block: one accessor per placeholder, then a single blank line
         // before the body the stub already carries.
@@ -143,6 +146,62 @@ final class ActionCommandTest extends TestCase
             . "        \$payload = Payload::success([]);";
 
         $this->assertStringContainsString($expected, $contents);
+    }
+
+    public function testPlaceholdersProduceAParamsDeclaration(): void
+    {
+        $this->runCommand(['GET', '/album/edit/{id}']);
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Album/Edit/GetAlbumEdit.php'
+        );
+
+        // Asserted whole, through to the closing brace, because the block is
+        // built by concatenation - a substring check lets a dropped line or a
+        // missing separator through, and this is generated code nobody reviews.
+        $expected = "    }\n"
+            . "\n"
+            . "    /**\n"
+            . "     * Trailing route attributes, in path order. Constrains, casts and\n"
+            . "     * converts them after the route has matched.\n"
+            . "     */\n"
+            . "    public static function params(): array\n"
+            . "    {\n"
+            . "        return [\n"
+            . "            'id' => ['type' => 'string'],\n"
+            . "        ];\n"
+            . "    }\n"
+            . "}";
+
+        $this->assertStringContainsString($expected, $contents);
+    }
+
+    public function testParamsAreDeclaredInPathOrder(): void
+    {
+        $this->runCommand(['GET', '/company/users/{id}/{userId}']);
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Company/Users/GetCompanyUsers.php'
+        );
+
+        // Declaration order matches path order, so the accessors and the
+        // constraints line up with the segments they describe.
+        $this->assertStringContainsString(
+            "            'id' => ['type' => 'string'],\n"
+            . "            'userId' => ['type' => 'string'],",
+            $contents
+        );
+    }
+
+    public function testActionWithNoPlaceholdersDeclaresNoParams(): void
+    {
+        $this->runCommand(['GET', '/health']);
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Health/GetHealth.php'
+        );
+
+        $this->assertStringNotContainsString('params()', $contents);
     }
 
     public function testViewTemplateStripsPlaceholderBraces(): void
@@ -216,32 +275,20 @@ final class ActionCommandTest extends TestCase
         );
     }
 
-    public function testExistingLowerPrecedenceCandidateIsReported(): void
+    public function testGeneratedActionIsTheOnlyClassThatAnswersItsRoute(): void
     {
-        // Crest\Tests\Support\Action\Company\GetCompany exists, and the router
-        // lists it as a candidate for GET /company/all behind GetCompanyAll.
-        // Generating that route must say so.
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['namespaces' => "
-            . "['action' => 'Crest\\\\Tests\\\\Support\\\\Action']];\n"
+        // One path names exactly one class, so nothing can shadow what is
+        // generated. This replaces the old candidate warning, which existed
+        // only because the router used to try several class shapes per path.
+        $this->runCommand(['GET', '/company/all']);
+
+        $router = new Router();
+        $router->setBaseNamespace('App\Action');
+
+        $this->assertSame(
+            '/company/all',
+            $router->pathFor('App\Action\Company\All\GetCompanyAll')
         );
-
-        $status = $this->runCommand(['GET', '/company/all']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString(
-            'Note: Crest\Tests\Support\Action\Company\GetCompany also matches this route',
-            $this->readStdout()
-        );
-    }
-
-    public function testNothingIsReportedWhenNoOtherCandidateExists(): void
-    {
-        $status = $this->runCommand(['GET', '/company/all']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringNotContainsString('Note:', $this->readStdout());
     }
 
     public function testCreatedPathAndRouteAreReported(): void
@@ -251,7 +298,7 @@ final class ActionCommandTest extends TestCase
         $output = $this->readStdout();
 
         $this->assertStringContainsString(
-            'Created ' . $this->root . '/src/Action/Company/GetCompanyAll.php',
+            'Created ' . $this->root . '/src/Action/Company/All/GetCompanyAll.php',
             $output
         );
         $this->assertStringContainsString('Answers GET /company/all', $output);
