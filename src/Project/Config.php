@@ -15,8 +15,10 @@ namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
 
+use function array_keys;
 use function dirname;
 use function explode;
+use function in_array;
 use function file_get_contents;
 use function getcwd;
 use function implode;
@@ -49,6 +51,9 @@ final class Config
      * @param array<string, string> $paths
      * @param array<string, string> $namespaces
      * @param array<string, string> $psr4
+     * @param list<string>          $declared Top-level keys the config file
+     *                                        actually stated, so a reader can
+     *                                        tell those from the defaults.
      */
     private function __construct(
         private readonly Flavor $flavor,
@@ -57,6 +62,9 @@ final class Config
         private readonly array $paths,
         private readonly array $namespaces,
         private readonly array $psr4,
+        private readonly ?string $source = null,
+        private readonly array $declared = [],
+        private readonly ?string $bootstrap = null,
     ) {
     }
 
@@ -74,7 +82,7 @@ final class Config
             /** @var array<string, mixed> $declared */
             $declared = require $file;
 
-            return self::fromArray($declared, dirname($file));
+            return self::fromArray($declared, dirname($file), $file);
         }
 
         return self::infer($directory);
@@ -151,6 +159,55 @@ final class Config
     }
 
     /**
+     * How the project boots, as declared - either a front controller class or
+     * a path to a file returning a container. Null when nothing was declared.
+     *
+     * Returned verbatim rather than resolved, because the two forms resolve
+     * differently and only the caller knows which it is looking at.
+     *
+     * Services and listeners cannot be read off the filesystem the way routes
+     * can: they exist only once the application has registered them.
+     */
+    public function bootstrap(): ?string
+    {
+        return $this->bootstrap;
+    }
+
+    /**
+     * Whether the config file stated this top-level key, as opposed to it
+     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
+     */
+    public function isDeclared(string $key): bool
+    {
+        return in_array($key, $this->declared, true);
+    }
+
+    /**
+     * Every named location, resolved to an absolute path.
+     *
+     * @return array<string, string>
+     */
+    public function paths(): array
+    {
+        $resolved = [];
+
+        foreach (array_keys($this->paths) as $key) {
+            $resolved[$key] = $this->path($key);
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * The config file this was read from, or null when everything was inferred
+     * from composer.json.
+     */
+    public function source(): ?string
+    {
+        return $this->source;
+    }
+
+    /**
      * Absolute path for a named location.
      */
     public function path(string $key): string
@@ -170,9 +227,19 @@ final class Config
     /**
      * @param array<string, mixed> $declared
      */
-    private static function fromArray(array $declared, string $root): self
+    private static function fromArray(array $declared, string $root, string $source): self
     {
-        $flavor = Flavor::Adr;
+        $stated = [];
+
+        // `namespaces` is deliberately absent: nothing reads its origin yet, and
+        // tracking a key no caller asks about is a claim with no way to be wrong.
+        foreach (['flavor', 'namespace', 'paths'] as $key) {
+            if (true === isset($declared[$key])) {
+                $stated[] = $key;
+            }
+        }
+
+        $flavor = Flavor::ADR;
         if (true === isset($declared['flavor']) && true === is_string($declared['flavor'])) {
             $flavor = Flavor::tryFrom($declared['flavor'])
                 ?? throw new Exception(sprintf("unknown flavor '%s'", $declared['flavor']));
@@ -188,6 +255,12 @@ final class Config
             /** @var array<string, string> $supplied */
             $supplied = $declared['paths'];
             $paths    = [...$paths, ...$supplied];
+
+            // Per key, not just the block: declaring `views` leaves `action` on
+            // its default, and calling that one declared would be a lie.
+            foreach (array_keys($supplied) as $name) {
+                $stated[] = 'paths.' . $name;
+            }
         }
 
         $namespaces = [];
@@ -198,7 +271,22 @@ final class Config
 
         // crest.php never restates the autoload map; namespaceFor() still needs
         // it whenever `namespaces` does not answer the question outright.
-        return new self($flavor, $namespace, $root, $paths, $namespaces, self::psr4Map($root));
+        $bootstrap = null;
+        if (true === isset($declared['bootstrap']) && true === is_string($declared['bootstrap'])) {
+            $bootstrap = $declared['bootstrap'];
+        }
+
+        return new self(
+            $flavor,
+            $namespace,
+            $root,
+            $paths,
+            $namespaces,
+            self::psr4Map($root),
+            $source,
+            $stated,
+            $bootstrap
+        );
     }
 
     /**
@@ -220,7 +308,7 @@ final class Config
             }
 
             return new self(
-                Flavor::Adr,
+                Flavor::ADR,
                 trim($prefix, '\\'),
                 $directory,
                 self::DEFAULT_PATHS,

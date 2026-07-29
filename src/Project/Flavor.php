@@ -19,7 +19,10 @@ namespace Crest\Project;
  */
 enum Flavor: string
 {
-    case Adr = 'adr';
-    case Cli = 'cli';
-    case Mvc = 'mvc';
+    // Names are the acronyms they stand for; the backed values stay lowercase
+    // because they are what a project writes in crest.php and what names the
+    // stub directory under resources/stubs.
+    case ADR = 'adr';
+    case CLI = 'cli';
+    case MVC = 'mvc';
 }
