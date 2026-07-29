@@ -24,4 +24,4 @@ final class {{ class }} implements Action
 
         return ($this->responder)($request, $this->response, $payload);
     }
-}
+{{ params }}}
