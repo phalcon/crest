@@ -63,6 +63,7 @@ final class StubTest extends TestCase
                 'namespace'  => 'App\Action\Health',
                 'class'      => 'GetHealth',
                 'attributes' => '',
+                'params'     => '',
                 'template'   => 'health/index',
             ]);
 

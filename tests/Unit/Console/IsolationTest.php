@@ -38,7 +38,7 @@ final class IsolationTest extends TestCase
     private const FORBIDDEN_IN_CONSOLE = [
         'Crest\\Command',
         'Crest\\Project',
-        'Crest\\Adr',
+        'Crest\\ADR',
         'Crest\\Generator',
         'crest',
         'Crest ',

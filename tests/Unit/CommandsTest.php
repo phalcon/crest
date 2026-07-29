@@ -67,7 +67,15 @@ final class CommandsTest extends TestCase
     public function testAliasesAreNotListedAsCommands(): void
     {
         $this->assertSame(
-            ['about', 'list', 'make:action'],
+            [
+                'about',
+                'config:show',
+                'container:list',
+                'event:list',
+                'list',
+                'make:action',
+                'route:list',
+            ],
             array_keys(Commands::registry()->all())
         );
     }
