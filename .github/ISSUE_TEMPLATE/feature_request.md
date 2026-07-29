@@ -11,8 +11,7 @@ assignees: ''
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
 **Describe the solution you'd like**
-A clear and concise description of what you want to happen. If it is a new command,
-sketch the invocation:
+A clear and concise description of what you want to happen. If it is a new command, sketch the invocation:
 
 ```bash
 vendor/bin/crest <command> <arguments> [--options]
@@ -22,8 +21,7 @@ vendor/bin/crest <command> <arguments> [--options]
 A clear and concise description of any alternative solutions or features you've considered.
 
 **Prior art**
-Did `phalcon-devtools` do this, and if so under what name? Crest is replacing devtools, so
-an existing v4 command is a strong argument on its own.
+Did `phalcon-devtools` do this, and if so under what name? Crest is replacing devtools, so an existing v4 command is a strong argument on its own.
 
 **Additional context**
 Add any other context or screenshots about the feature request here.

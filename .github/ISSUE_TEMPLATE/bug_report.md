@@ -19,8 +19,7 @@ Steps to reproduce the behavior. Include the exact command you ran:
 vendor/bin/crest <command> <arguments>
 ```
 
-> Re-run with `--trace` and paste the full output. That turns the one-line error
-> into a stack trace, which is usually the whole answer.
+> Re-run with `--trace` and paste the full output. That turns the one-line error into a stack trace, which is usually the whole answer.
 
 ```
 paste output here
@@ -30,16 +29,14 @@ paste output here
 A clear and concise description of what you expected to happen.
 
 **Generated output**
-If the bug is in a generator, paste the file crest produced and describe how it
-differs from what you expected.
+If the bug is in a generator, paste the file crest produced and describe how it differs from what you expected.
 
 ```php
 // paste generated code
 ```
 
 **Details**
-Paste the output of `vendor/bin/crest about` — it reports the PHP, Phalcon and
-crest versions in one go:
+Paste the output of `vendor/bin/crest about` - it reports the PHP, Phalcon and crest versions in one go:
 
 ```
 paste `crest about` output here
