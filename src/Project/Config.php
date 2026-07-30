@@ -242,8 +242,8 @@ final class Config
             Flavor::ADR => [
                 'action'     => 'src/Action',
                 // Not an ADR artifact: a crest command is the same class in any
-                // flavor. It sits here because ADR is the only populated set;
-                // when the others land it belongs in all of them.
+                // flavor. It sits here because ADR is the only populated set,
+                // and moves to a shared one when cli, mvc and micro arrive.
                 'command'    => 'src/Command',
                 'middleware' => 'src/Middleware',
                 'provider'   => 'src/Provider',

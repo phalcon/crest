@@ -53,11 +53,11 @@ final class ResponderCommandTest extends TestCase
             . "namespace App\Responder;\n"
             . "\n"
             . "use Phalcon\Contracts\ADR\Payload\Payload;\n"
-            . "use Phalcon\Contracts\ADR\Responder\Responder;\n"
+            . "use Phalcon\Contracts\ADR\Responder\Responder as ResponderContract;\n"
             . "use Phalcon\Http\RequestInterface;\n"
             . "use Phalcon\Http\ResponseInterface;\n"
             . "\n"
-            . "final class AlbumResponder implements Responder\n"
+            . "final class AlbumResponder implements ResponderContract\n"
             . "{\n"
             . "    public function __invoke(\n"
             . "        RequestInterface \$request,\n"
@@ -74,6 +74,23 @@ final class ResponderCommandTest extends TestCase
         $this->assertSame(
             $expected,
             (string) file_get_contents($this->root . '/src/Responder/AlbumResponder.php')
+        );
+    }
+
+    public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
+    {
+        // `make:responder Responder` is the pathological case: the suffix is
+        // already there, so the class is named Responder - and without the alias
+        // the stub would emit `implements Responder` beside
+        // `use ...\Responder;`, which does not compile.
+        $status = $this->runCommand(['Responder']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Responder/Responder.php');
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'final class Responder implements ResponderContract',
+            $contents
         );
     }
 

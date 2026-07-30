@@ -90,7 +90,7 @@ final class Kernel
         $first  = $tokens[0] ?? null;
 
         if ('--version' === $first || '-V' === $first) {
-            $this->output->line($this->name . ' ' . $this->version());
+            $this->output->banner($this->name . ' ' . $this->version());
 
             return 0;
         }

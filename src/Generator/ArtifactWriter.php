@@ -62,6 +62,15 @@ final class ArtifactWriter
     /**
      * Writes contents to a file, creating the directory if it is missing.
      *
+     * Both operations are checked. Unchecked, a read-only target produced two
+     * PHP warnings and then "Created <file>" with exit 0 - the tool reporting a
+     * file it had not written.
+     *
+     * The warnings are suppressed rather than left to surface alongside the
+     * exception: the kernel renders a console exception as one clean stderr
+     * line, and a raw warning ahead of it would bury the sentence that explains
+     * what went wrong.
+     *
      * Static because it needs nothing from the instance, which lets stub:publish
      * reuse it - that command copies rather than renders, so it has no stub of
      * its own to construct a writer around.
@@ -70,10 +79,12 @@ final class ArtifactWriter
     {
         $directory = dirname($file);
 
-        if (false === is_dir($directory)) {
-            mkdir($directory, 0o775, true);
+        if (false === is_dir($directory) && false === @mkdir($directory, 0o775, true)) {
+            throw new Exception(sprintf('could not create %s', $directory));
         }
 
-        file_put_contents($file, $contents);
+        if (false === @file_put_contents($file, $contents)) {
+            throw new Exception(sprintf('could not write %s', $file));
+        }
     }
 }

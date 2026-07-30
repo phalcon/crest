@@ -54,6 +54,14 @@ final class ClassNameTest extends TestCase
         $this->assertSame('CorsmiddlewareMiddleware', ClassName::suffixed('Corsmiddleware', 'Middleware'));
     }
 
+    public function testANonLatinNameIsAccepted(): void
+    {
+        // PHP's own identifier rule allows the high-byte range, so a class named
+        // in another script is a legal class - refusing it would be crest being
+        // narrower than the language it generates for.
+        $this->assertSame('ÜbergabeResponder', ClassName::suffixed('Übergabe', 'Responder'));
+    }
+
     public function testANamespacedNameIsRejected(): void
     {
         $this->expectException(Exception::class);

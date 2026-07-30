@@ -39,7 +39,12 @@ final class Output
     public const COLOR_ORANGE = "\033[38;5;208m";
     public const COLOR_RED    = "\033[31m";
     public const COLOR_RESET  = "\033[0m";
-    public const CREST        = '⟩⟩⟩';
+
+    /**
+     * The glyph a banner opens with. Named for its shape rather than for any
+     * one tool: this class has to still make sense once it is phalcon/console.
+     */
+    public const MARK = '⟩⟩⟩';
 
     private bool $decorated;
 
@@ -71,7 +76,7 @@ final class Output
      */
     public function banner(string $text): void
     {
-        $this->line($this->decorate(self::CREST, self::COLOR_ORANGE) . ' ' . $text);
+        $this->line($this->decorate(self::MARK, self::COLOR_ORANGE) . ' ' . $text);
     }
 
     public function error(string $text): void

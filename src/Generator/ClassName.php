@@ -39,8 +39,13 @@ final class ClassName
      * One unqualified class name. Namespaced input is rejected rather than
      * split into directories, because the answer to `make:responder Admin/Album`
      * is a decision about layout, not something to guess at.
+     *
+     * The high-byte range is PHP's own rule for an identifier, so a class named
+     * in a non-Latin script is accepted rather than refused for being unusual.
+     * Deliberately byte-oriented and not /u: that is exactly how PHP itself
+     * decides what may name a class.
      */
-    private const PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*$/';
+    private const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/';
 
     public static function suffixed(string $name, string $suffix): string
     {

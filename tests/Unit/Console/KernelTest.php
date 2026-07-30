@@ -22,6 +22,7 @@ use Crest\Tests\Support\Console\FakeCommand;
 use Crest\Tests\Support\Console\ThrowingCommand;
 use PHPUnit\Framework\TestCase;
 
+use function preg_quote;
 use function strpos;
 
 use const PHP_EOL;
@@ -168,7 +169,7 @@ final class KernelTest extends TestCase
         // Asserted whole: the banner is concatenated and the blank line and
         // header row are each a separate call, so substring checks let a
         // dropped separator or a missing row through.
-        $expected = Output::CREST . ' demo ' . PackageVersion::of('phalcon/crest') . PHP_EOL
+        $expected = Output::MARK . ' demo ' . PackageVersion::of('phalcon/crest') . PHP_EOL
             . PHP_EOL
             . 'COMMAND  DESCRIPTION' . PHP_EOL
             . 'fake     A command that exists only for tests' . PHP_EOL;
@@ -189,7 +190,7 @@ final class KernelTest extends TestCase
         $status = $this->kernel()->handle(['demo', '-V']);
 
         $this->assertSame(0, $status);
-        $this->assertStringStartsWith('demo ', $this->readStdout());
+        $this->assertStringStartsWith(Output::MARK . ' demo ', $this->readStdout());
     }
 
     public function testTraceAddsStackFramesToABindingError(): void
@@ -221,10 +222,14 @@ final class KernelTest extends TestCase
     {
         $this->kernel()->handle(['demo', '--version']);
 
-        // 'demo ' plus something - an empty version would mean the package
-        // lookup silently failed.
-        $this->assertMatchesRegularExpression('/^demo \S+/', $this->readStdout());
+        // The mark, then 'demo ' plus something - an empty version would mean
+        // the package lookup silently failed.
+        $this->assertMatchesRegularExpression(
+            '/^' . preg_quote(Output::MARK, '/') . ' demo \S+/',
+            $this->readStdout()
+        );
     }
+
 
     private function kernel(): Kernel
     {

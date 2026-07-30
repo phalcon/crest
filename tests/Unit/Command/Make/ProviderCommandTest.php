@@ -55,9 +55,9 @@ final class ProviderCommandTest extends TestCase
             . "namespace App\Provider;\n"
             . "\n"
             . "use Phalcon\Contracts\Container\Service\Collection;\n"
-            . "use Phalcon\Contracts\Container\Service\Provider;\n"
+            . "use Phalcon\Contracts\Container\Service\Provider as ProviderContract;\n"
             . "\n"
-            . "final class CacheProvider implements Provider\n"
+            . "final class CacheProvider implements ProviderContract\n"
             . "{\n"
             . "    public function provide(Collection \$services): void\n"
             . "    {\n"
@@ -73,6 +73,24 @@ final class ProviderCommandTest extends TestCase
         $this->assertSame(
             $expected,
             (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
+        );
+    }
+
+    public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
+    {
+        // `make:provider Provider` is the pathological case: the suffix is
+        // already there, so the class is named Provider - and without the alias
+        // the stub would emit `implements Provider` beside `use ...\Provider;`,
+        // which does not compile. Collection is left unaliased: no artifact
+        // suffix can produce that name.
+        $status = $this->runCommand(['Provider']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Provider/Provider.php');
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'final class Provider implements ProviderContract',
+            $contents
         );
     }
 

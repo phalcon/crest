@@ -42,7 +42,7 @@ final class OutputTest extends TestCase
 
         $output->banner('demo 1.2.3');
 
-        $this->assertSame(Output::CREST . ' demo 1.2.3' . PHP_EOL, $this->readStdout());
+        $this->assertSame(Output::MARK . ' demo 1.2.3' . PHP_EOL, $this->readStdout());
     }
 
     public function testBannerColorsOnlyTheMarkWhenDecorated(): void
@@ -53,7 +53,7 @@ final class OutputTest extends TestCase
         $output->banner('demo 1.2.3');
 
         $this->assertSame(
-            "\033[38;5;208m" . Output::CREST . "\033[0m" . ' demo 1.2.3' . PHP_EOL,
+            "\033[38;5;208m" . Output::MARK . "\033[0m" . ' demo 1.2.3' . PHP_EOL,
             $this->readStdout()
         );
     }

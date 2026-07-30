@@ -31,7 +31,14 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Renamed `Crest\ADR\CandidateSource` to `ActionResolver` and `PhalconRouterCandidates` to `PhalconRouterResolver`. One path now names exactly one Action, so there are no candidates to choose between.
 - Dependencies now resolve against the PHP 8.1 floor via `config.platform`, so the lock matches the declared minimum.
 - Default `paths` are now per flavor rather than shared. Only `adr` is populated, so a `cli` or `mvc` project is no longer offered directories for artifacts it has no command to generate. [#5](https://github.com/phalcon/crest/issues/5)
-- `crest` and `crest list` now open with a chevron mark before the name and version. The mark is dropped from piped output and when `NO_COLOR` is set. [#5](https://github.com/phalcon/crest/issues/5)
+- `crest`, `crest list` and `crest --version` now open with a chevron mark before the name and version. Only the colour is dropped from piped output and when `NO_COLOR` is set; the glyph stays. [#5](https://github.com/phalcon/crest/issues/5)
+
+### Fixed
+
+- `make:middleware`, `make:provider` and `make:responder` no longer generate a class that cannot be parsed when the name given is already the suffix. `make:middleware Middleware` produced `final class Middleware implements Middleware` beside `use ...\Middleware;`. The contract is now imported under an alias. [#5](https://github.com/phalcon/crest/issues/5)
+- Generators now fail instead of reporting a file they did not write. A target that could not be created produced two PHP warnings, `Created <file>` and exit 0; it now reports `could not create <directory>` and exits 1. [#5](https://github.com/phalcon/crest/issues/5)
+- `stub:publish` now rejects a name that is a path. `stub:publish ../../elsewhere/thing` resolved and copied a file from outside the package. [#5](https://github.com/phalcon/crest/issues/5)
+- `ClassName::suffixed()` now accepts non-Latin class names, matching PHP's own rule for an identifier. [#5](https://github.com/phalcon/crest/issues/5)
 
 ### Removed
 

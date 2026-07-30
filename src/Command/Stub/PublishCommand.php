@@ -26,6 +26,7 @@ use function basename;
 use function file_get_contents;
 use function glob;
 use function is_file;
+use function preg_match;
 use function sprintf;
 
 /**
@@ -41,6 +42,11 @@ use function sprintf;
  */
 final class PublishCommand extends ProjectCommand
 {
+    /**
+     * A packaged stub name. Hyphens are in because `action-view` is one.
+     */
+    private const NAME = '/^[A-Za-z0-9_-]+$/';
+
     public function define(): Definition
     {
         return Definition::for('stub:publish', 'Copy packaged stubs into the project for editing')
@@ -57,8 +63,7 @@ final class PublishCommand extends ProjectCommand
         $force  = true === $input->option('force');
 
         foreach ($this->sources($flavor, $name) as $source) {
-            $target = $config->root() . '/' . Stub::OVERRIDE_DIRECTORY . '/'
-                . Stub::relativePath($flavor, basename($source, '.stub'));
+            $target = Stub::overridePath($config->root(), $flavor, basename($source, '.stub'));
 
             if (true === is_file($target) && false === $force) {
                 $output->line(
@@ -87,10 +92,16 @@ final class PublishCommand extends ProjectCommand
      */
     private function sources(string $flavor, string $name): array
     {
-        $directory = Paths::stubs() . '/' . $flavor;
-
         if ('' !== $name) {
-            $single = $directory . '/' . $name . '.stub';
+            // A name is a name, not a path. Without this, `stub:publish
+            // ../../elsewhere/thing` resolves and copies a file from outside the
+            // package - harmless on a developer's own machine, but the failure
+            // it produces otherwise explains nothing.
+            if (0 === preg_match(self::NAME, $name)) {
+                throw new Exception(sprintf("'%s' is not a stub name", $name));
+            }
+
+            $single = Stub::packagedPath(Paths::stubs(), $flavor, $name);
 
             if (false === is_file($single)) {
                 throw new Exception(sprintf("stub '%s/%s' is not packaged", $flavor, $name));
@@ -101,7 +112,7 @@ final class PublishCommand extends ProjectCommand
 
         // glob() sorts alphabetically unless told not to, so the listing is
         // stable without a sort of its own.
-        $found = glob($directory . '/*.stub') ?: [];
+        $found = glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [];
 
         if ([] === $found) {
             throw new Exception(sprintf("no stubs are packaged for the '%s' flavor", $flavor));

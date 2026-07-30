@@ -54,7 +54,7 @@ final class PublishCommandTest extends TestCase
 
         foreach ($this->packagedStubs() as $name) {
             $this->assertFileExists(
-                $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/' . $name . '.stub'
+                Stub::overridePath($this->root, 'adr', $name)
             );
         }
     }
@@ -66,7 +66,7 @@ final class PublishCommandTest extends TestCase
         $this->assertSame(
             (string) file_get_contents(Paths::stubs() . '/adr/action.stub'),
             (string) file_get_contents(
-                $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/action.stub'
+                Stub::overridePath($this->root, 'adr', 'action')
             )
         );
     }
@@ -78,7 +78,7 @@ final class PublishCommandTest extends TestCase
         // checks while doing nothing useful.
         $this->runCommand(['action']);
 
-        $published = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/action.stub';
+        $published = Stub::overridePath($this->root, 'adr', 'action');
         file_put_contents($published, 'edited');
 
         $stub = new Stub(Paths::stubs(), $this->root);
@@ -91,18 +91,16 @@ final class PublishCommandTest extends TestCase
     {
         $status = $this->runCommand(['action']);
 
-        $directory = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/';
-
         $this->assertSame(0, $status);
-        $this->assertFileExists($directory . 'action.stub');
-        $this->assertFileDoesNotExist($directory . 'responder.stub');
+        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'action'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'responder'));
     }
 
     public function testAnAlreadyPublishedStubIsSkippedNotOverwritten(): void
     {
         $this->runCommand(['action']);
 
-        $published = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/action.stub';
+        $published = Stub::overridePath($this->root, 'adr', 'action');
         file_put_contents($published, 'edited');
 
         $status = $this->runCommand(['action']);
@@ -128,7 +126,7 @@ final class PublishCommandTest extends TestCase
 
         foreach ($this->packagedStubs() as $name) {
             $this->assertFileExists(
-                $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/' . $name . '.stub'
+                Stub::overridePath($this->root, 'adr', $name)
             );
         }
     }
@@ -137,7 +135,7 @@ final class PublishCommandTest extends TestCase
     {
         $this->runCommand(['action']);
 
-        $published = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/action.stub';
+        $published = Stub::overridePath($this->root, 'adr', 'action');
         file_put_contents($published, 'edited');
 
         $status = $this->runCommand(['action', '--force']);
@@ -155,6 +153,21 @@ final class PublishCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString("stub 'adr/nope' is not packaged", $this->readStderr());
+    }
+
+    public function testAStubNameThatIsAPathIsRejected(): void
+    {
+        // Without the guard this resolves through is_file() and copies a file in
+        // from outside the package. No privilege is crossed - it is the
+        // developer's own machine - but "is not packaged" would be a lie about
+        // what went wrong.
+        $status = $this->runCommand(['../../../etc/passwd']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "'../../../etc/passwd' is not a stub name",
+            $this->readStderr()
+        );
     }
 
     public function testAFlavorWithNoPackagedStubsIsReported(): void
@@ -177,7 +190,7 @@ final class PublishCommandTest extends TestCase
         $this->runCommand(['action']);
 
         $this->assertStringContainsString(
-            'Published ' . $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr/action.stub',
+            'Published ' . Stub::overridePath($this->root, 'adr', 'action'),
             $this->readStdout()
         );
     }

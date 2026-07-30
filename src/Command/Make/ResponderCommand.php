@@ -53,7 +53,7 @@ final class ResponderCommand extends ProjectCommand
     public function handle(Input $input, Output $output): int
     {
         $config    = $this->config($input);
-        $placement = $this->placement($config, $input, self::KEY, self::SUFFIX);
+        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
 
         $writer = new ArtifactWriter(
             new Stub(Paths::stubs(), $config->root()),

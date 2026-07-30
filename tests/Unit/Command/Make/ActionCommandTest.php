@@ -19,6 +19,7 @@ use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\ADR\Router\Router;
 use PHPUnit\Framework\TestCase;
 
+use function dirname;
 use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
@@ -339,10 +340,10 @@ final class ActionCommandTest extends TestCase
      */
     private function publishStub(string $name, string $contents): void
     {
-        $directory = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr';
+        $path = Stub::overridePath($this->root, 'adr', $name);
 
-        mkdir($directory, 0o775, true);
-        file_put_contents($directory . '/' . $name . '.stub', $contents);
+        mkdir(dirname($path), 0o775, true);
+        file_put_contents($path, $contents);
     }
 
     /**

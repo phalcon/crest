@@ -55,11 +55,11 @@ final class MiddlewareCommandTest extends TestCase
             . "namespace App\Middleware;\n"
             . "\n"
             . "use Phalcon\Contracts\ADR\Handler;\n"
-            . "use Phalcon\Contracts\ADR\Middleware;\n"
+            . "use Phalcon\Contracts\ADR\Middleware as MiddlewareContract;\n"
             . "use Phalcon\Contracts\Http\AttributeRequest;\n"
             . "use Phalcon\Http\ResponseInterface;\n"
             . "\n"
-            . "final class AuthMiddleware implements Middleware\n"
+            . "final class AuthMiddleware implements MiddlewareContract\n"
             . "{\n"
             . "    public function __invoke(AttributeRequest \$request, Handler \$next): ResponseInterface\n"
             . "    {\n"
@@ -71,6 +71,23 @@ final class MiddlewareCommandTest extends TestCase
         $this->assertSame(
             $expected,
             (string) file_get_contents($this->root . '/src/Middleware/AuthMiddleware.php')
+        );
+    }
+
+    public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
+    {
+        // `make:middleware Middleware` is the pathological case: the suffix is
+        // already there, so the class is named Middleware - and without the
+        // alias the stub would emit `implements Middleware` beside
+        // `use ...\Middleware;`, which does not compile.
+        $status = $this->runCommand(['Middleware']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Middleware/Middleware.php');
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'final class Middleware implements MiddlewareContract',
+            $contents
         );
     }
 

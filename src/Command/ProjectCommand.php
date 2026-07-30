@@ -41,16 +41,20 @@ abstract class ProjectCommand extends Command
     }
 
     /**
-     * Where a user-named artifact goes, for the `name` argument every generator
-     * declares.
+     * Where a user-named artifact goes.
+     *
+     * Takes the name rather than the Input it came from: reading the `name`
+     * argument here would be an unwritten contract with every subclass, and a
+     * generator that called its argument something else would get a confusing
+     * complaint about the empty string.
      *
      * The name is validated before any configuration is read, so a typo is
      * reported as a typo rather than as whatever the psr-4 map happens to say
      * about the directory it would have landed in.
      */
-    protected function placement(Config $config, Input $input, string $key, string $suffix): Placement
+    protected function placement(Config $config, string $name, string $key, string $suffix): Placement
     {
-        $class = ClassName::suffixed($input->argumentString('name'), $suffix);
+        $class = ClassName::suffixed($name, $suffix);
 
         return new Placement(
             $class,

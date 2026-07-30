@@ -42,6 +42,12 @@ final class IsolationTest extends TestCase
         'Crest\\Generator',
         'crest',
         'Crest ',
+        // Matching is case-sensitive and has to stay that way - every file here
+        // declares `namespace Crest\Console`. So the shouted form is listed
+        // separately: a constant named CREST slipped past the lowercase needle
+        // once, and naming a tool from inside this cluster is the one thing
+        // these tests exist to prevent.
+        'CREST',
     ];
 
     /**
