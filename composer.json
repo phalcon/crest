@@ -5,8 +5,7 @@
     "license": "BSD-3-Clause",
     "keywords": ["phalcon", "cli", "console", "generator", "scaffolding"],
     "require": {
-        "php": "^8.1",
-        "phalcon/cli-options-parser": "^2.0"
+        "php": "^8.1"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3",
