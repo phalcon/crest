@@ -28,6 +28,15 @@ use function str_replace;
  */
 final class Stub
 {
+    /**
+     * Where a project keeps the stubs it has taken over, relative to its root.
+     *
+     * Public because stub:publish writes here and this class reads here. Two
+     * copies of the convention that disagreed would put published stubs
+     * somewhere resolution never looks - silent, and maddening to diagnose.
+     */
+    public const OVERRIDE_DIRECTORY = 'resources/stubs';
+
     private ?string $projectRoot;
 
     private string $packagedRoot;
@@ -52,12 +61,21 @@ final class Stub
         return $template;
     }
 
+    /**
+     * A stub's location under a package's stub root, or under a project's
+     * override directory once OVERRIDE_DIRECTORY is prefixed.
+     */
+    public static function relativePath(string $flavor, string $name): string
+    {
+        return sprintf('%s/%s.stub', $flavor, $name);
+    }
+
     public function resolve(string $flavor, string $name): string
     {
-        $relative = sprintf('%s/%s.stub', $flavor, $name);
+        $relative = self::relativePath($flavor, $name);
 
         if (null !== $this->projectRoot) {
-            $override = $this->projectRoot . '/resources/stubs/' . $relative;
+            $override = $this->projectRoot . '/' . self::OVERRIDE_DIRECTORY . '/' . $relative;
 
             if (true === is_file($override)) {
                 return $override;
