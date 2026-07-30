@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Console;
 
 use Crest\Console\Kernel;
+use Crest\Console\Output;
 use Crest\Console\PackageVersion;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
@@ -167,7 +168,7 @@ final class KernelTest extends TestCase
         // Asserted whole: the banner is concatenated and the blank line and
         // header row are each a separate call, so substring checks let a
         // dropped separator or a missing row through.
-        $expected = 'demo ' . PackageVersion::of('phalcon/crest') . PHP_EOL
+        $expected = Output::CREST . ' demo ' . PackageVersion::of('phalcon/crest') . PHP_EOL
             . PHP_EOL
             . 'COMMAND  DESCRIPTION' . PHP_EOL
             . 'fake     A command that exists only for tests' . PHP_EOL;

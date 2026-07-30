@@ -126,10 +126,12 @@ final class ShowCommandTest extends TestCase
 
         $this->runCommand();
 
-        $output = $this->readStdout();
+        // Normalised: the column width now follows the longest default key, so
+        // asserting the padding here would pin something this test is not about.
+        $output = $this->normalised();
 
-        $this->assertStringContainsString('action  ' . $this->root . '/src/Action  inferred', $output);
-        $this->assertStringContainsString('views   ' . $this->root . '/templates   declared', $output);
+        $this->assertStringContainsString('action ' . $this->root . '/src/Action inferred', $output);
+        $this->assertStringContainsString('views ' . $this->root . '/templates declared', $output);
     }
 
     public function testTheWholeReportIsRenderedForAnInferredProject(): void
@@ -144,7 +146,11 @@ final class ShowCommandTest extends TestCase
             . 'namespace App inferred' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
-            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL;
+            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL
+            . 'command ' . $this->root . '/src/Command inferred' . PHP_EOL
+            . 'middleware ' . $this->root . '/src/Middleware inferred' . PHP_EOL
+            . 'provider ' . $this->root . '/src/Provider inferred' . PHP_EOL
+            . 'responder ' . $this->root . '/src/Responder inferred' . PHP_EOL;
 
         $this->assertSame($expected, $this->normalised());
     }
@@ -153,6 +159,9 @@ final class ShowCommandTest extends TestCase
     {
         // Paths are declared out of alphabetical order, so the listing only
         // reads correctly because it is sorted rather than merged-and-printed.
+        //
+        // The flavor is mvc, which has no default paths, so only the two
+        // declared keys appear - `action` belongs to ADR alone.
         file_put_contents(
             $this->root . '/crest.php',
             "<?php\n\nreturn ['flavor' => 'mvc', 'namespace' => 'Shop', "
@@ -169,7 +178,6 @@ final class ShowCommandTest extends TestCase
             . 'namespace Shop declared' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
-            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
             . 'views ' . $this->root . '/templates declared' . PHP_EOL;
 

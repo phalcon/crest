@@ -14,47 +14,27 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ActionCommand;
-use Crest\Commands;
-use Crest\Console\Kernel;
-use Crest\Console\Registry;
-use Crest\Tests\Support\CapturesOutput;
-use Crest\Tests\Support\ScratchDirectory;
+use Crest\Generator\Stub;
+use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\ADR\Router\Router;
 use PHPUnit\Framework\TestCase;
 
-use function chdir;
 use function file_get_contents;
 use function file_put_contents;
-use function getcwd;
+use function mkdir;
 
 final class ActionCommandTest extends TestCase
 {
-    use CapturesOutput;
-    use ScratchDirectory;
-
-    private string $previousCwd = '';
+    use GeneratesInAScratchProject;
 
     protected function setUp(): void
     {
-        $this->makeScratchDirectory('make-action', 'src/Action');
-        $this->writeComposerJson(['App\\' => 'src/']);
-        $this->captureStreams();
-
-        // The command writes real files, and Config::discover() falls back to
-        // the working directory when --directory does not reach it. Under
-        // mutation testing that fallback is reachable, and from the repository
-        // root it would generate into the actual src/ tree. Running from the
-        // scratch directory keeps even the fallback contained.
-        $this->previousCwd = (string) getcwd();
-        chdir($this->root);
+        $this->startScratchProject('make-action', 'src/Action');
     }
 
     protected function tearDown(): void
     {
-        chdir($this->previousCwd);
-
-        $this->closeStreams();
-        $this->removeScratchDirectory();
+        $this->endScratchProject();
     }
 
     public function testDefinitionNamesItselfMakeAction(): void
@@ -253,6 +233,55 @@ final class ActionCommandTest extends TestCase
         $this->assertStringContainsString("missing required argument 'method'", $this->readStderr());
     }
 
+    public function testANamedStubIsRenderedInsteadOfTheResponderDefault(): void
+    {
+        // Resolved through the same two-level chain as everything else, so a
+        // project that has run stub:publish can generate from its own copy.
+        $this->publishStub('minimal', "<?php\n\n// {{ namespace }}\\{{ class }}\n");
+
+        $status = $this->runCommand(['GET', '/health', '--stub=minimal']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            "<?php\n\n// App\Action\Health\GetHealth\n",
+            (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php')
+        );
+    }
+
+    public function testAnEmptyStubOptionFallsBackToTheResponderDefault(): void
+    {
+        // `--stub=` is a shell mishap, not a request for a stub called ''. It
+        // reads as absent, matching how optionString() treats every option.
+        $status = $this->runCommand(['GET', '/health', '--stub=']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'implements Action',
+            (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php')
+        );
+    }
+
+    public function testAStubThatDoesNotExistIsReported(): void
+    {
+        $status = $this->runCommand(['GET', '/health', '--stub=nope']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("stub 'adr/nope' not found", $this->readStderr());
+    }
+
+    public function testStubAndResponderTogetherAreRejected(): void
+    {
+        $this->publishStub('minimal', 'x');
+
+        $status = $this->runCommand(['GET', '/health', '--stub=minimal', '--responder=view']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            '--stub and --responder both name a stub to render; pass one or the other',
+            $this->readStderr()
+        );
+    }
+
     public function testUnknownResponderIsRejected(): void
     {
         $status = $this->runCommand(['GET', '/health', '--responder', 'xml']);
@@ -305,20 +334,22 @@ final class ActionCommandTest extends TestCase
     }
 
     /**
+     * Writes a stub into the project override directory, where stub:publish puts
+     * them and Stub::resolve() looks first.
+     */
+    private function publishStub(string $name, string $contents): void
+    {
+        $directory = $this->root . '/' . Stub::OVERRIDE_DIRECTORY . '/adr';
+
+        mkdir($directory, 0o775, true);
+        file_put_contents($directory . '/' . $name . '.stub', $contents);
+    }
+
+    /**
      * @param list<string> $arguments
      */
     private function runCommand(array $arguments): int
     {
-        $registry = (new Registry())->add('make:action', ActionCommand::class);
-        $kernel   = new Kernel(
-            Commands::NAME,
-            $registry,
-            Commands::PACKAGE,
-            $this->stdout,
-            $this->stderr,
-            false
-        );
-
-        return $kernel->handle(['crest', 'make:action', ...$arguments, '--directory', $this->root]);
+        return $this->runProjectCommand('make:action', ActionCommand::class, $arguments);
     }
 }

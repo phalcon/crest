@@ -74,7 +74,12 @@ final class CommandsTest extends TestCase
                 'event:list',
                 'list',
                 'make:action',
+                'make:command',
+                'make:middleware',
+                'make:provider',
+                'make:responder',
                 'route:list',
+                'stub:publish',
             ],
             array_keys(Commands::registry()->all())
         );

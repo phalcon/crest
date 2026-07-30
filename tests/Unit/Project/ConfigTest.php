@@ -251,6 +251,36 @@ final class ConfigTest extends TestCase
         $this->assertSame($this->root . '/src/Action', $config->path('action'));
     }
 
+    public function testAdrGetsADefaultPathForEveryGeneratedArtifact(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $this->assertSame(
+            [
+                'action'     => $this->root . '/src/Action',
+                'command'    => $this->root . '/src/Command',
+                'middleware' => $this->root . '/src/Middleware',
+                'provider'   => $this->root . '/src/Provider',
+                'responder'  => $this->root . '/src/Responder',
+            ],
+            Config::discover($this->root)->paths()
+        );
+    }
+
+    public function testFlavorsWithoutGeneratorsGetNoDefaultPaths(): void
+    {
+        // ADR is the only flavor with generators. Offering the others its
+        // directories would put locations in config:show for artifacts the
+        // project has no command to write.
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
+        $this->assertSame([], Config::discover($this->root)->paths());
+
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+        $this->assertSame([], Config::discover($this->root)->paths());
+    }
+
     public function testPsr4DirectoryMatchOnlyCountsWholeSegments(): void
     {
         // 'src' must not be treated as covering 'srcextra' - that is a

@@ -34,6 +34,30 @@ final class OutputTest extends TestCase
         $this->closeStreams();
     }
 
+    public function testBannerPrintsTheMarkThenTheTextUndecorated(): void
+    {
+        // Undecorated keeps the glyph and drops the escapes: a piped run should
+        // still read as a banner, just without colour.
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $output->banner('demo 1.2.3');
+
+        $this->assertSame(Output::CREST . ' demo 1.2.3' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testBannerColorsOnlyTheMarkWhenDecorated(): void
+    {
+        // The text after the mark is the caller's, and stays uncoloured.
+        $output = new Output($this->stdout, $this->stderr, true);
+
+        $output->banner('demo 1.2.3');
+
+        $this->assertSame(
+            "\033[38;5;208m" . Output::CREST . "\033[0m" . ' demo 1.2.3' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
     public function testErrorGoesToStderrNotStdout(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);

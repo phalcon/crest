@@ -68,7 +68,8 @@ final class ListCommandTest extends TestCase
         $this->listCommands();
 
         $this->assertStringStartsWith(
-            Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE) . PHP_EOL . PHP_EOL
+            Output::CREST . ' ' . Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE)
+            . PHP_EOL . PHP_EOL
             . 'COMMAND',
             $this->readStdout()
         );
