@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\Contracts\Container\Service\Provider;
+
+final class {{ class }} implements Provider
+{
+    public function provide(Collection $services): void
+    {
+        // Concretes autowire, so only the seams need declaring:
+        //
+        // $services->set(Thing::class, Thing::class);
+        // $services->bind(ThingInterface::class, Thing::class);
+        // $services->setAlias(ThingInterface::class, 'thing');
+    }
+}

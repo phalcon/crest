@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Crest\Console\Command\Command as CrestCommand;
+use Crest\Console\Input;
+use Crest\Console\Output;
+use Crest\Console\Parsing\Definition;
+
+final class {{ class }} extends CrestCommand
+{
+    public function define(): Definition
+    {
+        return Definition::for('{{ command }}', 'Describe what this command does');
+    }
+
+    public function handle(Input $input, Output $output): int
+    {
+        $output->success('{{ command }} ran');
+
+        return 0;
+    }
+}
