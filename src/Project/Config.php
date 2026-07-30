@@ -45,8 +45,6 @@ use function trim;
  */
 final class Config
 {
-    private const DEFAULT_PATHS = ['action' => 'src/Action'];
-
     /**
      * @param array<string, string> $paths
      * @param array<string, string> $namespaces
@@ -225,6 +223,37 @@ final class Config
     }
 
     /**
+     * Where each generated artifact lands when crest.php does not say.
+     *
+     * Keyed by flavor rather than shared, because the artifacts themselves are
+     * flavor-specific: a provider registers against `Phalcon\Container` under
+     * ADR and against DI under MVC, so one flat set would offer every project
+     * directories for artifacts it can never generate.
+     *
+     * Only ADR is populated. The others get their keys when their generators
+     * land - defaults no command reads would show up in `config:show` as
+     * locations that mean nothing.
+     *
+     * @return array<string, string>
+     */
+    private static function defaultPaths(Flavor $flavor): array
+    {
+        return match ($flavor) {
+            Flavor::ADR => [
+                'action'     => 'src/Action',
+                // Not an ADR artifact: a crest command is the same class in any
+                // flavor. It sits here because ADR is the only populated set;
+                // when the others land it belongs in all of them.
+                'command'    => 'src/Command',
+                'middleware' => 'src/Middleware',
+                'provider'   => 'src/Provider',
+                'responder'  => 'src/Responder',
+            ],
+            Flavor::CLI, Flavor::MVC => [],
+        };
+    }
+
+    /**
      * @param array<string, mixed> $declared
      */
     private static function fromArray(array $declared, string $root, string $source): self
@@ -250,7 +279,7 @@ final class Config
             $namespace = trim($declared['namespace'], '\\');
         }
 
-        $paths = self::DEFAULT_PATHS;
+        $paths = self::defaultPaths($flavor);
         if (true === isset($declared['paths']) && true === is_array($declared['paths'])) {
             /** @var array<string, string> $supplied */
             $supplied = $declared['paths'];
@@ -311,7 +340,7 @@ final class Config
                 Flavor::ADR,
                 trim($prefix, '\\'),
                 $directory,
-                self::DEFAULT_PATHS,
+                self::defaultPaths(Flavor::ADR),
                 [],
                 $psr4
             );

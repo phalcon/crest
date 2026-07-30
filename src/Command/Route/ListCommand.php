@@ -15,11 +15,10 @@ namespace Crest\Command\Route;
 
 use Crest\ADR\ActionResolver;
 use Crest\ADR\PhalconRouterResolver;
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-use Crest\Project\Config;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -46,7 +45,7 @@ use function substr;
  * classes and ask the framework what each one answers. That is what this does -
  * it derives nothing itself.
  */
-final class ListCommand extends Command
+final class ListCommand extends ProjectCommand
 {
     public function define(): Definition
     {
@@ -55,10 +54,7 @@ final class ListCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
+        $config = $this->config($input);
 
         $base      = $config->namespaceFor('action');
         $directory = $config->path('action');

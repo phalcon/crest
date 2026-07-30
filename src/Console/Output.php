@@ -35,9 +35,11 @@ use const STDOUT;
  */
 final class Output
 {
-    public const COLOR_GREEN = "\033[32m";
-    public const COLOR_RED   = "\033[31m";
-    public const COLOR_RESET = "\033[0m";
+    public const COLOR_GREEN  = "\033[32m";
+    public const COLOR_ORANGE = "\033[38;5;208m";
+    public const COLOR_RED    = "\033[31m";
+    public const COLOR_RESET  = "\033[0m";
+    public const CREST        = '⟩⟩⟩';
 
     private bool $decorated;
 
@@ -57,6 +59,19 @@ final class Output
         $this->stdout    = $stdout;
         $this->stderr    = $stderr;
         $this->decorated = $decorated ?? $this->detectDecoration($stdout);
+    }
+
+    /**
+     * The identity line a run opens with: the chevron mark, then whatever the
+     * caller puts after it - by convention the tool name and its version.
+     *
+     * The mark is coloured through decorate() rather than carrying its own
+     * escapes, so a piped run or one with NO_COLOR set gets the glyph and no
+     * control codes.
+     */
+    public function banner(string $text): void
+    {
+        $this->line($this->decorate(self::CREST, self::COLOR_ORANGE) . ' ' . $text);
     }
 
     public function error(string $text): void

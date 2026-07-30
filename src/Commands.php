@@ -19,7 +19,12 @@ use Crest\Command\Config\ShowCommand as ConfigShowCommand;
 use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
 use Crest\Command\Make\ActionCommand;
+use Crest\Command\Make\CommandCommand;
+use Crest\Command\Make\MiddlewareCommand;
+use Crest\Command\Make\ProviderCommand;
+use Crest\Command\Make\ResponderCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
+use Crest\Command\Stub\PublishCommand as StubPublishCommand;
 use Crest\Console\Registry;
 
 /**
@@ -57,7 +62,12 @@ final class Commands
             ->add('event:list', EventListCommand::class)
             ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)
+            ->add('make:command', CommandCommand::class)
+            ->add('make:middleware', MiddlewareCommand::class)
+            ->add('make:provider', ProviderCommand::class)
+            ->add('make:responder', ResponderCommand::class)
             ->add('route:list', RouteListCommand::class)
+            ->add('stub:publish', StubPublishCommand::class)
             ->withDiscovery(self::KEY);
     }
 }

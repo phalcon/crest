@@ -48,7 +48,7 @@ final class ListCommand extends Command
             $rows[] = [$name, (new $class())->define()->getDescription()];
         }
 
-        $output->line(Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE));
+        $output->banner(Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE));
         $output->line();
         $output->table(['COMMAND', 'DESCRIPTION'], $rows);
 

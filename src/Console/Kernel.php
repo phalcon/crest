@@ -152,7 +152,7 @@ final class Kernel
             $rows[]  = [$name, $command->define()->getDescription()];
         }
 
-        $this->output->line($this->name . ' ' . $this->version());
+        $this->output->banner($this->name . ' ' . $this->version());
         $this->output->line();
         $this->output->table(['COMMAND', 'DESCRIPTION'], $rows);
     }

@@ -13,13 +13,12 @@ declare(strict_types=1);
 
 namespace Crest\Command\Event;
 
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Bootstrap;
-use Crest\Project\Config;
 use Phalcon\Container\Container;
 use Phalcon\Events\Manager;
 
@@ -36,7 +35,7 @@ use function sort;
  * both are real. Normalising them would hide the difference between listening
  * to everything a component fires and listening to one moment.
  */
-final class ListCommand extends Command
+final class ListCommand extends ProjectCommand
 {
     public function define(): Definition
     {
@@ -45,12 +44,7 @@ final class ListCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
-
-        $manager = $this->manager(Bootstrap::container($config));
+        $manager = $this->manager(Bootstrap::container($this->config($input)));
 
         /** @var list<string> $types */
         $types = $manager->getEventTypes();

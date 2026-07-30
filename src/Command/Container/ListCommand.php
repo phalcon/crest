@@ -13,13 +13,12 @@ declare(strict_types=1);
 
 namespace Crest\Command\Container;
 
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Bootstrap;
-use Crest\Project\Config;
 use Phalcon\Container\Container;
 
 use function get_class;
@@ -31,7 +30,7 @@ use function sort;
  * Names come from the container; everything else is looked up per name, which
  * is all the container exposes and all this needs.
  */
-final class ListCommand extends Command
+final class ListCommand extends ProjectCommand
 {
     public function define(): Definition
     {
@@ -40,12 +39,7 @@ final class ListCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
-
-        $container = $this->container(Bootstrap::container($config));
+        $container = $this->container(Bootstrap::container($this->config($input)));
 
         $names = $container->getServiceNames();
         sort($names);

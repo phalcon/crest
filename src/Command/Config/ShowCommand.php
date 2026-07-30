@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Command\Config;
 
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
@@ -29,7 +29,7 @@ use function ksort;
  * from would answer the easy half of the question: the useful part is knowing
  * which of them the project actually asked for.
  */
-final class ShowCommand extends Command
+final class ShowCommand extends ProjectCommand
 {
     private const DECLARED = 'declared';
     private const INFERRED = 'inferred';
@@ -41,11 +41,7 @@ final class ShowCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
-
+        $config = $this->config($input);
         $source = $config->source();
 
         $output->line('Source: ' . ($source ?? 'inferred from composer.json'));

@@ -16,22 +16,16 @@ namespace Crest\Command\Make;
 use Crest\ADR\Convention;
 use Crest\ADR\PhalconRouterResolver;
 use Crest\ADR\Target;
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Generator\ArtifactWriter;
 use Crest\Generator\Stub;
 use Crest\Paths;
-use Crest\Project\Config;
 
-use function class_exists;
-use function dirname;
-use function file_exists;
-use function file_put_contents;
 use function implode;
-use function is_dir;
-use function mkdir;
 use function sprintf;
 use function str_replace;
 use function strtolower;
@@ -41,8 +35,13 @@ use function trim;
  * Generates an ADR Action and places it where the convention router will find
  * it. Boots nothing - it reads config and writes a file, which is why it keeps
  * working on a project that does not currently run.
+ *
+ * `--responder` picks between the two packaged shapes; `--stub` names any stub
+ * instead, resolved through the same two-level chain, so a project that has run
+ * stub:publish can generate from its own edited copy. An empty `--stub=` counts
+ * as absent, which is how optionString() reads every other option.
  */
-final class ActionCommand extends Command
+final class ActionCommand extends ProjectCommand
 {
     private const RESPONDERS = ['json' => 'action', 'view' => 'action-view'];
 
@@ -52,21 +51,32 @@ final class ActionCommand extends Command
             ->argument('method', true, 'HTTP method, e.g. GET')
             ->argument('path', true, 'Route path, e.g. /company/{id}')
             ->option('responder=s', 'Responder style: json or view', 'json')
-            ->option('force', 'Overwrite an existing action', false);
+            ->option('stub=s', 'Render a named stub instead of the responder default')
+            // No declared default: resolveOptions() supplies false for a flag
+            // without consulting one, so passing it would state something that
+            // is never read.
+            ->option('force', 'Overwrite an existing action');
     }
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
+        $config = $this->config($input);
 
         $responder = strtolower($input->optionString('responder'));
 
         if (false === isset(self::RESPONDERS[$responder])) {
             throw new Exception(
                 sprintf("unknown responder '%s'; expected json or view", $responder)
+            );
+        }
+
+        $named = $input->optionString('stub');
+
+        // Both choose a stub. Honouring one and dropping the other silently is
+        // how someone spends an afternoon wondering why their stub is ignored.
+        if ('' !== $named && true === $input->hasOption('responder')) {
+            throw new Exception(
+                '--stub and --responder both name a stub to render; pass one or the other'
             );
         }
 
@@ -81,30 +91,23 @@ final class ActionCommand extends Command
 
         $file = $config->path('action') . '/' . $target->relativePath;
 
-        if (true === file_exists($file) && true !== $input->option('force')) {
-            throw new Exception(sprintf('%s already exists; pass --force to overwrite', $file));
-        }
+        $writer = new ArtifactWriter(
+            new Stub(Paths::stubs(), $config->root()),
+            $config->flavor()->value
+        );
 
-        $stub = new Stub(Paths::stubs(), $config->root());
-
-        $contents = $stub->render(
-            $config->flavor()->value,
-            self::RESPONDERS[$responder],
+        $writer->render(
+            $file,
+            '' !== $named ? $named : self::RESPONDERS[$responder],
             [
                 'namespace'  => $target->namespace,
                 'class'      => $target->class,
                 'attributes' => $this->attributeBlock($target),
                 'params'     => $this->paramsBlock($target),
                 'template'   => $this->template($target),
-            ]
+            ],
+            true === $input->option('force')
         );
-
-        $directory = dirname($file);
-        if (false === is_dir($directory)) {
-            mkdir($directory, 0o775, true);
-        }
-
-        file_put_contents($file, $contents);
 
         $output->success(sprintf('Created %s', $file));
         $output->line(sprintf('Answers %s %s', $target->method, $target->path));
