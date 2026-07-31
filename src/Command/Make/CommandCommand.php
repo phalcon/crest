@@ -18,9 +18,6 @@ use Crest\Commands;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-use Crest\Generator\ArtifactWriter;
-use Crest\Generator\Stub;
-use Crest\Paths;
 
 use function sprintf;
 use function str_replace;
@@ -62,10 +59,7 @@ final class CommandCommand extends ProjectCommand
         $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
         $name      = $this->registryName($placement->class);
 
-        $writer = new ArtifactWriter(
-            new Stub(Paths::stubs(), $config->root()),
-            $config->flavor()->value
-        );
+        $writer = $this->writer($config);
 
         $writer->render(
             $placement->file,

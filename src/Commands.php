@@ -14,10 +14,10 @@ declare(strict_types=1);
 namespace Crest;
 
 use Crest\Command\AboutCommand;
-use Crest\Command\ListCommand;
 use Crest\Command\Config\ShowCommand as ConfigShowCommand;
 use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
+use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
 use Crest\Command\Make\CommandCommand;
 use Crest\Command\Make\MiddlewareCommand;
@@ -29,8 +29,7 @@ use Crest\Console\Registry;
 
 /**
  * Crest's identity and command set. The console core is deliberately anonymous;
- * this class is what makes it crest. When Crest\Console becomes
- * phalcon/console, this file is the only thing that stays behind.
+ * this class is what makes it crest.
  */
 final class Commands
 {

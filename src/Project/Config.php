@@ -18,10 +18,10 @@ use Crest\Console\Exceptions\Exception;
 use function array_keys;
 use function dirname;
 use function explode;
-use function in_array;
 use function file_get_contents;
 use function getcwd;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -86,142 +86,6 @@ final class Config
         return self::infer($directory);
     }
 
-    public function flavor(): Flavor
-    {
-        return $this->flavor;
-    }
-
-    public function namespace(): string
-    {
-        return $this->namespace;
-    }
-
-    /**
-     * The namespace a named location maps to.
-     *
-     * An explicit `namespaces` entry in crest.php wins. Otherwise the answer
-     * comes from composer.json's psr-4 map - the authoritative statement of
-     * which prefix covers which directory - by finding the longest declared
-     * directory that prefixes this path and appending the remainder.
-     *
-     * PSR-4 maps directory segments to namespace segments verbatim, so the
-     * remainder is used as-is with no case transformation.
-     *
-     * Throws when no psr-4 entry covers the path: that configuration cannot
-     * autoload whatever is written there, and a clear error is worth more than
-     * a plausible guess.
-     */
-    public function namespaceFor(string $key): string
-    {
-        if (true === isset($this->namespaces[$key])) {
-            return trim($this->namespaces[$key], '\\');
-        }
-
-        // substr, not str_replace: a global replace would also strip a repeat
-        // of the root further down the path.
-        $relative = trim(substr($this->path($key), strlen($this->root)), '/');
-        $best     = null;
-        $prefix   = '';
-
-        foreach ($this->psr4 as $candidate => $directory) {
-            $directory = trim($directory, '/');
-
-            if (
-                $relative !== $directory
-                && false === str_starts_with($relative, $directory . '/')
-            ) {
-                continue;
-            }
-
-            if (null !== $best && strlen($directory) <= strlen($best)) {
-                continue;
-            }
-
-            $best   = $directory;
-            $prefix = trim($candidate, '\\');
-        }
-
-        if (null === $best) {
-            throw new Exception(
-                sprintf("no psr-4 autoload entry covers '%s'", $relative)
-            );
-        }
-
-        $remainder = trim(substr($relative, strlen($best)), '/');
-
-        if ('' === $remainder) {
-            return $prefix;
-        }
-
-        return $prefix . '\\' . implode('\\', explode('/', $remainder));
-    }
-
-    /**
-     * How the project boots, as declared - either a front controller class or
-     * a path to a file returning a container. Null when nothing was declared.
-     *
-     * Returned verbatim rather than resolved, because the two forms resolve
-     * differently and only the caller knows which it is looking at.
-     *
-     * Services and listeners cannot be read off the filesystem the way routes
-     * can: they exist only once the application has registered them.
-     */
-    public function bootstrap(): ?string
-    {
-        return $this->bootstrap;
-    }
-
-    /**
-     * Whether the config file stated this top-level key, as opposed to it
-     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
-     */
-    public function isDeclared(string $key): bool
-    {
-        return in_array($key, $this->declared, true);
-    }
-
-    /**
-     * Every named location, resolved to an absolute path.
-     *
-     * @return array<string, string>
-     */
-    public function paths(): array
-    {
-        $resolved = [];
-
-        foreach (array_keys($this->paths) as $key) {
-            $resolved[$key] = $this->path($key);
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * The config file this was read from, or null when everything was inferred
-     * from composer.json.
-     */
-    public function source(): ?string
-    {
-        return $this->source;
-    }
-
-    /**
-     * Absolute path for a named location.
-     */
-    public function path(string $key): string
-    {
-        if (false === isset($this->paths[$key])) {
-            throw new Exception(sprintf("unknown path '%s'", $key));
-        }
-
-        return $this->root . '/' . trim($this->paths[$key], '/');
-    }
-
-    public function root(): string
-    {
-        return $this->root;
-    }
-
     /**
      * Where each generated artifact lands when crest.php does not say.
      *
@@ -240,7 +104,7 @@ final class Config
     {
         return match ($flavor) {
             Flavor::ADR => [
-                'action'     => 'src/Action',
+                'action' => 'src/Action',
                 // Not an ADR artifact: a crest command is the same class in any
                 // flavor. It sits here because ADR is the only populated set,
                 // and moves to a shared one when cli, mvc and micro arrive.
@@ -379,5 +243,141 @@ final class Config
         }
 
         return $map;
+    }
+
+    /**
+     * How the project boots, as declared - either a front controller class or
+     * a path to a file returning a container. Null when nothing was declared.
+     *
+     * Returned verbatim rather than resolved, because the two forms resolve
+     * differently and only the caller knows which it is looking at.
+     *
+     * Services and listeners cannot be read off the filesystem the way routes
+     * can: they exist only once the application has registered them.
+     */
+    public function bootstrap(): ?string
+    {
+        return $this->bootstrap;
+    }
+
+    public function flavor(): Flavor
+    {
+        return $this->flavor;
+    }
+
+    /**
+     * Whether the config file stated this top-level key, as opposed to it
+     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
+     */
+    public function isDeclared(string $key): bool
+    {
+        return in_array($key, $this->declared, true);
+    }
+
+    public function namespace(): string
+    {
+        return $this->namespace;
+    }
+
+    /**
+     * The namespace a named location maps to.
+     *
+     * An explicit `namespaces` entry in crest.php wins. Otherwise the answer
+     * comes from composer.json's psr-4 map - the authoritative statement of
+     * which prefix covers which directory - by finding the longest declared
+     * directory that prefixes this path and appending the remainder.
+     *
+     * PSR-4 maps directory segments to namespace segments verbatim, so the
+     * remainder is used as-is with no case transformation.
+     *
+     * Throws when no psr-4 entry covers the path: that configuration cannot
+     * autoload whatever is written there, and a clear error is worth more than
+     * a plausible guess.
+     */
+    public function namespaceFor(string $key): string
+    {
+        if (true === isset($this->namespaces[$key])) {
+            return trim($this->namespaces[$key], '\\');
+        }
+
+        // substr, not str_replace: a global replace would also strip a repeat
+        // of the root further down the path.
+        $relative = trim(substr($this->path($key), strlen($this->root)), '/');
+        $best     = null;
+        $prefix   = '';
+
+        foreach ($this->psr4 as $candidate => $directory) {
+            $directory = trim($directory, '/');
+
+            if (
+                $relative !== $directory
+                && false === str_starts_with($relative, $directory . '/')
+            ) {
+                continue;
+            }
+
+            if (null !== $best && strlen($directory) <= strlen($best)) {
+                continue;
+            }
+
+            $best   = $directory;
+            $prefix = trim($candidate, '\\');
+        }
+
+        if (null === $best) {
+            throw new Exception(
+                sprintf("no psr-4 autoload entry covers '%s'", $relative)
+            );
+        }
+
+        $remainder = trim(substr($relative, strlen($best)), '/');
+
+        if ('' === $remainder) {
+            return $prefix;
+        }
+
+        return $prefix . '\\' . implode('\\', explode('/', $remainder));
+    }
+
+    /**
+     * Absolute path for a named location.
+     */
+    public function path(string $key): string
+    {
+        if (false === isset($this->paths[$key])) {
+            throw new Exception(sprintf("unknown path '%s'", $key));
+        }
+
+        return $this->root . '/' . trim($this->paths[$key], '/');
+    }
+
+    /**
+     * Every named location, resolved to an absolute path.
+     *
+     * @return array<string, string>
+     */
+    public function paths(): array
+    {
+        $resolved = [];
+
+        foreach (array_keys($this->paths) as $key) {
+            $resolved[$key] = $this->path($key);
+        }
+
+        return $resolved;
+    }
+
+    public function root(): string
+    {
+        return $this->root;
+    }
+
+    /**
+     * The config file this was read from, or null when everything was inferred
+     * from composer.json.
+     */
+    public function source(): ?string
+    {
+        return $this->source;
     }
 }

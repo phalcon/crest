@@ -15,8 +15,11 @@ namespace Crest\Command;
 
 use Crest\Console\Command\Command;
 use Crest\Console\Input;
+use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
 use Crest\Generator\Placement;
+use Crest\Generator\Stub;
+use Crest\Paths;
 use Crest\Project\Config;
 
 /**
@@ -25,10 +28,10 @@ use Crest\Project\Config;
  * `--directory` and `--config` are global options the kernel merges into each
  * definition, so resolving them was repeated identically in ten commands. It
  * lives here rather than on Crest\Console\Command\Command because that class may
- * not reference Crest\Project - it has to stay tool-agnostic for the eventual
- * extraction to phalcon/console. And it is not a Config::fromInput() factory,
- * because that would point Crest\Project at Crest\Console\Input and couple
- * project configuration to the console for the sake of two arguments.
+ * not reference Crest\Project - Crest\Console stays independent of the rest of
+ * the tool, which IsolationTest enforces. And it is not a Config::fromInput()
+ * factory, because that would point Crest\Project at Crest\Console\Input and
+ * couple project configuration to the console for the sake of two arguments.
  */
 abstract class ProjectCommand extends Command
 {
@@ -60,6 +63,26 @@ abstract class ProjectCommand extends Command
             $class,
             $config->path($key) . '/' . $class . '.php',
             $config->namespaceFor($key)
+        );
+    }
+
+    /**
+     * The writer a generator renders through.
+     *
+     * Assembly was repeated verbatim in every make:* command, which meant five
+     * copies of the stub resolution order - packaged root, then project root -
+     * and five places to change when it moves. Contributed commands get it by
+     * extending this class rather than by knowing how a writer goes together.
+     *
+     * stub:publish deliberately does not come through here: it copies rather
+     * than renders, so it has no stub to construct a writer around and uses the
+     * static ArtifactWriter::write() instead.
+     */
+    protected function writer(Config $config): ArtifactWriter
+    {
+        return new ArtifactWriter(
+            new Stub(Paths::stubs(), $config->root()),
+            $config->flavor()->value
         );
     }
 }

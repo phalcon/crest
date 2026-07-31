@@ -41,9 +41,9 @@ final class Stub
      */
     private const OVERRIDE_DIRECTORY = 'resources/stubs';
 
-    private ?string $projectRoot;
-
     private string $packagedRoot;
+
+    private ?string $projectRoot;
 
     /**
      * Roots are stored as given. Normalising a trailing slash is the path

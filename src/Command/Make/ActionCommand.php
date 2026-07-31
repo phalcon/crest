@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
+use Crest\ADR\ActionResolver;
 use Crest\ADR\Convention;
 use Crest\ADR\PhalconRouterResolver;
 use Crest\ADR\Target;
@@ -21,9 +22,6 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-use Crest\Generator\ArtifactWriter;
-use Crest\Generator\Stub;
-use Crest\Paths;
 
 use function implode;
 use function sprintf;
@@ -45,6 +43,22 @@ final class ActionCommand extends ProjectCommand
 {
     private const RESPONDERS = ['json' => 'action', 'view' => 'action-view'];
 
+    private readonly ActionResolver $resolver;
+
+    /**
+     * Defaulted, so the kernel's `new $class()` still works and nothing outside
+     * has to know which resolver this command wants.
+     *
+     * Injectable for the same reason route:list is: the class name a route
+     * produces is the framework's rule, and a test can only prove crest asked
+     * for it - rather than derived it - by watching what it does with an answer
+     * no local rule would give.
+     */
+    public function __construct(?ActionResolver $resolver = null)
+    {
+        $this->resolver = $resolver ?? new PhalconRouterResolver();
+    }
+
     public function define(): Definition
     {
         return Definition::for('make:action', 'Create an ADR action for a route')
@@ -52,6 +66,7 @@ final class ActionCommand extends ProjectCommand
             ->argument('path', true, 'Route path, e.g. /company/{id}')
             ->option('responder=s', 'Responder style: json or view', 'json')
             ->option('stub=s', 'Render a named stub instead of the responder default')
+            ->option('template=s', 'Template the view responder renders; defaults to <path>/index')
             // No declared default: resolveOptions() supplies false for a flag
             // without consulting one, so passing it would state something that
             // is never read.
@@ -80,21 +95,16 @@ final class ActionCommand extends ProjectCommand
             );
         }
 
-        $convention = new Convention(
-            $config->namespaceFor('action'),
-            new PhalconRouterResolver()
-        );
-        $target     = $convention->target(
+        $convention = new Convention($config->namespaceFor('action'), $this->resolver);
+        $target = $convention->target(
             $input->argumentString('method'),
             $input->argumentString('path')
         );
 
         $file = $config->path('action') . '/' . $target->relativePath;
 
-        $writer = new ArtifactWriter(
-            new Stub(Paths::stubs(), $config->root()),
-            $config->flavor()->value
-        );
+        $writer   = $this->writer($config);
+        $template = $this->template($target, $input->optionString('template'));
 
         $writer->render(
             $file,
@@ -104,13 +114,29 @@ final class ActionCommand extends ProjectCommand
                 'class'      => $target->class,
                 'attributes' => $this->attributeBlock($target),
                 'params'     => $this->paramsBlock($target),
-                'template'   => $this->template($target),
+                'template'   => $template,
             ],
             true === $input->option('force')
         );
 
         $output->success(sprintf('Created %s', $file));
         $output->line(sprintf('Answers %s %s', $target->method, $target->path));
+
+        // Only for the packaged view stub. A --stub the project supplied may or
+        // may not render a template, and crest does not know which, so it says
+        // nothing rather than guessing.
+        if ('view' === $responder) {
+            $output->line();
+            $output->line('Nothing renders it yet. The responder asks for this template:');
+            $output->line();
+            $output->line('    ' . $template);
+            $output->line();
+            $output->line(
+                'Create it wherever your renderer looks. Renderer::render() takes a '
+                . 'name, not a path, so the directory and the extension belong to the '
+                . 'renderer rather than to crest.'
+            );
+        }
 
         return 0;
     }
@@ -165,8 +191,21 @@ final class ActionCommand extends ProjectCommand
             . "    }\n";
     }
 
-    private function template(Target $target): string
+    /**
+     * The template name the view responder renders.
+     *
+     * Derived from the route unless the caller names one. The derivation is
+     * crest's own convention and not the framework's - withTemplate() accepts
+     * any string, and Renderer::render() defines neither directory nor
+     * extension - so --template exists to replace a guess rather than leave
+     * someone renaming the file afterwards.
+     */
+    private function template(Target $target, string $named): string
     {
+        if ('' !== $named) {
+            return $named;
+        }
+
         $path = trim(str_replace('{', '', str_replace('}', '', $target->path)), '/');
 
         return ('' === $path ? 'index' : $path) . '/index';

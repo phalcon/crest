@@ -44,22 +44,6 @@ final class ArtifactWriter
     }
 
     /**
-     * Renders a stub into place.
-     *
-     * @param array<string, string> $replacements
-     */
-    public function render(string $file, string $name, array $replacements, bool $force): void
-    {
-        // is_file(), not file_exists(): the latter is also true of a directory,
-        // which would report "already exists" and then fail to write.
-        if (true === is_file($file) && false === $force) {
-            throw new Exception(sprintf('%s already exists; pass --force to overwrite', $file));
-        }
-
-        self::write($file, $this->stub->render($this->flavor, $name, $replacements));
-    }
-
-    /**
      * Writes contents to a file, creating the directory if it is missing.
      *
      * Both operations are checked. Unchecked, a read-only target produced two
@@ -86,5 +70,21 @@ final class ArtifactWriter
         if (false === @file_put_contents($file, $contents)) {
             throw new Exception(sprintf('could not write %s', $file));
         }
+    }
+
+    /**
+     * Renders a stub into place.
+     *
+     * @param array<string, string> $replacements
+     */
+    public function render(string $file, string $name, array $replacements, bool $force): void
+    {
+        // is_file(), not file_exists(): the latter is also true of a directory,
+        // which would report "already exists" and then fail to write.
+        if (true === is_file($file) && false === $force) {
+            throw new Exception(sprintf('%s already exists; pass --force to overwrite', $file));
+        }
+
+        self::write($file, $this->stub->render($this->flavor, $name, $replacements));
     }
 }

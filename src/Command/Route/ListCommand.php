@@ -25,16 +25,12 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 use Throwable;
 
-use function array_pop;
 use function array_values;
 use function class_exists;
-use function explode;
-use function implode;
 use function is_dir;
 use function ksort;
 use function str_replace;
 use function strlen;
-use function strtoupper;
 use function substr;
 
 /**
@@ -47,6 +43,23 @@ use function substr;
  */
 final class ListCommand extends ProjectCommand
 {
+    private readonly ActionResolver $resolver;
+
+    /**
+     * Defaulted, so the kernel's `new $class()` still works and nothing outside
+     * has to know which resolver this command wants.
+     *
+     * Injectable so a test can prove the METHOD column is whatever the resolver
+     * answered. Without the seam, every conforming class name yields the same
+     * verb whether crest asks the framework or derives it locally - which is
+     * exactly the mistake this command used to make, and no fixture can tell
+     * the two apart.
+     */
+    public function __construct(?ActionResolver $resolver = null)
+    {
+        $this->resolver = $resolver ?? new PhalconRouterResolver();
+    }
+
     public function define(): Definition
     {
         return Definition::for('route:list', 'List the routes the application answers');
@@ -58,7 +71,6 @@ final class ListCommand extends ProjectCommand
 
         $base      = $config->namespaceFor('action');
         $directory = $config->path('action');
-        $resolver  = new PhalconRouterResolver();
 
         $routes = [];
 
@@ -69,15 +81,19 @@ final class ListCommand extends ProjectCommand
             // Action's params(), and an unloaded class reports none.
             $this->load($file, $fqcn);
 
-            $path = $resolver->pathFor($base, $fqcn);
+            $method = $this->resolver->methodFor($base, $fqcn);
+            $path   = $this->resolver->pathFor($base, $fqcn);
 
-            if (null === $path) {
+            // Both answer null for exactly the same classes - the ones the
+            // convention would never have produced - so neither guard is
+            // redundant to read, and neither is load-bearing on its own.
+            if (null === $method || null === $path) {
                 continue;
             }
 
             // Keyed by path alone: one path names exactly one Action, so the
             // path is already unique and sorting by it is sorting the listing.
-            $routes[$path] = [$this->verb($class), $path, $fqcn];
+            $routes[$path] = [$method, $path, $fqcn];
         }
 
         if ([] === $routes) {
@@ -156,21 +172,5 @@ final class ListCommand extends ProjectCommand
         } catch (Throwable) {
             // Reported without its attributes rather than not at all.
         }
-    }
-
-    /**
-     * The HTTP verb, taken as whatever precedes the concatenated namespace
-     * segments in the class name.
-     *
-     * Derived rather than matched against a list of verbs, so crest holds no
-     * copy of which verbs the framework recognises - if it gains one, this
-     * keeps working.
-     */
-    private function verb(string $class): string
-    {
-        $parts = explode('\\', $class);
-        $last  = array_pop($parts);
-
-        return strtoupper(substr($last, 0, strlen($last) - strlen(implode('', $parts))));
     }
 }

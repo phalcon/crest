@@ -31,6 +31,17 @@ interface ActionResolver
     public function classFor(string $baseNamespace, string $method, string $path): string;
 
     /**
+     * The HTTP method the given Action class answers, uppercased, or null when
+     * the class is not one this convention would have produced.
+     *
+     * The counterpart to pathFor(). Crest asks rather than deriving it, because
+     * the verb's position in a class name is part of the framework's naming
+     * rule - reconstructing it here would be a second copy of half the
+     * convention, in a tool nobody would think to grep when the rule changes.
+     */
+    public function methodFor(string $baseNamespace, string $class): ?string;
+
+    /**
      * The path the given Action class answers, or null when the class is not
      * one this convention would have produced.
      *

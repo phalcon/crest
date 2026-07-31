@@ -17,9 +17,6 @@ use Crest\Command\ProjectCommand;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-use Crest\Generator\ArtifactWriter;
-use Crest\Generator\Stub;
-use Crest\Paths;
 
 use function sprintf;
 
@@ -50,10 +47,7 @@ final class MiddlewareCommand extends ProjectCommand
         $config    = $this->config($input);
         $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
 
-        $writer = new ArtifactWriter(
-            new Stub(Paths::stubs(), $config->root()),
-            $config->flavor()->value
-        );
+        $writer = $this->writer($config);
 
         $writer->render(
             $placement->file,

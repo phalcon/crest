@@ -19,13 +19,13 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Bootstrap;
-use Phalcon\Container\Container;
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\Contracts\Events\Enumerable;
 use Phalcon\Events\Manager;
 
 use function get_class;
 use function is_object;
-use function method_exists;
-use function sort;
+use function ksort;
 
 /**
  * The listeners attached to the project's events manager.
@@ -44,21 +44,23 @@ final class ListCommand extends ProjectCommand
 
     public function handle(Input $input, Output $output): int
     {
-        $manager = $this->manager(Bootstrap::container($this->config($input)));
+        $manager   = $this->manager(Bootstrap::container($this->config($input)));
+        $listeners = $manager->getListenerMap();
 
-        /** @var list<string> $types */
-        $types = $manager->getEventTypes();
-        sort($types);
-
-        if ([] === $types) {
+        if ([] === $listeners) {
             $output->line('no listeners attached');
 
             return 0;
         }
 
+        // One call answers both halves of the listing, so the types arrive in
+        // attach order rather than sorted - which is not the order anyone wants
+        // to read listeners in.
+        ksort($listeners);
+
         $rows = [];
-        foreach ($types as $type) {
-            foreach ($manager->getListeners($type) as $listener) {
+        foreach ($listeners as $type => $attached) {
+            foreach ($attached as $listener) {
                 $rows[] = [$type, $this->describe($listener)];
             }
         }
@@ -85,15 +87,10 @@ final class ListCommand extends ProjectCommand
      * Whether the project registered this service, as opposed to the container
      * being willing to autowire it on demand.
      */
-    private function isRegistered(object $container, string $name): bool
+    private function isRegistered(Collection $container, string $name): bool
     {
-        foreach (['hasDefinition', 'hasInstance'] as $method) {
-            if (true === method_exists($container, $method) && true === $container->$method($name)) {
-                return true;
-            }
-        }
-
-        return false;
+        return true === $container->hasDefinition($name)
+            || true === $container->hasInstance($name);
     }
 
     /**
@@ -102,9 +99,9 @@ final class ListCommand extends ProjectCommand
      * Asked for by name rather than pulled from a known key, because a project
      * may register it under either and the container answers both the same way.
      */
-    private function manager(object $container): Manager
+    private function manager(object $container): Enumerable
     {
-        if (false === $container instanceof Container) {
+        if (false === $container instanceof Collection) {
             throw new Exception(
                 get_class($container) . ' is not a Phalcon container'
             );
@@ -125,7 +122,10 @@ final class ListCommand extends ProjectCommand
 
         $manager = $container->get(Manager::class);
 
-        if (false === $manager instanceof Manager) {
+        // Enumerable rather than Manager: reporting listeners is the only thing
+        // this command asks of it, and that capability is what the contract
+        // publishes.
+        if (false === $manager instanceof Enumerable) {
             throw new Exception(Manager::class . ' resolved to something else');
         }
 

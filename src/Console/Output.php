@@ -42,7 +42,7 @@ final class Output
 
     /**
      * The glyph a banner opens with. Named for its shape rather than for any
-     * one tool: this class has to still make sense once it is phalcon/console.
+     * one tool.
      */
     public const MARK = '⟩⟩⟩';
 
@@ -77,6 +77,29 @@ final class Output
     public function banner(string $text): void
     {
         $this->line($this->decorate(self::MARK, self::COLOR_ORANGE) . ' ' . $text);
+    }
+
+    /**
+     * The command listing: banner, blank line, one row per command.
+     *
+     * Presentation only - the caller supplies the descriptions, so this class
+     * stays unaware of how a registry answers. Shared because the kernel prints
+     * this listing when invoked with no arguments and an addressable `list`
+     * command prints the same thing, and two copies of the layout had to be
+     * kept in agreement by hand.
+     *
+     * @param array<string, string> $descriptions Command name => description.
+     */
+    public function commandTable(string $banner, array $descriptions): void
+    {
+        $rows = [];
+        foreach ($descriptions as $name => $description) {
+            $rows[] = [$name, $description];
+        }
+
+        $this->banner($banner);
+        $this->line();
+        $this->table(['COMMAND', 'DESCRIPTION'], $rows);
     }
 
     public function error(string $text): void
@@ -125,8 +148,7 @@ final class Output
 
     /**
      * Renders a command's usage block from its definition. Presentation lives
-     * here rather than on Definition so the schema stays a pure data structure
-     * when it is promoted into cli-options-parser.
+     * here rather than on Definition so the schema stays a pure data structure.
      */
     public function usage(string $tool, Definition $definition): void
     {
