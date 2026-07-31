@@ -22,6 +22,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `command`, `middleware`, `provider` and `responder` to the default `paths` in `crest.php`, alongside `action`. Each is overridable per project as before. [#5](https://github.com/phalcon/crest/issues/5)
 - Added `Crest\Command\ProjectCommand`, the base for commands that read the project being run against. Contributed commands can extend it for `--directory` and `--config` handling instead of resolving those options themselves. [#5](https://github.com/phalcon/crest/issues/5)
 - Added `Crest\Generator\ClassName::suffixed()`, which appends an artifact suffix idempotently, so `make:middleware Cors` and `make:middleware CorsMiddleware` both produce `CorsMiddleware`. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `--template` to `make:action`, naming the template the view responder renders instead of accepting the derived `<path>/index`. The derivation is crest's own convention, not the framework's - `withTemplate()` accepts any string - so it is now overridable rather than silent. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `Crest\Command\ProjectCommand::writer()`, assembling the stub writer once instead of repeating the same three-argument construction in five `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `methodFor()` to `Crest\ADR\ActionResolver`, so the HTTP method an Action answers is asked of the framework rather than derived from the class name. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`, so a bare `crest` and `crest list` render the command listing through one path instead of two copies kept in agreement by hand.
 
 ### Changed
 
@@ -32,6 +36,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Dependencies now resolve against the PHP 8.1 floor via `config.platform`, so the lock matches the declared minimum.
 - Default `paths` are now per flavor rather than shared. Only `adr` is populated, so a `cli` or `mvc` project is no longer offered directories for artifacts it has no command to generate. [#5](https://github.com/phalcon/crest/issues/5)
 - `crest`, `crest list` and `crest --version` now open with a chevron mark before the name and version. Only the color is dropped from piped output and when `NO_COLOR` is set; the glyph stays. [#5](https://github.com/phalcon/crest/issues/5)
+- `make:action --responder=view` now prints the template the responder asks for. The action named one but nothing created it, and `Renderer::render()` takes a name rather than a path, so where it resolves belongs to the project's renderer. [#5](https://github.com/phalcon/crest/issues/5)
+- `route:list` and `make:action` now accept an `ActionResolver`, defaulted so the kernel still constructs them with no arguments. This is what lets a test prove the routing answers come from the framework rather than from crest. [#5](https://github.com/phalcon/crest/issues/5)
+- `event:list` now reads every listener in a single `getListenerMap()` call instead of one call per event type. [#1](https://github.com/phalcon/crest/issues/1)
+- `phalcon/talon` moved from `^0.8` to `^0.9`.
 
 ### Fixed
 
@@ -39,6 +47,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Generators now fail instead of reporting a file they did not write. A target that could not be created produced two PHP warnings, `Created <file>` and exit 0; it now reports `could not create <directory>` and exits 1. [#5](https://github.com/phalcon/crest/issues/5)
 - `stub:publish` now rejects a name that is a path. `stub:publish ../../elsewhere/thing` resolved and copied a file from outside the package. [#5](https://github.com/phalcon/crest/issues/5)
 - `ClassName::suffixed()` now accepts non-Latin class names, matching PHP's own rule for an identifier. [#5](https://github.com/phalcon/crest/issues/5)
+- `container:list` and `event:list` no longer reach past Phalcon's published contracts. Both type against `Phalcon\Contracts\Container\Service\Collection` and the new `Enumerable` contracts instead of the concrete `Container` and `Manager`, and `event:list` no longer probes the container with `method_exists()`. The methods they relied on were absent from every published interface, so narrowing the concrete classes would have broken crest without breaking any contract. [#1](https://github.com/phalcon/crest/issues/1)
+- `route:list` no longer derives the HTTP method from the class name. The verb's position in an Action name is part of the framework's naming rule, and reconstructing it here was a second copy of half the convention in a tool nobody would grep when the rule changed. [#1](https://github.com/phalcon/crest/issues/1)
 
 ### Removed
 
