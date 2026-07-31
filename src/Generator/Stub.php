@@ -46,7 +46,7 @@ final class Stub
     private ?string $projectRoot;
 
     /**
-     * Roots are stored as given. Normalising a trailing slash is the path
+     * Roots are stored as given. Normalizing a trailing slash is the path
      * builders' job, and doing it here as well would mean two places could be
      * changed independently while the tests still passed.
      */

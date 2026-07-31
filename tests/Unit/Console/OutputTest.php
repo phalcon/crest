@@ -36,7 +36,7 @@ final class OutputTest extends TestCase
 
     public function testBannerColorsOnlyTheMarkWhenDecorated(): void
     {
-        // The text after the mark is the caller's, and stays uncoloured.
+        // The text after the mark is the caller's, and stays uncolored.
         $output = new Output($this->stdout, $this->stderr, true);
 
         $output->banner('demo 1.2.3');
@@ -50,7 +50,7 @@ final class OutputTest extends TestCase
     public function testBannerPrintsTheMarkThenTheTextUndecorated(): void
     {
         // Undecorated keeps the glyph and drops the escapes: a piped run should
-        // still read as a banner, just without colour.
+        // still read as a banner, just without color.
         $output = new Output($this->stdout, $this->stderr, false);
 
         $output->banner('demo 1.2.3');

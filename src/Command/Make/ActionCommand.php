@@ -87,7 +87,7 @@ final class ActionCommand extends ProjectCommand
 
         $named = $input->optionString('stub');
 
-        // Both choose a stub. Honouring one and dropping the other silently is
+        // Both choose a stub. Honoring one and dropping the other silently is
         // how someone spends an afternoon wondering why their stub is ignored.
         if ('' !== $named && true === $input->hasOption('responder')) {
             throw new Exception(

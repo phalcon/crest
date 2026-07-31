@@ -55,9 +55,9 @@ final class ShowCommandTest extends TestCase
 
         $this->runCommand();
 
-        // Normalised: the column width now follows the longest default key, so
+        // Normalized: the column width now follows the longest default key, so
         // asserting the padding here would pin something this test is not about.
-        $output = $this->normalised();
+        $output = $this->normalized();
 
         $this->assertStringContainsString('action ' . $this->root . '/src/Action inferred', $output);
         $this->assertStringContainsString('views ' . $this->root . '/templates declared', $output);
@@ -160,7 +160,7 @@ final class ShowCommandTest extends TestCase
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
             . 'views ' . $this->root . '/templates declared' . PHP_EOL;
 
-        $this->assertSame($expected, $this->normalised());
+        $this->assertSame($expected, $this->normalized());
     }
 
     public function testTheWholeReportIsRenderedForAnInferredProject(): void
@@ -181,7 +181,7 @@ final class ShowCommandTest extends TestCase
             . 'provider ' . $this->root . '/src/Provider inferred' . PHP_EOL
             . 'responder ' . $this->root . '/src/Responder inferred' . PHP_EOL;
 
-        $this->assertSame($expected, $this->normalised());
+        $this->assertSame($expected, $this->normalized());
     }
 
     /**
@@ -189,7 +189,7 @@ final class ShowCommandTest extends TestCase
      * run, so the padding does too. Collapsing runs of spaces lets the content
      * be asserted exactly without asserting the width.
      */
-    private function normalised(): string
+    private function normalized(): string
     {
         return (string) preg_replace('/ {2,}/', ' ', $this->readStdout());
     }

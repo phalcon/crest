@@ -32,7 +32,7 @@ use function ksort;
  *
  * Event types are mixed granularity by design: a listener may be attached to a
  * whole component (`dispatch`) or to one event (`dispatch:beforeDispatch`), and
- * both are real. Normalising them would hide the difference between listening
+ * both are real. Normalizing them would hide the difference between listening
  * to everything a component fires and listening to one moment.
  */
 final class ListCommand extends ProjectCommand

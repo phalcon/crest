@@ -137,7 +137,7 @@ final class ListCommandTest extends TestCase
             . 'zebra Phalcon\Support\HelperFactory no' . PHP_EOL;
 
         $this->assertSame(0, $status);
-        $this->assertSame($expected, $this->normalised());
+        $this->assertSame($expected, $this->normalized());
     }
 
     public function testWithoutABootstrapItSaysWhatToAdd(): void
@@ -159,7 +159,7 @@ final class ListCommandTest extends TestCase
         );
     }
 
-    private function normalised(): string
+    private function normalized(): string
     {
         return (string) preg_replace('/ {2,}/', ' ', $this->readStdout());
     }

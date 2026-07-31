@@ -31,7 +31,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Renamed `Crest\ADR\CandidateSource` to `ActionResolver` and `PhalconRouterCandidates` to `PhalconRouterResolver`. One path now names exactly one Action, so there are no candidates to choose between.
 - Dependencies now resolve against the PHP 8.1 floor via `config.platform`, so the lock matches the declared minimum.
 - Default `paths` are now per flavor rather than shared. Only `adr` is populated, so a `cli` or `mvc` project is no longer offered directories for artifacts it has no command to generate. [#5](https://github.com/phalcon/crest/issues/5)
-- `crest`, `crest list` and `crest --version` now open with a chevron mark before the name and version. Only the colour is dropped from piped output and when `NO_COLOR` is set; the glyph stays. [#5](https://github.com/phalcon/crest/issues/5)
+- `crest`, `crest list` and `crest --version` now open with a chevron mark before the name and version. Only the color is dropped from piped output and when `NO_COLOR` is set; the glyph stays. [#5](https://github.com/phalcon/crest/issues/5)
 
 ### Fixed
 

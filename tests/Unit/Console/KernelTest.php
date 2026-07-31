@@ -185,7 +185,7 @@ final class KernelTest extends TestCase
         $this->assertStringContainsString('#0', $this->readStderr());
     }
 
-    public function testUnexpectedThrowableHonoursTrace(): void
+    public function testUnexpectedThrowableHonorsTrace(): void
     {
         $status = $this->throwingKernel()->handle(['demo', 'boom', '--trace']);
 
