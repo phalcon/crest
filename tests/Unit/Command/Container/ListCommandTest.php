@@ -51,46 +51,6 @@ final class ListCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testDefinitionNamesItselfContainerList(): void
-    {
-        $this->assertSame('container:list', (new ListCommand())->define()->getName());
-    }
-
-    public function testWithoutABootstrapItSaysWhatToAdd(): void
-    {
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "name the front controller in crest.php, e.g. 'bootstrap' => App\\Front\\ApiFront::class",
-            $this->readStderr()
-        );
-    }
-
-    public function testAnUnknownFrontControllerIsReported(): void
-    {
-        $this->declareFront('App\Front\NoSuchFront');
-
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('was not found', $this->readStderr());
-    }
-
-    public function testAFrontWithNoBootIsReported(): void
-    {
-        $this->declareFront(NoBootFront::class);
-
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            NoBootFront::class . ' has no boot(); without one it cannot be started '
-            . 'without also serving a request',
-            $this->readStderr()
-        );
-    }
-
     public function testABootReturningANonObjectIsReported(): void
     {
         $this->declareFront(NonContainerFront::class);
@@ -127,6 +87,45 @@ final class ListCommandTest extends TestCase
         );
     }
 
+    public function testAFrontWithNoBootIsReported(): void
+    {
+        $this->declareFront(NoBootFront::class);
+
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            NoBootFront::class . ' has no boot(); without one it cannot be started '
+            . 'without also serving a request',
+            $this->readStderr()
+        );
+    }
+
+    public function testAnEmptyContainerSaysSo(): void
+    {
+        $this->declareFront(EmptyFront::class);
+
+        $status = $this->runCommand();
+
+        $this->assertSame(0, $status);
+        $this->assertSame('no services registered' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testAnUnknownFrontControllerIsReported(): void
+    {
+        $this->declareFront('App\Front\NoSuchFront');
+
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('was not found', $this->readStderr());
+    }
+
+    public function testDefinitionNamesItselfContainerList(): void
+    {
+        $this->assertSame('container:list', (new ListCommand())->define()->getName());
+    }
+
     public function testServicesAreListedSortedWithClassAndResolvedState(): void
     {
         $this->declareFront(ServicesFront::class);
@@ -141,14 +140,15 @@ final class ListCommandTest extends TestCase
         $this->assertSame($expected, $this->normalised());
     }
 
-    public function testAnEmptyContainerSaysSo(): void
+    public function testWithoutABootstrapItSaysWhatToAdd(): void
     {
-        $this->declareFront(EmptyFront::class);
-
         $status = $this->runCommand();
 
-        $this->assertSame(0, $status);
-        $this->assertSame('no services registered' . PHP_EOL, $this->readStdout());
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "name the front controller in crest.php, e.g. 'bootstrap' => App\\Front\\ApiFront::class",
+            $this->readStderr()
+        );
     }
 
     private function declareFront(string $class): void

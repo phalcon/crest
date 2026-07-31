@@ -36,42 +36,62 @@ final class MiddlewareCommandTest extends TestCase
         $this->endScratchProject();
     }
 
+    public function testAnUnusableNameIsReported(): void
+    {
+        $status = $this->runCommand(['Admin/Auth']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "'Admin/Auth' is not a usable class name",
+            $this->readStderr()
+        );
+    }
+
+    public function testCreatedPathIsReported(): void
+    {
+        $this->runCommand(['Auth']);
+
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/src/Middleware/AuthMiddleware.php',
+            $this->readStdout()
+        );
+    }
+
     public function testDefinitionNamesItselfMakeMiddleware(): void
     {
         $this->assertSame('make:middleware', (new MiddlewareCommand())->define()->getName());
     }
 
-    public function testTheWholeMiddlewareIsRendered(): void
+    public function testForceOverwritesAnExistingMiddleware(): void
     {
-        // Asserted whole rather than by substring: this is generated code nobody
-        // reviews, so a dropped use statement or a mangled signature has to fail
-        // here or it ships.
-        $status = $this->runCommand(['Auth']);
+        $this->runCommand(['Auth']);
+        file_put_contents($this->root . '/src/Middleware/AuthMiddleware.php', 'stale');
 
-        $expected = "<?php\n"
-            . "\n"
-            . "declare(strict_types=1);\n"
-            . "\n"
-            . "namespace App\Middleware;\n"
-            . "\n"
-            . "use Phalcon\Contracts\ADR\Handler;\n"
-            . "use Phalcon\Contracts\ADR\Middleware as MiddlewareContract;\n"
-            . "use Phalcon\Contracts\Http\AttributeRequest;\n"
-            . "use Phalcon\Http\ResponseInterface;\n"
-            . "\n"
-            . "final class AuthMiddleware implements MiddlewareContract\n"
-            . "{\n"
-            . "    public function __invoke(AttributeRequest \$request, Handler \$next): ResponseInterface\n"
-            . "    {\n"
-            . "        return \$next(\$request);\n"
-            . "    }\n"
-            . "}\n";
+        $status = $this->runCommand(['Auth', '--force']);
 
         $this->assertSame(0, $status);
-        $this->assertSame(
-            $expected,
+        $this->assertStringNotContainsString(
+            'stale',
             (string) file_get_contents($this->root . '/src/Middleware/AuthMiddleware.php')
         );
+    }
+
+    public function testNameArgumentIsRequired(): void
+    {
+        $status = $this->runCommand([]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
+    }
+
+    public function testRefusesToOverwriteWithoutForce(): void
+    {
+        $this->runCommand(['Auth']);
+
+        $status = $this->runCommand(['Auth']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('already exists', $this->readStderr());
     }
 
     public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
@@ -89,15 +109,6 @@ final class MiddlewareCommandTest extends TestCase
             'final class Middleware implements MiddlewareContract',
             $contents
         );
-    }
-
-    public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
-    {
-        $status = $this->runCommand(['AuthMiddleware']);
-
-        $this->assertSame(0, $status);
-        $this->assertFileExists($this->root . '/src/Middleware/AuthMiddleware.php');
-        $this->assertFileDoesNotExist($this->root . '/src/Middleware/AuthMiddlewareMiddleware.php');
     }
 
     public function testTheMiddlewareDirectoryIsCreatedWhenItIsAbsent(): void
@@ -131,56 +142,45 @@ final class MiddlewareCommandTest extends TestCase
         $this->assertSame($expected, $this->readStdout());
     }
 
-    public function testRefusesToOverwriteWithoutForce(): void
+    public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
     {
-        $this->runCommand(['Auth']);
-
-        $status = $this->runCommand(['Auth']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('already exists', $this->readStderr());
-    }
-
-    public function testForceOverwritesAnExistingMiddleware(): void
-    {
-        $this->runCommand(['Auth']);
-        file_put_contents($this->root . '/src/Middleware/AuthMiddleware.php', 'stale');
-
-        $status = $this->runCommand(['Auth', '--force']);
+        $status = $this->runCommand(['AuthMiddleware']);
 
         $this->assertSame(0, $status);
-        $this->assertStringNotContainsString(
-            'stale',
+        $this->assertFileExists($this->root . '/src/Middleware/AuthMiddleware.php');
+        $this->assertFileDoesNotExist($this->root . '/src/Middleware/AuthMiddlewareMiddleware.php');
+    }
+
+    public function testTheWholeMiddlewareIsRendered(): void
+    {
+        // Asserted whole rather than by substring: this is generated code nobody
+        // reviews, so a dropped use statement or a mangled signature has to fail
+        // here or it ships.
+        $status = $this->runCommand(['Auth']);
+
+        $expected = "<?php\n"
+            . "\n"
+            . "declare(strict_types=1);\n"
+            . "\n"
+            . "namespace App\Middleware;\n"
+            . "\n"
+            . "use Phalcon\Contracts\ADR\Handler;\n"
+            . "use Phalcon\Contracts\ADR\Middleware as MiddlewareContract;\n"
+            . "use Phalcon\Contracts\Http\AttributeRequest;\n"
+            . "use Phalcon\Http\ResponseInterface;\n"
+            . "\n"
+            . "final class AuthMiddleware implements MiddlewareContract\n"
+            . "{\n"
+            . "    public function __invoke(AttributeRequest \$request, Handler \$next): ResponseInterface\n"
+            . "    {\n"
+            . "        return \$next(\$request);\n"
+            . "    }\n"
+            . "}\n";
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            $expected,
             (string) file_get_contents($this->root . '/src/Middleware/AuthMiddleware.php')
-        );
-    }
-
-    public function testNameArgumentIsRequired(): void
-    {
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
-    }
-
-    public function testAnUnusableNameIsReported(): void
-    {
-        $status = $this->runCommand(['Admin/Auth']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "'Admin/Auth' is not a usable class name",
-            $this->readStderr()
-        );
-    }
-
-    public function testCreatedPathIsReported(): void
-    {
-        $this->runCommand(['Auth']);
-
-        $this->assertStringContainsString(
-            'Created ' . $this->root . '/src/Middleware/AuthMiddleware.php',
-            $this->readStdout()
         );
     }
 

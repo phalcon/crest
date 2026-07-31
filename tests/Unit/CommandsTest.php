@@ -21,6 +21,26 @@ use function sprintf;
 
 final class CommandsTest extends TestCase
 {
+    public function testAliasesAreNotListedAsCommands(): void
+    {
+        $this->assertSame(
+            [
+                'about',
+                'config:show',
+                'container:list',
+                'event:list',
+                'list',
+                'make:action',
+                'make:command',
+                'make:middleware',
+                'make:provider',
+                'make:responder',
+                'route:list',
+                'stub:publish',
+            ],
+            array_keys(Commands::registry()->all())
+        );
+    }
     public function testEveryRegisteredCommandNamesItselfConsistently(): void
     {
         foreach (Commands::registry()->all() as $name => $class) {
@@ -62,26 +82,5 @@ final class CommandsTest extends TestCase
         $this->assertTrue($registry->has('list'));
         $this->assertTrue($registry->has('commands'));
         $this->assertTrue($registry->has('enumerate'));
-    }
-
-    public function testAliasesAreNotListedAsCommands(): void
-    {
-        $this->assertSame(
-            [
-                'about',
-                'config:show',
-                'container:list',
-                'event:list',
-                'list',
-                'make:action',
-                'make:command',
-                'make:middleware',
-                'make:provider',
-                'make:responder',
-                'route:list',
-                'stub:publish',
-            ],
-            array_keys(Commands::registry()->all())
-        );
     }
 }

@@ -20,6 +20,14 @@ use PHPUnit\Framework\TestCase;
 
 final class DefinitionTest extends TestCase
 {
+    public function testArgumentsAreOptionalUnlessAskedToBeRequired(): void
+    {
+        // No explicit second argument: the default must leave it optional, so
+        // binding nothing is legal.
+        $definition = Definition::for('greet')->argument('subject');
+
+        $this->assertNull($definition->bind([])->argument('subject'));
+    }
     public function testBareSpecIsAFlag(): void
     {
         $definition = Definition::for('make:action')->option('force', 'Overwrite');
@@ -30,6 +38,19 @@ final class DefinitionTest extends TestCase
         $this->assertSame(OptionMode::None, $option->mode);
         $this->assertNull($option->short);
         $this->assertSame('Overwrite', $option->description);
+    }
+
+    public function testDescriptionIsExposed(): void
+    {
+        $this->assertSame('Make it', Definition::for('make:action', 'Make it')->getDescription());
+    }
+
+    public function testDuplicateOptionOnTheSameDefinitionIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("option '--force' is already declared");
+
+        Definition::for('make:action')->option('force')->option('force');
     }
 
     public function testEmptyModeSuffixIsRejected(): void
@@ -73,6 +94,18 @@ final class DefinitionTest extends TestCase
         $this->assertSame('help', $definition->findOption('h')?->name);
     }
 
+    public function testMergeKeepsBothSetsOfOptions(): void
+    {
+        $globals = Definition::for('')->option('trace', 'Trace');
+        $command = Definition::for('make:action')->option('force', 'Force');
+
+        $merged = $command->merge($globals);
+
+        $this->assertNotNull($merged->findOption('trace'));
+        $this->assertNotNull($merged->findOption('force'));
+        $this->assertSame('make:action', $merged->getName());
+    }
+
     public function testMergeThrowsOnACollidingOptionName(): void
     {
         $globals = Definition::for('')->option('force', 'Global force');
@@ -95,16 +128,12 @@ final class DefinitionTest extends TestCase
         $command->merge($globals);
     }
 
-    public function testMergeKeepsBothSetsOfOptions(): void
+    public function testModeSuffixIsTakenWholeNotUpToTheSecondEquals(): void
     {
-        $globals = Definition::for('')->option('trace', 'Trace');
-        $command = Definition::for('make:action')->option('force', 'Force');
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown option mode '=s=x'");
 
-        $merged = $command->merge($globals);
-
-        $this->assertNotNull($merged->findOption('trace'));
-        $this->assertNotNull($merged->findOption('force'));
-        $this->assertSame('make:action', $merged->getName());
+        Definition::for('make:action')->option('stub=s=x', 'Stub');
     }
 
     public function testOptionalArgumentsMayNotPrecedeRequiredOnes(): void
@@ -117,9 +146,12 @@ final class DefinitionTest extends TestCase
             ->argument('path', true);
     }
 
-    public function testDescriptionIsExposed(): void
+    public function testShortAliasIsEverythingAfterTheFirstPipe(): void
     {
-        $this->assertSame('Make it', Definition::for('make:action', 'Make it')->getDescription());
+        $definition = Definition::for('about')->option('help|h|x', 'Help');
+
+        $this->assertSame('help', $definition->findOption('h|x')?->name);
+        $this->assertNull($definition->findOption('h'));
     }
 
     public function testUnknownModeSuffixIsRejected(): void
@@ -128,39 +160,6 @@ final class DefinitionTest extends TestCase
         $this->expectExceptionMessage("unknown option mode '=x'");
 
         Definition::for('make:action')->option('stub=x', 'Stub');
-    }
-
-    public function testArgumentsAreOptionalUnlessAskedToBeRequired(): void
-    {
-        // No explicit second argument: the default must leave it optional, so
-        // binding nothing is legal.
-        $definition = Definition::for('greet')->argument('subject');
-
-        $this->assertNull($definition->bind([])->argument('subject'));
-    }
-
-    public function testDuplicateOptionOnTheSameDefinitionIsRejected(): void
-    {
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("option '--force' is already declared");
-
-        Definition::for('make:action')->option('force')->option('force');
-    }
-
-    public function testModeSuffixIsTakenWholeNotUpToTheSecondEquals(): void
-    {
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("unknown option mode '=s=x'");
-
-        Definition::for('make:action')->option('stub=s=x', 'Stub');
-    }
-
-    public function testShortAliasIsEverythingAfterTheFirstPipe(): void
-    {
-        $definition = Definition::for('about')->option('help|h|x', 'Help');
-
-        $this->assertSame('help', $definition->findOption('h|x')?->name);
-        $this->assertNull($definition->findOption('h'));
     }
 
     public function testUnknownOptionReturnsNull(): void

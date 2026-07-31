@@ -38,25 +38,38 @@ final class PublishCommandTest extends TestCase
         $this->endScratchProject();
     }
 
-    public function testDefinitionNamesItselfStubPublish(): void
+    public function testAFlavorWithNoPackagedStubsIsReported(): void
     {
-        $this->assertSame('stub:publish', (new PublishCommand())->define()->getName());
-    }
+        // cli ships nothing yet. Publishing silently and printing no lines would
+        // read as success.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
 
-    public function testEveryPackagedAdrStubIsPublished(): void
-    {
-        // Asserted against the packaged directory rather than a hardcoded list,
-        // so a stub added later is covered without touching this test - and a
-        // stub that stops being published fails it.
         $status = $this->runCommand([]);
 
-        $this->assertSame(0, $status);
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "no stubs are packaged for the 'cli' flavor",
+            $this->readStderr()
+        );
+    }
 
-        foreach ($this->packagedStubs() as $name) {
-            $this->assertFileExists(
-                Stub::overridePath($this->root, 'adr', $name)
-            );
-        }
+    public function testAnAlreadyPublishedStubIsSkippedNotOverwritten(): void
+    {
+        $this->runCommand(['action']);
+
+        $published = Stub::overridePath($this->root, 'adr', 'action');
+        file_put_contents($published, 'edited');
+
+        $status = $this->runCommand(['action']);
+
+        // Exit 0, not 1: nothing failed. Clobbering an edited stub is what would
+        // be the failure.
+        $this->assertSame(0, $status);
+        $this->assertSame('edited', (string) file_get_contents($published));
+        $this->assertStringContainsString(
+            'Skipped ' . $published . '; it exists already, pass --force to overwrite',
+            $this->readStdout()
+        );
     }
 
     public function testAPublishedStubIsAByteForByteCopy(): void
@@ -96,33 +109,42 @@ final class PublishCommandTest extends TestCase
         $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'responder'));
     }
 
-    public function testAnAlreadyPublishedStubIsSkippedNotOverwritten(): void
+    public function testAStubNameThatIsAPathIsRejected(): void
     {
-        $this->runCommand(['action']);
+        // Without the guard this resolves through is_file() and copies a file in
+        // from outside the package. No privilege is crossed - it is the
+        // developer's own machine - but "is not packaged" would be a lie about
+        // what went wrong.
+        $status = $this->runCommand(['../../../etc/passwd']);
 
-        $published = Stub::overridePath($this->root, 'adr', 'action');
-        file_put_contents($published, 'edited');
-
-        $status = $this->runCommand(['action']);
-
-        // Exit 0, not 1: nothing failed. Clobbering an edited stub is what would
-        // be the failure.
-        $this->assertSame(0, $status);
-        $this->assertSame('edited', (string) file_get_contents($published));
+        $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            'Skipped ' . $published . '; it exists already, pass --force to overwrite',
-            $this->readStdout()
+            "'../../../etc/passwd' is not a stub name",
+            $this->readStderr()
         );
     }
 
-    public function testPublishingContinuesPastAStubTheProjectAlreadyHas(): void
+    public function testAStubThatIsNotPackagedIsReported(): void
     {
-        // A skipped stub must not end the run. `action-view` sorts before
-        // `action`, so with the loop breaking instead of continuing everything
-        // from `command` onwards would silently never be published.
-        $this->runCommand(['action']);
+        $status = $this->runCommand(['nope']);
 
-        $this->runCommand([]);
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("stub 'adr/nope' is not packaged", $this->readStderr());
+    }
+
+    public function testDefinitionNamesItselfStubPublish(): void
+    {
+        $this->assertSame('stub:publish', (new PublishCommand())->define()->getName());
+    }
+
+    public function testEveryPackagedAdrStubIsPublished(): void
+    {
+        // Asserted against the packaged directory rather than a hardcoded list,
+        // so a stub added later is covered without touching this test - and a
+        // stub that stops being published fails it.
+        $status = $this->runCommand([]);
+
+        $this->assertSame(0, $status);
 
         foreach ($this->packagedStubs() as $name) {
             $this->assertFileExists(
@@ -147,44 +169,6 @@ final class PublishCommandTest extends TestCase
         );
     }
 
-    public function testAStubThatIsNotPackagedIsReported(): void
-    {
-        $status = $this->runCommand(['nope']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("stub 'adr/nope' is not packaged", $this->readStderr());
-    }
-
-    public function testAStubNameThatIsAPathIsRejected(): void
-    {
-        // Without the guard this resolves through is_file() and copies a file in
-        // from outside the package. No privilege is crossed - it is the
-        // developer's own machine - but "is not packaged" would be a lie about
-        // what went wrong.
-        $status = $this->runCommand(['../../../etc/passwd']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "'../../../etc/passwd' is not a stub name",
-            $this->readStderr()
-        );
-    }
-
-    public function testAFlavorWithNoPackagedStubsIsReported(): void
-    {
-        // cli ships nothing yet. Publishing silently and printing no lines would
-        // read as success.
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
-
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "no stubs are packaged for the 'cli' flavor",
-            $this->readStderr()
-        );
-    }
-
     public function testPublishedPathsAreReported(): void
     {
         $this->runCommand(['action']);
@@ -193,6 +177,22 @@ final class PublishCommandTest extends TestCase
             'Published ' . Stub::overridePath($this->root, 'adr', 'action'),
             $this->readStdout()
         );
+    }
+
+    public function testPublishingContinuesPastAStubTheProjectAlreadyHas(): void
+    {
+        // A skipped stub must not end the run. `action-view` sorts before
+        // `action`, so with the loop breaking instead of continuing everything
+        // from `command` onwards would silently never be published.
+        $this->runCommand(['action']);
+
+        $this->runCommand([]);
+
+        foreach ($this->packagedStubs() as $name) {
+            $this->assertFileExists(
+                Stub::overridePath($this->root, 'adr', $name)
+            );
+        }
     }
 
     /**

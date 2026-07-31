@@ -40,6 +40,13 @@ final class LocatorTest extends TestCase
         $this->assertSame($this->root . '/crest.php', Locator::locate($this->root));
     }
 
+    public function testReturnsNullOnceTheFilesystemRootIsPassed(): void
+    {
+        // Nothing is written, so the walk runs all the way to '/' and has to
+        // stop there rather than looping forever.
+        $this->assertNull(Locator::locate($this->root . '/src/Action/Deep'));
+    }
+
     public function testWalksUpUntilItFindsTheFile(): void
     {
         // The whole point of the walk: crest has to work from anywhere inside
@@ -50,12 +57,5 @@ final class LocatorTest extends TestCase
             $this->root . '/crest.php',
             Locator::locate($this->root . '/src/Action/Deep')
         );
-    }
-
-    public function testReturnsNullOnceTheFilesystemRootIsPassed(): void
-    {
-        // Nothing is written, so the walk runs all the way to '/' and has to
-        // stop there rather than looping forever.
-        $this->assertNull(Locator::locate($this->root . '/src/Action/Deep'));
     }
 }

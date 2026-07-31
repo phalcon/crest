@@ -44,77 +44,6 @@ final class ShowCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testDefinitionNamesItselfConfigShow(): void
-    {
-        $this->assertSame('config:show', (new ShowCommand())->define()->getName());
-    }
-
-    public function testAnInferredProjectSaysSoAndShowsWhatWasInferred(): void
-    {
-        $status = $this->runCommand();
-
-        $output = $this->readStdout();
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString('inferred from composer.json', $output);
-        $this->assertStringContainsString('adr', $output);
-        $this->assertStringContainsString('App', $output);
-        $this->assertStringContainsString($this->root, $output);
-    }
-
-    public function testEveryValueIsMarkedInferredWhenThereIsNoConfigFile(): void
-    {
-        $this->runCommand();
-
-        $output = $this->readStdout();
-
-        $this->assertStringContainsString('inferred', $output);
-        $this->assertStringNotContainsString('declared', $output);
-    }
-
-    public function testDeclaredValuesAreDistinguishedFromInferredOnes(): void
-    {
-        // flavor and namespace are declared; paths is not, so it keeps the
-        // default and must still read as inferred.
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['flavor' => 'mvc', 'namespace' => 'Shop'];\n"
-        );
-
-        $this->runCommand();
-
-        $output = $this->readStdout();
-
-        $this->assertStringContainsString('declared', $output);
-        $this->assertStringContainsString('inferred', $output);
-    }
-
-    public function testTheConfigFileIsNamedWhenOneWasUsed(): void
-    {
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
-
-        $this->runCommand();
-
-        $this->assertStringContainsString($this->root . '/crest.php', $this->readStdout());
-    }
-
-    public function testDeclaredPathsAreListed(): void
-    {
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
-        );
-
-        $this->runCommand();
-
-        $output = $this->readStdout();
-
-        // The declared key and the surviving default both appear, resolved to
-        // absolute locations.
-        $this->assertStringContainsString($this->root . '/templates', $output);
-        $this->assertStringContainsString($this->root . '/src/Action', $output);
-    }
-
     public function testADefaultPathIsNotReportedAsDeclared(): void
     {
         // Declaring `views` leaves `action` on its default. Marking the whole
@@ -134,25 +63,75 @@ final class ShowCommandTest extends TestCase
         $this->assertStringContainsString('views ' . $this->root . '/templates declared', $output);
     }
 
-    public function testTheWholeReportIsRenderedForAnInferredProject(): void
+    public function testAnInferredProjectSaysSoAndShowsWhatWasInferred(): void
+    {
+        $status = $this->runCommand();
+
+        $output = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('inferred from composer.json', $output);
+        $this->assertStringContainsString('adr', $output);
+        $this->assertStringContainsString('App', $output);
+        $this->assertStringContainsString($this->root, $output);
+    }
+
+    public function testDeclaredPathsAreListed(): void
+    {
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
+        );
+
+        $this->runCommand();
+
+        $output = $this->readStdout();
+
+        // The declared key and the surviving default both appear, resolved to
+        // absolute locations.
+        $this->assertStringContainsString($this->root . '/templates', $output);
+        $this->assertStringContainsString($this->root . '/src/Action', $output);
+    }
+
+    public function testDeclaredValuesAreDistinguishedFromInferredOnes(): void
+    {
+        // flavor and namespace are declared; paths is not, so it keeps the
+        // default and must still read as inferred.
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['flavor' => 'mvc', 'namespace' => 'Shop'];\n"
+        );
+
+        $this->runCommand();
+
+        $output = $this->readStdout();
+
+        $this->assertStringContainsString('declared', $output);
+        $this->assertStringContainsString('inferred', $output);
+    }
+
+    public function testDefinitionNamesItselfConfigShow(): void
+    {
+        $this->assertSame('config:show', (new ShowCommand())->define()->getName());
+    }
+
+    public function testEveryValueIsMarkedInferredWhenThereIsNoConfigFile(): void
     {
         $this->runCommand();
 
-        $expected = 'Source: inferred from composer.json' . PHP_EOL
-            . PHP_EOL
-            . 'ITEM VALUE ORIGIN' . PHP_EOL
-            . 'root ' . $this->root . ' inferred' . PHP_EOL
-            . 'flavor adr inferred' . PHP_EOL
-            . 'namespace App inferred' . PHP_EOL
-            . PHP_EOL
-            . 'PATH LOCATION ORIGIN' . PHP_EOL
-            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL
-            . 'command ' . $this->root . '/src/Command inferred' . PHP_EOL
-            . 'middleware ' . $this->root . '/src/Middleware inferred' . PHP_EOL
-            . 'provider ' . $this->root . '/src/Provider inferred' . PHP_EOL
-            . 'responder ' . $this->root . '/src/Responder inferred' . PHP_EOL;
+        $output = $this->readStdout();
 
-        $this->assertSame($expected, $this->normalised());
+        $this->assertStringContainsString('inferred', $output);
+        $this->assertStringNotContainsString('declared', $output);
+    }
+
+    public function testTheConfigFileIsNamedWhenOneWasUsed(): void
+    {
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString($this->root . '/crest.php', $this->readStdout());
     }
 
     public function testTheWholeReportIsRenderedForADeclaredProject(): void
@@ -180,6 +159,27 @@ final class ShowCommandTest extends TestCase
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
             . 'views ' . $this->root . '/templates declared' . PHP_EOL;
+
+        $this->assertSame($expected, $this->normalised());
+    }
+
+    public function testTheWholeReportIsRenderedForAnInferredProject(): void
+    {
+        $this->runCommand();
+
+        $expected = 'Source: inferred from composer.json' . PHP_EOL
+            . PHP_EOL
+            . 'ITEM VALUE ORIGIN' . PHP_EOL
+            . 'root ' . $this->root . ' inferred' . PHP_EOL
+            . 'flavor adr inferred' . PHP_EOL
+            . 'namespace App inferred' . PHP_EOL
+            . PHP_EOL
+            . 'PATH LOCATION ORIGIN' . PHP_EOL
+            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL
+            . 'command ' . $this->root . '/src/Command inferred' . PHP_EOL
+            . 'middleware ' . $this->root . '/src/Middleware inferred' . PHP_EOL
+            . 'provider ' . $this->root . '/src/Provider inferred' . PHP_EOL
+            . 'responder ' . $this->root . '/src/Responder inferred' . PHP_EOL;
 
         $this->assertSame($expected, $this->normalised());
     }

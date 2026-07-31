@@ -58,11 +58,6 @@ final class ListCommandTest extends TestCase
         $this->closeStreams();
     }
 
-    public function testDefinitionNamesItselfList(): void
-    {
-        $this->assertSame('list', (new ListCommand())->define()->getName());
-    }
-
     public function testBannerPrecedesTheTable(): void
     {
         $this->listCommands();
@@ -73,29 +68,6 @@ final class ListCommandTest extends TestCase
             . 'COMMAND',
             $this->readStdout()
         );
-    }
-
-    public function testEveryRegisteredCommandIsListedWithItsDescription(): void
-    {
-        $status = $this->listCommands();
-
-        $output = $this->readStdout();
-
-        $this->assertSame(0, $status);
-
-        foreach (Commands::registry()->all() as $name => $class) {
-            $this->assertStringContainsString($name, $output);
-            $this->assertStringContainsString((new $class())->define()->getDescription(), $output);
-        }
-    }
-
-    public function testListsItselfToo(): void
-    {
-        // A command the user can run must appear in the listing, including
-        // this one - otherwise `list` hides the very surface it documents.
-        $this->listCommands();
-
-        $this->assertStringContainsString('list', $this->readStdout());
     }
 
     public function testCommandsAreSortedByName(): void
@@ -130,6 +102,34 @@ final class ListCommandTest extends TestCase
         $output = $this->readStdout();
 
         $this->assertLessThan(strpos($output, 'about'), strpos($output, 'aaa:first'));
+    }
+
+    public function testDefinitionNamesItselfList(): void
+    {
+        $this->assertSame('list', (new ListCommand())->define()->getName());
+    }
+
+    public function testEveryRegisteredCommandIsListedWithItsDescription(): void
+    {
+        $status = $this->listCommands();
+
+        $output = $this->readStdout();
+
+        $this->assertSame(0, $status);
+
+        foreach (Commands::registry()->all() as $name => $class) {
+            $this->assertStringContainsString($name, $output);
+            $this->assertStringContainsString((new $class())->define()->getDescription(), $output);
+        }
+    }
+
+    public function testListsItselfToo(): void
+    {
+        // A command the user can run must appear in the listing, including
+        // this one - otherwise `list` hides the very surface it documents.
+        $this->listCommands();
+
+        $this->assertStringContainsString('list', $this->readStdout());
     }
 
     private function listCommands(): int

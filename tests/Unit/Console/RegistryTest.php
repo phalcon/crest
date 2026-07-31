@@ -75,48 +75,22 @@ final class RegistryTest extends TestCase
         $this->assertTrue($registry->has('fake'));
     }
 
-    public function testGetThrowsForAnUnknownName(): void
+    public function testContributedCommandIsVisibleToHasWithoutListingFirst(): void
     {
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("unknown command 'nope'");
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
 
-        (new Registry())->get('nope');
+        $this->assertTrue((new Registry())->withDiscovery(self::KEY)->has('fake'));
     }
 
-    public function testGetStillThrowsAfterDiscoveryFindsNothing(): void
+    public function testContributedCommandResolvesThroughGetWithoutListingFirst(): void
     {
-        // A miss triggers the deferred scan; nothing in the test environment
-        // contributes under this key, so the miss must still surface.
-        $registry = (new Registry())
-            ->add('fake', FakeCommand::class)
-            ->withDiscovery('crest-registry-test-key');
+        // get() misses the seeded map, so resolve() itself has to trigger the
+        // scan - nothing has called all() to do it beforehand.
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
 
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("unknown command 'nope'");
-
-        $registry->get('nope');
-    }
-
-    public function testWithDiscoveryIsChainableAndSeededNamesStillResolve(): void
-    {
-        $registry = (new Registry())
-            ->add('fake', FakeCommand::class)
-            ->withDiscovery('crest-registry-test-key');
+        $registry = (new Registry())->withDiscovery(self::KEY);
 
         $this->assertSame(FakeCommand::class, $registry->get('fake'));
-    }
-
-    public function testHasIsTrueForAnAlias(): void
-    {
-        $registry = (new Registry())->add('fake', FakeCommand::class, 'fk');
-
-        $this->assertTrue($registry->has('fk'));
-        $this->assertFalse($registry->has('nope'));
-    }
-
-    public function testStartsEmpty(): void
-    {
-        $this->assertSame([], (new Registry())->all());
     }
 
     public function testDiscoveryAddsAContributedCommand(): void
@@ -142,9 +116,11 @@ final class RegistryTest extends TestCase
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
-    public function testDiscoveryIgnoresAPackageWithNoMatchingExtraKey(): void
+    public function testDiscoveryIgnoresANumericCommandName(): void
     {
-        $this->installExtra(['some-other-tool' => ['commands' => ['x' => FakeCommand::class]]]);
+        // A JSON array rather than an object yields int keys; those are not
+        // command names and must not be registered.
+        $this->installExtra([self::KEY => ['commands' => [FakeCommand::class]]]);
 
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
@@ -156,13 +132,19 @@ final class RegistryTest extends TestCase
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
-    public function testDiscoveryIgnoresANumericCommandName(): void
+    public function testDiscoveryIgnoresAPackageWithNoMatchingExtraKey(): void
     {
-        // A JSON array rather than an object yields int keys; those are not
-        // command names and must not be registered.
-        $this->installExtra([self::KEY => ['commands' => [FakeCommand::class]]]);
+        $this->installExtra(['some-other-tool' => ['commands' => ['x' => FakeCommand::class]]]);
 
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIsSkippedEntirelyWithoutAKey(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+
+        // No withDiscovery() call, so the contributed command stays invisible.
+        $this->assertSame([], (new Registry())->all());
     }
 
     public function testDiscoveryRunsOnlyOnce(): void
@@ -180,25 +162,34 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
     }
 
-    public function testScanContinuesPastAPackageWithANonArrayExtraEntry(): void
+    public function testGetStillThrowsAfterDiscoveryFindsNothing(): void
     {
-        // A malformed contributor must be skipped, not abort the whole scan.
-        $this->installTwoPackages(
-            [self::KEY => 'nonsense'],
-            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
-        );
+        // A miss triggers the deferred scan; nothing in the test environment
+        // contributes under this key, so the miss must still surface.
+        $registry = (new Registry())
+            ->add('fake', FakeCommand::class)
+            ->withDiscovery('crest-registry-test-key');
 
-        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown command 'nope'");
+
+        $registry->get('nope');
     }
 
-    public function testScanContinuesPastAPackageWithANonArrayCommandsEntry(): void
+    public function testGetThrowsForAnUnknownName(): void
     {
-        $this->installTwoPackages(
-            [self::KEY => ['commands' => 'nonsense']],
-            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
-        );
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown command 'nope'");
 
-        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+        (new Registry())->get('nope');
+    }
+
+    public function testHasIsTrueForAnAlias(): void
+    {
+        $registry = (new Registry())->add('fake', FakeCommand::class, 'fk');
+
+        $this->assertTrue($registry->has('fk'));
+        $this->assertFalse($registry->has('nope'));
     }
 
     public function testScanContinuesPastANumericCommandName(): void
@@ -220,30 +211,25 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
-    public function testContributedCommandResolvesThroughGetWithoutListingFirst(): void
+    public function testScanContinuesPastAPackageWithANonArrayCommandsEntry(): void
     {
-        // get() misses the seeded map, so resolve() itself has to trigger the
-        // scan - nothing has called all() to do it beforehand.
-        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        $this->installTwoPackages(
+            [self::KEY => ['commands' => 'nonsense']],
+            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
+        );
 
-        $registry = (new Registry())->withDiscovery(self::KEY);
-
-        $this->assertSame(FakeCommand::class, $registry->get('fake'));
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
-    public function testContributedCommandIsVisibleToHasWithoutListingFirst(): void
+    public function testScanContinuesPastAPackageWithANonArrayExtraEntry(): void
     {
-        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        // A malformed contributor must be skipped, not abort the whole scan.
+        $this->installTwoPackages(
+            [self::KEY => 'nonsense'],
+            [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]
+        );
 
-        $this->assertTrue((new Registry())->withDiscovery(self::KEY)->has('fake'));
-    }
-
-    public function testDiscoveryIsSkippedEntirelyWithoutAKey(): void
-    {
-        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
-
-        // No withDiscovery() call, so the contributed command stays invisible.
-        $this->assertSame([], (new Registry())->all());
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
     public function testSeededNameResolvesWithoutTriggeringDiscovery(): void
@@ -259,6 +245,20 @@ final class RegistryTest extends TestCase
         // The seeded hit answered without scanning, so all() still has to run
         // discovery afterwards and pick the contributed command up.
         $this->assertArrayHasKey('boom', $registry->all());
+    }
+
+    public function testStartsEmpty(): void
+    {
+        $this->assertSame([], (new Registry())->all());
+    }
+
+    public function testWithDiscoveryIsChainableAndSeededNamesStillResolve(): void
+    {
+        $registry = (new Registry())
+            ->add('fake', FakeCommand::class)
+            ->withDiscovery('crest-registry-test-key');
+
+        $this->assertSame(FakeCommand::class, $registry->get('fake'));
     }
 
     /**

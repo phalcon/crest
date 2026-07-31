@@ -50,11 +50,45 @@ final class KernelTest extends TestCase
         $this->assertStringNotContainsString('#0', $this->readStderr());
     }
 
+    public function testDoubleDashShieldsALaterHelpFlagFromTheKernel(): void
+    {
+        // `--` makes everything after it literal, so a positional of '--help'
+        // must reach the command instead of printing usage.
+        $status = $this->kernel()->handle(['demo', 'fake', '--', '--help']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame('hello --help' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testDoubleDashShieldsALaterTraceFlagFromTheKernel(): void
+    {
+        // Same rule for --trace: after `--` it is a value, so the failure below
+        // must still render as a single line with no stack frames.
+        $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b', '--', '--trace']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringNotContainsString('#0', $this->readStderr());
+    }
+
     public function testGlobalOptionsAreAvailableToEveryCommand(): void
     {
         $status = $this->kernel()->handle(['demo', 'fake', '--directory', '/srv']);
 
         $this->assertSame(0, $status);
+    }
+
+    public function testGlobalsAreDeclaredOnceAndPubliclyReadable(): void
+    {
+        // Public because a tool embedding the kernel needs to document the
+        // options it inherits without re-declaring them.
+        $globals = Kernel::globals();
+
+        $this->assertSame('', $globals->getName());
+        $this->assertNotNull($globals->findOption('config'));
+        $this->assertNotNull($globals->findOption('directory'));
+        $this->assertNotNull($globals->findOption('trace'));
+        $this->assertSame('help', $globals->findOption('h')?->name);
+        $this->assertSame('quiet', $globals->findOption('q')?->name);
     }
 
     public function testHelpForACommandRendersItsUsage(): void
@@ -78,61 +112,6 @@ final class KernelTest extends TestCase
         $this->assertSame('hello phalcon' . PHP_EOL, $this->readStdout());
     }
 
-    public function testNoArgumentsListsCommands(): void
-    {
-        $status = $this->kernel()->handle(['demo']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString('fake', $this->readStdout());
-    }
-
-    public function testToolNameIsNeverHardcoded(): void
-    {
-        // The whole point of the constructor argument: nothing in the console
-        // core may say "crest". If this fails, the extraction is broken.
-        $this->kernel()->handle(['demo', 'nope']);
-        $this->kernel()->handle(['demo', '--version']);
-
-        $this->assertStringNotContainsStringIgnoringCase('crest', $this->readStdout());
-        $this->assertStringNotContainsStringIgnoringCase('crest', $this->readStderr());
-    }
-
-    public function testUnknownCommandExitsOneWithStderr(): void
-    {
-        $status = $this->kernel()->handle(['demo', 'nope']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("demo: unknown command 'nope'", $this->readStderr());
-    }
-
-    public function testVersionIsHandledBeforeCommandResolution(): void
-    {
-        $status = $this->kernel()->handle(['demo', '--version']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString('demo', $this->readStdout());
-    }
-
-    public function testDoubleDashShieldsALaterHelpFlagFromTheKernel(): void
-    {
-        // `--` makes everything after it literal, so a positional of '--help'
-        // must reach the command instead of printing usage.
-        $status = $this->kernel()->handle(['demo', 'fake', '--', '--help']);
-
-        $this->assertSame(0, $status);
-        $this->assertSame('hello --help' . PHP_EOL, $this->readStdout());
-    }
-
-    public function testDoubleDashShieldsALaterTraceFlagFromTheKernel(): void
-    {
-        // Same rule for --trace: after `--` it is a value, so the failure below
-        // must still render as a single line with no stack frames.
-        $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b', '--', '--trace']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringNotContainsString('#0', $this->readStderr());
-    }
-
     public function testListCommandsIsSortedByName(): void
     {
         $registry = (new Registry())
@@ -148,20 +127,6 @@ final class KernelTest extends TestCase
         $this->assertLessThan(strpos($output, 'zebra'), strpos($output, 'alpha'));
     }
 
-    public function testGlobalsAreDeclaredOnceAndPubliclyReadable(): void
-    {
-        // Public because a tool embedding the kernel needs to document the
-        // options it inherits without re-declaring them.
-        $globals = Kernel::globals();
-
-        $this->assertSame('', $globals->getName());
-        $this->assertNotNull($globals->findOption('config'));
-        $this->assertNotNull($globals->findOption('directory'));
-        $this->assertNotNull($globals->findOption('trace'));
-        $this->assertSame('help', $globals->findOption('h')?->name);
-        $this->assertSame('quiet', $globals->findOption('q')?->name);
-    }
-
     public function testListingIsBannerBlankLineThenTable(): void
     {
         $this->kernel()->handle(['demo']);
@@ -175,6 +140,14 @@ final class KernelTest extends TestCase
             . 'fake     A command that exists only for tests' . PHP_EOL;
 
         $this->assertSame($expected, $this->readStdout());
+    }
+
+    public function testNoArgumentsListsCommands(): void
+    {
+        $status = $this->kernel()->handle(['demo']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('fake', $this->readStdout());
     }
 
     public function testShortHelpFlagAlsoRendersUsage(): void
@@ -193,9 +166,28 @@ final class KernelTest extends TestCase
         $this->assertStringStartsWith(Output::MARK . ' demo ', $this->readStdout());
     }
 
+    public function testToolNameIsNeverHardcoded(): void
+    {
+        // The whole point of the constructor argument: nothing in the console
+        // core may say "crest". If this fails, the extraction is broken.
+        $this->kernel()->handle(['demo', 'nope']);
+        $this->kernel()->handle(['demo', '--version']);
+
+        $this->assertStringNotContainsStringIgnoringCase('crest', $this->readStdout());
+        $this->assertStringNotContainsStringIgnoringCase('crest', $this->readStderr());
+    }
+
     public function testTraceAddsStackFramesToABindingError(): void
     {
         $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b', '--trace']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('#0', $this->readStderr());
+    }
+
+    public function testUnexpectedThrowableHonoursTrace(): void
+    {
+        $status = $this->throwingKernel()->handle(['demo', 'boom', '--trace']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString('#0', $this->readStderr());
@@ -210,12 +202,20 @@ final class KernelTest extends TestCase
         $this->assertStringNotContainsString('#0', $this->readStderr());
     }
 
-    public function testUnexpectedThrowableHonoursTrace(): void
+    public function testUnknownCommandExitsOneWithStderr(): void
     {
-        $status = $this->throwingKernel()->handle(['demo', 'boom', '--trace']);
+        $status = $this->kernel()->handle(['demo', 'nope']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('#0', $this->readStderr());
+        $this->assertStringContainsString("demo: unknown command 'nope'", $this->readStderr());
+    }
+
+    public function testVersionIsHandledBeforeCommandResolution(): void
+    {
+        $status = $this->kernel()->handle(['demo', '--version']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('demo', $this->readStdout());
     }
 
     public function testVersionLineCarriesAResolvedVersion(): void

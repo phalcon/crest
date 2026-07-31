@@ -39,46 +39,6 @@ final class ArtifactWriterTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testRenderWritesTheSubstitutedStub(): void
-    {
-        $file = $this->root . '/out/Thing.php';
-
-        $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
-
-        $this->assertSame('hello Thing', (string) file_get_contents($file));
-    }
-
-    public function testRenderCreatesMissingDirectoriesAllTheWayDown(): void
-    {
-        $file = $this->root . '/a/b/c/Thing.php';
-
-        $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
-
-        $this->assertFileExists($file);
-    }
-
-    public function testRenderRefusesToOverwriteWithoutForce(): void
-    {
-        $file = $this->root . '/out/Thing.php';
-
-        $this->writer()->render($file, 'thing', ['class' => 'First'], false);
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage($file . ' already exists; pass --force to overwrite');
-
-        $this->writer()->render($file, 'thing', ['class' => 'Second'], false);
-    }
-
-    public function testRenderOverwritesWhenForced(): void
-    {
-        $file = $this->root . '/out/Thing.php';
-
-        $this->writer()->render($file, 'thing', ['class' => 'First'], false);
-        $this->writer()->render($file, 'thing', ['class' => 'Second'], true);
-
-        $this->assertSame('hello Second', (string) file_get_contents($file));
-    }
-
     public function testADirectoryInThePlaceOfTheTargetIsNotMistakenForAnExistingFile(): void
     {
         // is_file() is the guard, not file_exists(): the latter is true of a
@@ -105,6 +65,46 @@ final class ArtifactWriterTest extends TestCase
         $this->expectExceptionMessage('could not create ' . $this->root . '/blocked');
 
         $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
+    }
+
+    public function testRenderCreatesMissingDirectoriesAllTheWayDown(): void
+    {
+        $file = $this->root . '/a/b/c/Thing.php';
+
+        $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
+
+        $this->assertFileExists($file);
+    }
+
+    public function testRenderOverwritesWhenForced(): void
+    {
+        $file = $this->root . '/out/Thing.php';
+
+        $this->writer()->render($file, 'thing', ['class' => 'First'], false);
+        $this->writer()->render($file, 'thing', ['class' => 'Second'], true);
+
+        $this->assertSame('hello Second', (string) file_get_contents($file));
+    }
+
+    public function testRenderRefusesToOverwriteWithoutForce(): void
+    {
+        $file = $this->root . '/out/Thing.php';
+
+        $this->writer()->render($file, 'thing', ['class' => 'First'], false);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($file . ' already exists; pass --force to overwrite');
+
+        $this->writer()->render($file, 'thing', ['class' => 'Second'], false);
+    }
+
+    public function testRenderWritesTheSubstitutedStub(): void
+    {
+        $file = $this->root . '/out/Thing.php';
+
+        $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
+
+        $this->assertSame('hello Thing', (string) file_get_contents($file));
     }
 
     public function testWriteReportsAFileItCouldNotWrite(): void

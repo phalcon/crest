@@ -36,44 +36,62 @@ final class ProviderCommandTest extends TestCase
         $this->endScratchProject();
     }
 
+    public function testAnUnusableNameIsReported(): void
+    {
+        $status = $this->runCommand(['Admin/Cache']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "'Admin/Cache' is not a usable class name",
+            $this->readStderr()
+        );
+    }
+
+    public function testCreatedPathIsReported(): void
+    {
+        $this->runCommand(['Cache']);
+
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/src/Provider/CacheProvider.php',
+            $this->readStdout()
+        );
+    }
+
     public function testDefinitionNamesItselfMakeProvider(): void
     {
         $this->assertSame('make:provider', (new ProviderCommand())->define()->getName());
     }
 
-    public function testTheWholeProviderIsRendered(): void
+    public function testForceOverwritesAnExistingProvider(): void
     {
-        // Asserted whole rather than by substring: this is generated code nobody
-        // reviews, so a dropped use statement or a mangled signature has to fail
-        // here or it ships.
-        $status = $this->runCommand(['Cache']);
+        $this->runCommand(['Cache']);
+        file_put_contents($this->root . '/src/Provider/CacheProvider.php', 'stale');
 
-        $expected = "<?php\n"
-            . "\n"
-            . "declare(strict_types=1);\n"
-            . "\n"
-            . "namespace App\Provider;\n"
-            . "\n"
-            . "use Phalcon\Contracts\Container\Service\Collection;\n"
-            . "use Phalcon\Contracts\Container\Service\Provider as ProviderContract;\n"
-            . "\n"
-            . "final class CacheProvider implements ProviderContract\n"
-            . "{\n"
-            . "    public function provide(Collection \$services): void\n"
-            . "    {\n"
-            . "        // Concretes autowire, so only the seams need declaring:\n"
-            . "        //\n"
-            . "        // \$services->set(Thing::class, Thing::class);\n"
-            . "        // \$services->bind(ThingInterface::class, Thing::class);\n"
-            . "        // \$services->setAlias(ThingInterface::class, 'thing');\n"
-            . "    }\n"
-            . "}\n";
+        $status = $this->runCommand(['Cache', '--force']);
 
         $this->assertSame(0, $status);
-        $this->assertSame(
-            $expected,
+        $this->assertStringNotContainsString(
+            'stale',
             (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
         );
+    }
+
+    public function testNameArgumentIsRequired(): void
+    {
+        $status = $this->runCommand([]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
+    }
+
+    public function testRefusesToOverwriteWithoutForce(): void
+    {
+        $this->runCommand(['Cache']);
+
+        $status = $this->runCommand(['Cache']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('already exists', $this->readStderr());
     }
 
     public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
@@ -92,15 +110,6 @@ final class ProviderCommandTest extends TestCase
             'final class Provider implements ProviderContract',
             $contents
         );
-    }
-
-    public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
-    {
-        $status = $this->runCommand(['CacheProvider']);
-
-        $this->assertSame(0, $status);
-        $this->assertFileExists($this->root . '/src/Provider/CacheProvider.php');
-        $this->assertFileDoesNotExist($this->root . '/src/Provider/CacheProviderProvider.php');
     }
 
     public function testTheProviderDirectoryIsCreatedWhenItIsAbsent(): void
@@ -135,56 +144,47 @@ final class ProviderCommandTest extends TestCase
         $this->assertSame($expected, $this->readStdout());
     }
 
-    public function testRefusesToOverwriteWithoutForce(): void
+    public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
     {
-        $this->runCommand(['Cache']);
-
-        $status = $this->runCommand(['Cache']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('already exists', $this->readStderr());
-    }
-
-    public function testForceOverwritesAnExistingProvider(): void
-    {
-        $this->runCommand(['Cache']);
-        file_put_contents($this->root . '/src/Provider/CacheProvider.php', 'stale');
-
-        $status = $this->runCommand(['Cache', '--force']);
+        $status = $this->runCommand(['CacheProvider']);
 
         $this->assertSame(0, $status);
-        $this->assertStringNotContainsString(
-            'stale',
+        $this->assertFileExists($this->root . '/src/Provider/CacheProvider.php');
+        $this->assertFileDoesNotExist($this->root . '/src/Provider/CacheProviderProvider.php');
+    }
+
+    public function testTheWholeProviderIsRendered(): void
+    {
+        // Asserted whole rather than by substring: this is generated code nobody
+        // reviews, so a dropped use statement or a mangled signature has to fail
+        // here or it ships.
+        $status = $this->runCommand(['Cache']);
+
+        $expected = "<?php\n"
+            . "\n"
+            . "declare(strict_types=1);\n"
+            . "\n"
+            . "namespace App\Provider;\n"
+            . "\n"
+            . "use Phalcon\Contracts\Container\Service\Collection;\n"
+            . "use Phalcon\Contracts\Container\Service\Provider as ProviderContract;\n"
+            . "\n"
+            . "final class CacheProvider implements ProviderContract\n"
+            . "{\n"
+            . "    public function provide(Collection \$services): void\n"
+            . "    {\n"
+            . "        // Concretes autowire, so only the seams need declaring:\n"
+            . "        //\n"
+            . "        // \$services->set(Thing::class, Thing::class);\n"
+            . "        // \$services->bind(ThingInterface::class, Thing::class);\n"
+            . "        // \$services->setAlias(ThingInterface::class, 'thing');\n"
+            . "    }\n"
+            . "}\n";
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            $expected,
             (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
-        );
-    }
-
-    public function testNameArgumentIsRequired(): void
-    {
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
-    }
-
-    public function testAnUnusableNameIsReported(): void
-    {
-        $status = $this->runCommand(['Admin/Cache']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "'Admin/Cache' is not a usable class name",
-            $this->readStderr()
-        );
-    }
-
-    public function testCreatedPathIsReported(): void
-    {
-        $this->runCommand(['Cache']);
-
-        $this->assertStringContainsString(
-            'Created ' . $this->root . '/src/Provider/CacheProvider.php',
-            $this->readStdout()
         );
     }
 

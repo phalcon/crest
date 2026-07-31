@@ -20,6 +20,30 @@ use PHPUnit\Framework\TestCase;
 
 final class ConventionTest extends TestCase
 {
+    public function testAStaticSegmentAfterAPlaceholderIsRejected(): void
+    {
+        // The convention cannot name this route, so the user is told rather
+        // than handed a file that answers a different URL.
+        $resolver = new StubActionResolver('App\Action\Album\Edit\GetAlbumEdit');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "'edit' cannot follow a placeholder; arguments come last, "
+            . "so write the route as '/album/edit/{id}'"
+        );
+
+        (new Convention('App\Action', $resolver))->target('GET', '/album/{id}/edit');
+    }
+
+    public function testClassWithNoNamespaceYieldsAnEmptyNamespace(): void
+    {
+        $resolver = new StubActionResolver('Get');
+
+        $target = (new Convention('', $resolver))->target('GET', '/');
+
+        $this->assertSame('', $target->namespace);
+        $this->assertSame('Get', $target->class);
+    }
     public function testEmptyPathIsPassedThroughAsRoot(): void
     {
         $resolver = new StubActionResolver('App\Action\Get');
@@ -36,44 +60,6 @@ final class ConventionTest extends TestCase
         $target = (new Convention('App\Action', $resolver))->target('post', '/company');
 
         $this->assertSame('POST', $target->method);
-    }
-
-    public function testTrailingPlaceholdersAllBecomeAttributes(): void
-    {
-        $resolver = new StubActionResolver('App\Action\Company\Users\GetCompanyUsers');
-
-        $target = (new Convention('App\Action', $resolver))
-            ->target('GET', '/company/users/{id}/{userId}');
-
-        $this->assertSame(['id', 'userId'], $target->attributes);
-        $this->assertSame(['App\Action', 'GET', '/company/users'], $resolver->calls[0]);
-    }
-
-    public function testAStaticSegmentAfterAPlaceholderIsRejected(): void
-    {
-        // The convention cannot name this route, so the user is told rather
-        // than handed a file that answers a different URL.
-        $resolver = new StubActionResolver('App\Action\Album\Edit\GetAlbumEdit');
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage(
-            "'edit' cannot follow a placeholder; arguments come last, "
-            . "so write the route as '/album/edit/{id}'"
-        );
-
-        (new Convention('App\Action', $resolver))->target('GET', '/album/{id}/edit');
-    }
-
-    public function testTheSuggestionKeepsEverySegmentInOrder(): void
-    {
-        // Two statics and two placeholders, so the suggestion has to carry all
-        // of both rather than the first of each.
-        $resolver = new StubActionResolver('App\Action\Album\Edit\GetAlbumEdit');
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("so write the route as '/album/edit/{id}/{slug}'");
-
-        (new Convention('App\Action', $resolver))->target('GET', '/album/{id}/edit/{slug}');
     }
 
     public function testOnlyTheStaticPrefixReachesTheResolver(): void
@@ -98,6 +84,28 @@ final class ConventionTest extends TestCase
         $this->assertSame([], $target->attributes);
     }
 
+    public function testTheSuggestionKeepsEverySegmentInOrder(): void
+    {
+        // Two statics and two placeholders, so the suggestion has to carry all
+        // of both rather than the first of each.
+        $resolver = new StubActionResolver('App\Action\Album\Edit\GetAlbumEdit');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("so write the route as '/album/edit/{id}/{slug}'");
+
+        (new Convention('App\Action', $resolver))->target('GET', '/album/{id}/edit/{slug}');
+    }
+
+    public function testTopLevelClassYieldsAFlatPath(): void
+    {
+        $resolver = new StubActionResolver('App\Action\Get');
+
+        $target = (new Convention('App\Action', $resolver))->target('GET', '/');
+
+        $this->assertSame('Get.php', $target->relativePath);
+        $this->assertSame('App\Action', $target->namespace);
+    }
+
     public function testTrailingBackslashesOnTheBaseNamespaceAreIgnored(): void
     {
         // Router::setBaseNamespace() rtrims too; if the two disagreed the
@@ -110,23 +118,14 @@ final class ConventionTest extends TestCase
         $this->assertSame(['App\Action', 'GET', '/company'], $resolver->calls[0]);
     }
 
-    public function testClassWithNoNamespaceYieldsAnEmptyNamespace(): void
+    public function testTrailingPlaceholdersAllBecomeAttributes(): void
     {
-        $resolver = new StubActionResolver('Get');
+        $resolver = new StubActionResolver('App\Action\Company\Users\GetCompanyUsers');
 
-        $target = (new Convention('', $resolver))->target('GET', '/');
+        $target = (new Convention('App\Action', $resolver))
+            ->target('GET', '/company/users/{id}/{userId}');
 
-        $this->assertSame('', $target->namespace);
-        $this->assertSame('Get', $target->class);
-    }
-
-    public function testTopLevelClassYieldsAFlatPath(): void
-    {
-        $resolver = new StubActionResolver('App\Action\Get');
-
-        $target = (new Convention('App\Action', $resolver))->target('GET', '/');
-
-        $this->assertSame('Get.php', $target->relativePath);
-        $this->assertSame('App\Action', $target->namespace);
+        $this->assertSame(['id', 'userId'], $target->attributes);
+        $this->assertSame(['App\Action', 'GET', '/company/users'], $resolver->calls[0]);
     }
 }

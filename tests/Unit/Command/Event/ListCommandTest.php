@@ -50,11 +50,6 @@ final class ListCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testDefinitionNamesItselfEventList(): void
-    {
-        $this->assertSame('event:list', (new ListCommand())->define()->getName());
-    }
-
     public function testAContainerThatRegistersNoManagerSaysSo(): void
     {
         // The container would happily autowire a fresh Manager, and reporting
@@ -82,6 +77,21 @@ final class ListCommandTest extends TestCase
         $this->assertSame('no listeners attached' . PHP_EOL, $this->readStdout());
     }
 
+    public function testANonPhalconContainerIsReported(): void
+    {
+        $this->declareFront(WrongContainerFront::class);
+
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('stdClass is not a Phalcon container', $this->readStderr());
+    }
+
+    public function testDefinitionNamesItselfEventList(): void
+    {
+        $this->assertSame('event:list', (new ListCommand())->define()->getName());
+    }
+
     public function testListenersAreListedSortedByEvent(): void
     {
         $this->declareFront(EventsFront::class);
@@ -95,16 +105,6 @@ final class ListCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertSame($expected, $this->normalised());
-    }
-
-    public function testANonPhalconContainerIsReported(): void
-    {
-        $this->declareFront(WrongContainerFront::class);
-
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('stdClass is not a Phalcon container', $this->readStderr());
     }
 
     public function testSomethingElseRegisteredAsTheManagerIsReported(): void
