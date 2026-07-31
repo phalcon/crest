@@ -14,18 +14,22 @@ declare(strict_types=1);
 namespace Crest;
 
 use Crest\Command\AboutCommand;
-use Crest\Command\ListCommand;
 use Crest\Command\Config\ShowCommand as ConfigShowCommand;
 use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
+use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
+use Crest\Command\Make\CommandCommand;
+use Crest\Command\Make\MiddlewareCommand;
+use Crest\Command\Make\ProviderCommand;
+use Crest\Command\Make\ResponderCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
+use Crest\Command\Stub\PublishCommand as StubPublishCommand;
 use Crest\Console\Registry;
 
 /**
  * Crest's identity and command set. The console core is deliberately anonymous;
- * this class is what makes it crest. When Crest\Console becomes
- * phalcon/console, this file is the only thing that stays behind.
+ * this class is what makes it crest.
  */
 final class Commands
 {
@@ -57,7 +61,12 @@ final class Commands
             ->add('event:list', EventListCommand::class)
             ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)
+            ->add('make:command', CommandCommand::class)
+            ->add('make:middleware', MiddlewareCommand::class)
+            ->add('make:provider', ProviderCommand::class)
+            ->add('make:responder', ResponderCommand::class)
             ->add('route:list', RouteListCommand::class)
+            ->add('stub:publish', StubPublishCommand::class)
             ->withDiscovery(self::KEY);
     }
 }

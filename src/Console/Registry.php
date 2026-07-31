@@ -20,6 +20,7 @@ use Crest\Console\Exceptions\Exception;
 use function class_exists;
 use function is_array;
 use function is_string;
+use function ksort;
 use function sprintf;
 
 /**
@@ -34,8 +35,7 @@ use function sprintf;
  * Aliases resolve through get()/has() but never appear in all(), so `list`
  * shows one row per command.
  *
- * Ships empty and names no commands: the owning tool seeds it. That is what
- * lets this class move to phalcon/console unchanged.
+ * Ships empty and names no commands: the owning tool seeds it.
  */
 final class Registry
 {
@@ -84,6 +84,33 @@ final class Registry
         $this->discover();
 
         return $this->commands;
+    }
+
+    /**
+     * Every canonical name mapped to its description, sorted by name.
+     *
+     * The one method here that instantiates anything: a description lives on
+     * the command's definition, so answering this means constructing each
+     * command. Resolution through get()/has() still instantiates nothing.
+     *
+     * Lives here rather than in the callers because the kernel prints this
+     * listing when invoked with no arguments and the addressable `list` command
+     * prints the same thing - two copies of the loop that had to be kept in
+     * agreement by hand.
+     *
+     * @return array<string, string>
+     */
+    public function descriptions(): array
+    {
+        $commands = $this->all();
+        ksort($commands);
+
+        $descriptions = [];
+        foreach ($commands as $name => $class) {
+            $descriptions[$name] = (new $class())->define()->getDescription();
+        }
+
+        return $descriptions;
     }
 
     /**

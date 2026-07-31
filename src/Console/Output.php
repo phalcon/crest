@@ -35,9 +35,16 @@ use const STDOUT;
  */
 final class Output
 {
-    public const COLOR_GREEN = "\033[32m";
-    public const COLOR_RED   = "\033[31m";
-    public const COLOR_RESET = "\033[0m";
+    public const COLOR_GREEN  = "\033[32m";
+    public const COLOR_ORANGE = "\033[38;5;208m";
+    public const COLOR_RED    = "\033[31m";
+    public const COLOR_RESET  = "\033[0m";
+
+    /**
+     * The glyph a banner opens with. Named for its shape rather than for any
+     * one tool.
+     */
+    public const MARK = '⟩⟩⟩';
 
     private bool $decorated;
 
@@ -57,6 +64,42 @@ final class Output
         $this->stdout    = $stdout;
         $this->stderr    = $stderr;
         $this->decorated = $decorated ?? $this->detectDecoration($stdout);
+    }
+
+    /**
+     * The identity line a run opens with: the chevron mark, then whatever the
+     * caller puts after it - by convention the tool name and its version.
+     *
+     * The mark is colored through decorate() rather than carrying its own
+     * escapes, so a piped run or one with NO_COLOR set gets the glyph and no
+     * control codes.
+     */
+    public function banner(string $text): void
+    {
+        $this->line($this->decorate(self::MARK, self::COLOR_ORANGE) . ' ' . $text);
+    }
+
+    /**
+     * The command listing: banner, blank line, one row per command.
+     *
+     * Presentation only - the caller supplies the descriptions, so this class
+     * stays unaware of how a registry answers. Shared because the kernel prints
+     * this listing when invoked with no arguments and an addressable `list`
+     * command prints the same thing, and two copies of the layout had to be
+     * kept in agreement by hand.
+     *
+     * @param array<string, string> $descriptions Command name => description.
+     */
+    public function commandTable(string $banner, array $descriptions): void
+    {
+        $rows = [];
+        foreach ($descriptions as $name => $description) {
+            $rows[] = [$name, $description];
+        }
+
+        $this->banner($banner);
+        $this->line();
+        $this->table(['COMMAND', 'DESCRIPTION'], $rows);
     }
 
     public function error(string $text): void
@@ -105,8 +148,7 @@ final class Output
 
     /**
      * Renders a command's usage block from its definition. Presentation lives
-     * here rather than on Definition so the schema stays a pure data structure
-     * when it is promoted into cli-options-parser.
+     * here rather than on Definition so the schema stays a pure data structure.
      */
     public function usage(string $tool, Definition $definition): void
     {

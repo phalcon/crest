@@ -39,6 +39,11 @@ final class PhalconRouterResolver implements ActionResolver
         return $this->router($baseNamespace)->classFor($method, $path);
     }
 
+    public function methodFor(string $baseNamespace, string $class): ?string
+    {
+        return $this->router($baseNamespace)->methodFor($class);
+    }
+
     public function pathFor(string $baseNamespace, string $class): ?string
     {
         return $this->router($baseNamespace)->pathFor($class);

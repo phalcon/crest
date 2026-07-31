@@ -36,6 +36,22 @@ final class ConfigTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    public function testAdrGetsADefaultPathForEveryGeneratedArtifact(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $this->assertSame(
+            [
+                'action'     => $this->root . '/src/Action',
+                'command'    => $this->root . '/src/Command',
+                'middleware' => $this->root . '/src/Middleware',
+                'provider'   => $this->root . '/src/Provider',
+                'responder'  => $this->root . '/src/Responder',
+            ],
+            Config::discover($this->root)->paths()
+        );
+    }
+
     public function testCrestPhpMayDeclareTheNamespaceExplicitly(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
@@ -55,6 +71,86 @@ final class ConfigTest extends TestCase
         $this->assertSame('Shop\Handlers', $config->namespaceFor('action'));
     }
 
+    public function testCrestPhpWithoutAComposerJsonHasAnEmptyPsr4Map(): void
+    {
+        // No composer.json at all: crest.php still loads, but namespaceFor()
+        // has nothing to resolve against and must say so rather than guess.
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['namespace' => 'Shop'];\n"
+        );
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame('Shop', $config->namespace());
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("no psr-4 autoload entry covers 'src/Action'");
+
+        $config->namespaceFor('action');
+    }
+
+    public function testDeclaredNamespaceForIsStrippedOfSurroundingBackslashes(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['namespaces' => ['action' => '\\\\Shop\\\\Handlers\\\\']];\n"
+        );
+
+        $this->assertSame('Shop\Handlers', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testDeclaredNamespaceIsStrippedOfSurroundingBackslashes(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['namespace' => '\\\\Shop\\\\'];\n"
+        );
+
+        $this->assertSame('Shop', Config::discover($this->root)->namespace());
+    }
+
+    public function testDeclaredPathIsStrippedOfSurroundingSlashes(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => '/src/Action/']];\n"
+        );
+
+        $this->assertSame($this->root . '/src/Action', Config::discover($this->root)->path('action'));
+    }
+
+    public function testDeclaredPathsAreMergedOverTheDefaultsNotReplaced(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
+        );
+
+        $config = Config::discover($this->root);
+
+        // The declared key is added and the default 'action' survives.
+        $this->assertSame($this->root . '/templates', $config->path('views'));
+        $this->assertSame($this->root . '/src/Action', $config->path('action'));
+    }
+
+    public function testExplicitConfigFileBeatsADiscoveredOne(): void
+    {
+        // Both exist, so this pins the precedence rather than relying on the
+        // walk-up finding nothing.
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['namespace' => 'Discovered'];\n");
+        file_put_contents($this->root . '/elsewhere.php', "<?php\n\nreturn ['namespace' => 'Explicit'];\n");
+
+        $config = Config::discover($this->root, $this->root . '/elsewhere.php');
+
+        $this->assertSame('Explicit', $config->namespace());
+    }
+
     public function testExplicitConfigFileWins(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
@@ -66,6 +162,32 @@ final class ConfigTest extends TestCase
         $config = Config::discover($this->root, $this->root . '/elsewhere.php');
 
         $this->assertSame('Other', $config->namespace());
+    }
+
+    public function testFirstDeclarationWinsWhenTwoPsr4DirectoriesTie(): void
+    {
+        // Equal-length matches: the earlier declaration keeps the win, so the
+        // comparison has to reject an equal candidate, not just a shorter one.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"First\\\\":"src/Action/","Second\\\\":"src/Action/"}}}'
+        );
+
+        $this->assertSame('First', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testFlavorsWithoutGeneratorsGetNoDefaultPaths(): void
+    {
+        // ADR is the only flavor with generators. Offering the others its
+        // directories would put locations in config:show for artifacts the
+        // project has no command to write.
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
+        $this->assertSame([], Config::discover($this->root)->paths());
+
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+        $this->assertSame([], Config::discover($this->root)->paths());
     }
 
     public function testInfersNamespaceAndActionPathFromComposerJson(): void
@@ -95,6 +217,23 @@ final class ConfigTest extends TestCase
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
 
+    public function testNamespaceForKeepsTheLongestMatchWhenAShorterOneComesLater(): void
+    {
+        // Declaration order puts the deeper directory first, so the second,
+        // shorter match must not displace it.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"Deep\\\\":"src/Action/","App\\\\":"src/"}}}'
+        );
+        mkdir($this->root . '/src/Action/Company', 0o775, true);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => 'src/Action/Company']];\n"
+        );
+
+        $this->assertSame('Deep\Company', Config::discover($this->root)->namespaceFor('action'));
+    }
+
     public function testNamespaceForPrefersTheLongestMatchingPsr4Directory(): void
     {
         $this->writeComposerJson(['App\\' => 'src/', 'Deep\\' => 'src/Action/']);
@@ -105,6 +244,19 @@ final class ConfigTest extends TestCase
         );
 
         $this->assertSame('Deep\Company', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testNamespaceForReturnsThePrefixAloneWhenThePathIsTheRoot(): void
+    {
+        // paths.action equals the psr-4 directory exactly, so there is no
+        // remainder to append.
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['paths' => ['action' => 'src']];\n"
+        );
+
+        $this->assertSame('App', Config::discover($this->root)->namespaceFor('action'));
     }
 
     public function testNamespaceForThrowsWhenNoPsr4EntryCoversThePath(): void
@@ -124,131 +276,38 @@ final class ConfigTest extends TestCase
         Config::discover($this->root)->namespaceFor('action');
     }
 
-    public function testSkipsPsr4EntriesWhoseDirectoryIsAbsent(): void
+    public function testNonMatchingPsr4EntriesNeverBecomeTheBestMatch(): void
     {
-        $this->writeComposerJson(['Ghost\\' => 'missing/', 'App\\' => 'src/']);
-
-        $this->assertSame('App', Config::discover($this->root)->namespace());
-    }
-
-    public function testNamespaceForReturnsThePrefixAloneWhenThePathIsTheRoot(): void
-    {
-        // paths.action equals the psr-4 directory exactly, so there is no
-        // remainder to append.
-        $this->writeComposerJson(['App\\' => 'src/']);
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['action' => 'src']];\n"
-        );
-
-        $this->assertSame('App', Config::discover($this->root)->namespaceFor('action'));
-    }
-
-    public function testNamespaceForKeepsTheLongestMatchWhenAShorterOneComesLater(): void
-    {
-        // Declaration order puts the deeper directory first, so the second,
-        // shorter match must not displace it.
+        // The long, non-matching directory must be skipped outright; if it were
+        // allowed to seed the longest-match it would beat the real 'src/'.
         file_put_contents(
             $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"Deep\\\\":"src/Action/","App\\\\":"src/"}}}'
-        );
-        mkdir($this->root . '/src/Action/Company', 0o775, true);
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['action' => 'src/Action/Company']];\n"
+            '{"autoload":{"psr-4":{"Long\\\\":"averylongdirectory/","App\\\\":"src/"}}}'
         );
 
-        $this->assertSame('Deep\Company', Config::discover($this->root)->namespaceFor('action'));
+        $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
 
-    public function testCrestPhpWithoutAComposerJsonHasAnEmptyPsr4Map(): void
+    public function testNoUsablePsr4EntryThrows(): void
     {
-        // No composer.json at all: crest.php still loads, but namespaceFor()
-        // has nothing to resolve against and must say so rather than guess.
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['namespace' => 'Shop'];\n"
-        );
-
-        $config = Config::discover($this->root);
-
-        $this->assertSame('Shop', $config->namespace());
+        // composer.json exists but every declared directory is missing, so
+        // there is nothing to infer a root namespace from.
+        $this->writeComposerJson(['Ghost\\' => 'missing/']);
 
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage("no psr-4 autoload entry covers 'src/Action'");
+        $this->expectExceptionMessage('no crest.php and no usable psr-4 autoload entry found');
 
-        $config->namespaceFor('action');
+        Config::discover($this->root);
     }
 
-    public function testExplicitConfigFileBeatsADiscoveredOne(): void
+    public function testPsr4DirectoryIsFoundDespiteSurroundingSlashes(): void
     {
-        // Both exist, so this pins the precedence rather than relying on the
-        // walk-up finding nothing.
-        $this->writeComposerJson(['App\\' => 'src/']);
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['namespace' => 'Discovered'];\n");
-        file_put_contents($this->root . '/elsewhere.php', "<?php\n\nreturn ['namespace' => 'Explicit'];\n");
-
-        $config = Config::discover($this->root, $this->root . '/elsewhere.php');
-
-        $this->assertSame('Explicit', $config->namespace());
-    }
-
-    public function testTrailingSlashOnTheDirectoryIsIgnored(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
-
-        $config = Config::discover($this->root . '/');
-
-        $this->assertSame($this->root, $config->root());
-        $this->assertSame($this->root . '/src/Action', $config->path('action'));
-    }
-
-    public function testDeclaredNamespaceIsStrippedOfSurroundingBackslashes(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
         file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['namespace' => '\\\\Shop\\\\'];\n"
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"App\\\\":"/src/"}}}'
         );
 
-        $this->assertSame('Shop', Config::discover($this->root)->namespace());
-    }
-
-    public function testDeclaredNamespaceForIsStrippedOfSurroundingBackslashes(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['namespaces' => ['action' => '\\\\Shop\\\\Handlers\\\\']];\n"
-        );
-
-        $this->assertSame('Shop\Handlers', Config::discover($this->root)->namespaceFor('action'));
-    }
-
-    public function testDeclaredPathIsStrippedOfSurroundingSlashes(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['action' => '/src/Action/']];\n"
-        );
-
-        $this->assertSame($this->root . '/src/Action', Config::discover($this->root)->path('action'));
-    }
-
-    public function testDeclaredPathsAreMergedOverTheDefaultsNotReplaced(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
-        file_put_contents(
-            $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
-        );
-
-        $config = Config::discover($this->root);
-
-        // The declared key is added and the default 'action' survives.
-        $this->assertSame($this->root . '/templates', $config->path('views'));
-        $this->assertSame($this->root . '/src/Action', $config->path('action'));
+        $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
     public function testPsr4DirectoryMatchOnlyCountsWholeSegments(): void
@@ -268,16 +327,25 @@ final class ConfigTest extends TestCase
         Config::discover($this->root)->namespaceFor('action');
     }
 
-    public function testNonMatchingPsr4EntriesNeverBecomeTheBestMatch(): void
+    public function testPsr4EntryWithAnEmptyTargetIsSkipped(): void
     {
-        // The long, non-matching directory must be skipped outright; if it were
-        // allowed to seed the longest-match it would beat the real 'src/'.
         file_put_contents(
             $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"Long\\\\":"averylongdirectory/","App\\\\":"src/"}}}'
+            '{"autoload":{"psr-4":{"Empty\\\\":"","App\\\\":"src/"}}}'
         );
 
-        $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
+        $this->assertSame('App', Config::discover($this->root)->namespace());
+    }
+
+    public function testPsr4TargetMayBeDeclaredAsAList(): void
+    {
+        // composer allows "App\\": ["src/", "lib/"]; the first entry wins.
+        file_put_contents(
+            $this->root . '/composer.json',
+            '{"autoload":{"psr-4":{"App\\\\":["src/","lib/"]}}}'
+        );
+
+        $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
     public function testScanKeepsLookingAfterRejectingAShorterMatch(): void
@@ -298,59 +366,21 @@ final class ConfigTest extends TestCase
         $this->assertSame('Deepest', Config::discover($this->root)->namespaceFor('action'));
     }
 
-    public function testFirstDeclarationWinsWhenTwoPsr4DirectoriesTie(): void
+    public function testSkipsPsr4EntriesWhoseDirectoryIsAbsent(): void
     {
-        // Equal-length matches: the earlier declaration keeps the win, so the
-        // comparison has to reject an equal candidate, not just a shorter one.
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"First\\\\":"src/Action/","Second\\\\":"src/Action/"}}}'
-        );
-
-        $this->assertSame('First', Config::discover($this->root)->namespaceFor('action'));
-    }
-
-    public function testPsr4DirectoryIsFoundDespiteSurroundingSlashes(): void
-    {
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"App\\\\":"/src/"}}}'
-        );
+        $this->writeComposerJson(['Ghost\\' => 'missing/', 'App\\' => 'src/']);
 
         $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
-    public function testNoUsablePsr4EntryThrows(): void
+    public function testTrailingSlashOnTheDirectoryIsIgnored(): void
     {
-        // composer.json exists but every declared directory is missing, so
-        // there is nothing to infer a root namespace from.
-        $this->writeComposerJson(['Ghost\\' => 'missing/']);
+        $this->writeComposerJson(['App\\' => 'src/']);
 
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage('no crest.php and no usable psr-4 autoload entry found');
+        $config = Config::discover($this->root . '/');
 
-        Config::discover($this->root);
-    }
-
-    public function testPsr4TargetMayBeDeclaredAsAList(): void
-    {
-        // composer allows "App\\": ["src/", "lib/"]; the first entry wins.
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"App\\\\":["src/","lib/"]}}}'
-        );
-
-        $this->assertSame('App', Config::discover($this->root)->namespace());
-    }
-
-    public function testPsr4EntryWithAnEmptyTargetIsSkipped(): void
-    {
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"Empty\\\\":"","App\\\\":"src/"}}}'
-        );
-
-        $this->assertSame('App', Config::discover($this->root)->namespace());
+        $this->assertSame($this->root, $config->root());
+        $this->assertSame($this->root . '/src/Action', $config->path('action'));
     }
 
     public function testUnknownFlavorThrows(): void

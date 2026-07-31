@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Phalcon\Contracts\ADR\Handler;
+use Phalcon\Contracts\ADR\Middleware as MiddlewareContract;
+use Phalcon\Contracts\Http\AttributeRequest;
+use Phalcon\Http\ResponseInterface;
+
+final class {{ class }} implements MiddlewareContract
+{
+    public function __invoke(AttributeRequest $request, Handler $next): ResponseInterface
+    {
+        return $next($request);
+    }
+}

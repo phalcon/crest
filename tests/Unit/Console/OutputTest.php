@@ -34,6 +34,30 @@ final class OutputTest extends TestCase
         $this->closeStreams();
     }
 
+    public function testBannerColorsOnlyTheMarkWhenDecorated(): void
+    {
+        // The text after the mark is the caller's, and stays uncolored.
+        $output = new Output($this->stdout, $this->stderr, true);
+
+        $output->banner('demo 1.2.3');
+
+        $this->assertSame(
+            "\033[38;5;208m" . Output::MARK . "\033[0m" . ' demo 1.2.3' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testBannerPrintsTheMarkThenTheTextUndecorated(): void
+    {
+        // Undecorated keeps the glyph and drops the escapes: a piped run should
+        // still read as a banner, just without color.
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $output->banner('demo 1.2.3');
+
+        $this->assertSame(Output::MARK . ' demo 1.2.3' . PHP_EOL, $this->readStdout());
+    }
+
     public function testErrorGoesToStderrNotStdout(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);
@@ -62,6 +86,15 @@ final class OutputTest extends TestCase
         $this->assertSame(PHP_EOL, $this->readStdout());
     }
 
+    public function testLineWritesToStdoutWithNewline(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $output->line('hello');
+
+        $this->assertSame('hello' . PHP_EOL, $this->readStdout());
+    }
+
     public function testNoColorEnvironmentVariableDisablesDecoration(): void
     {
         putenv('NO_COLOR=1');
@@ -76,28 +109,6 @@ final class OutputTest extends TestCase
         } finally {
             putenv('NO_COLOR');
         }
-    }
-
-    public function testUndecoratedIsDetectedForANonTtyStream(): void
-    {
-        // php://memory is never a tty, so auto-detection must settle on
-        // undecorated once NO_COLOR is out of the way.
-        putenv('NO_COLOR');
-
-        $output = new Output($this->stdout, $this->stderr);
-
-        $output->success('done');
-
-        $this->assertSame('done' . PHP_EOL, $this->readStdout());
-    }
-
-    public function testLineWritesToStdoutWithNewline(): void
-    {
-        $output = new Output($this->stdout, $this->stderr, false);
-
-        $output->line('hello');
-
-        $this->assertSame('hello' . PHP_EOL, $this->readStdout());
     }
 
     public function testSuccessIsUndecoratedWhenDecorationIsOff(): void
@@ -118,17 +129,15 @@ final class OutputTest extends TestCase
         $this->assertSame("\033[32mdone\033[0m" . PHP_EOL, $this->readStdout());
     }
 
-    public function testTablePadsColumnsToTheWidestCell(): void
+    public function testTableGivesAnEntirelyEmptyColumnNoWidth(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);
 
-        $output->table(['NAME', 'VALUE'], [['php', '8.4.1'], ['label', 'dev']]);
+        // Column 0 is empty in both the header and the row, so it must occupy
+        // no characters at all - only the separator remains before 'x'.
+        $output->table(['', '', ''], [['', 'x', 'y']], false);
 
-        $expected = 'NAME   VALUE' . PHP_EOL
-            . 'php    8.4.1' . PHP_EOL
-            . 'label  dev' . PHP_EOL;
-
-        $this->assertSame($expected, $this->readStdout());
+        $this->assertSame('  x  y' . PHP_EOL, $this->readStdout());
     }
 
     public function testTableMeasuresMultibyteCellsByCharacterNotByte(): void
@@ -146,6 +155,19 @@ final class OutputTest extends TestCase
         $this->assertSame($expected, $this->readStdout());
     }
 
+    public function testTablePadsColumnsToTheWidestCell(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $output->table(['NAME', 'VALUE'], [['php', '8.4.1'], ['label', 'dev']]);
+
+        $expected = 'NAME   VALUE' . PHP_EOL
+            . 'php    8.4.1' . PHP_EOL
+            . 'label  dev' . PHP_EOL;
+
+        $this->assertSame($expected, $this->readStdout());
+    }
+
     public function testTableSuppressesTheHeaderRowButKeepsItsWidths(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);
@@ -158,17 +180,6 @@ final class OutputTest extends TestCase
         $this->assertSame('a           b' . PHP_EOL, $this->readStdout());
     }
 
-    public function testTableGivesAnEntirelyEmptyColumnNoWidth(): void
-    {
-        $output = new Output($this->stdout, $this->stderr, false);
-
-        // Column 0 is empty in both the header and the row, so it must occupy
-        // no characters at all - only the separator remains before 'x'.
-        $output->table(['', '', ''], [['', 'x', 'y']], false);
-
-        $this->assertSame('  x  y' . PHP_EOL, $this->readStdout());
-    }
-
     public function testTableTrimsTrailingPaddingFromTheLastColumn(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);
@@ -177,6 +188,19 @@ final class OutputTest extends TestCase
 
         // 'z' must not be padded out to 'longer' width - the row is rtrimmed.
         $this->assertStringEndsWith('y  z' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testUndecoratedIsDetectedForANonTtyStream(): void
+    {
+        // php://memory is never a tty, so auto-detection must settle on
+        // undecorated once NO_COLOR is out of the way.
+        putenv('NO_COLOR');
+
+        $output = new Output($this->stdout, $this->stderr);
+
+        $output->success('done');
+
+        $this->assertSame('done' . PHP_EOL, $this->readStdout());
     }
 
     public function testUsageBracketsRequiredAndOptionalArgumentsDifferently(): void

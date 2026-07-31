@@ -51,46 +51,6 @@ final class ListCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testDefinitionNamesItselfContainerList(): void
-    {
-        $this->assertSame('container:list', (new ListCommand())->define()->getName());
-    }
-
-    public function testWithoutABootstrapItSaysWhatToAdd(): void
-    {
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "name the front controller in crest.php, e.g. 'bootstrap' => App\\Front\\ApiFront::class",
-            $this->readStderr()
-        );
-    }
-
-    public function testAnUnknownFrontControllerIsReported(): void
-    {
-        $this->declareFront('App\Front\NoSuchFront');
-
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('was not found', $this->readStderr());
-    }
-
-    public function testAFrontWithNoBootIsReported(): void
-    {
-        $this->declareFront(NoBootFront::class);
-
-        $status = $this->runCommand();
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            NoBootFront::class . ' has no boot(); without one it cannot be started '
-            . 'without also serving a request',
-            $this->readStderr()
-        );
-    }
-
     public function testABootReturningANonObjectIsReported(): void
     {
         $this->declareFront(NonContainerFront::class);
@@ -127,18 +87,18 @@ final class ListCommandTest extends TestCase
         );
     }
 
-    public function testServicesAreListedSortedWithClassAndResolvedState(): void
+    public function testAFrontWithNoBootIsReported(): void
     {
-        $this->declareFront(ServicesFront::class);
+        $this->declareFront(NoBootFront::class);
 
         $status = $this->runCommand();
 
-        $expected = 'SERVICE CLASS RESOLVED' . PHP_EOL
-            . 'alpha Phalcon\Support\HelperFactory yes' . PHP_EOL
-            . 'zebra Phalcon\Support\HelperFactory no' . PHP_EOL;
-
-        $this->assertSame(0, $status);
-        $this->assertSame($expected, $this->normalised());
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            NoBootFront::class . ' has no boot(); without one it cannot be started '
+            . 'without also serving a request',
+            $this->readStderr()
+        );
     }
 
     public function testAnEmptyContainerSaysSo(): void
@@ -151,6 +111,46 @@ final class ListCommandTest extends TestCase
         $this->assertSame('no services registered' . PHP_EOL, $this->readStdout());
     }
 
+    public function testAnUnknownFrontControllerIsReported(): void
+    {
+        $this->declareFront('App\Front\NoSuchFront');
+
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('was not found', $this->readStderr());
+    }
+
+    public function testDefinitionNamesItselfContainerList(): void
+    {
+        $this->assertSame('container:list', (new ListCommand())->define()->getName());
+    }
+
+    public function testServicesAreListedSortedWithClassAndResolvedState(): void
+    {
+        $this->declareFront(ServicesFront::class);
+
+        $status = $this->runCommand();
+
+        $expected = 'SERVICE CLASS RESOLVED' . PHP_EOL
+            . 'alpha Phalcon\Support\HelperFactory yes' . PHP_EOL
+            . 'zebra Phalcon\Support\HelperFactory no' . PHP_EOL;
+
+        $this->assertSame(0, $status);
+        $this->assertSame($expected, $this->normalized());
+    }
+
+    public function testWithoutABootstrapItSaysWhatToAdd(): void
+    {
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "name the front controller in crest.php, e.g. 'bootstrap' => App\\Front\\ApiFront::class",
+            $this->readStderr()
+        );
+    }
+
     private function declareFront(string $class): void
     {
         file_put_contents(
@@ -159,7 +159,7 @@ final class ListCommandTest extends TestCase
         );
     }
 
-    private function normalised(): string
+    private function normalized(): string
     {
         return (string) preg_replace('/ {2,}/', ' ', $this->readStdout());
     }

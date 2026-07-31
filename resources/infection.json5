@@ -31,6 +31,9 @@
                 // cannot return false on any path reaching the cast.
                 "Crest\\Generator\\Stub::render",
                 "Crest\\Project\\Config::psr4Map",
+                // Same guarantee from further off: sources() only ever yields
+                // paths it has confirmed with is_file(), or glob() results.
+                "Crest\\Command\\Stub\\PublishCommand::handle",
                 // getcwd() returns false only when the working directory is
                 // unreadable, which the suite cannot produce.
                 "Crest\\Project\\Config::discover",
@@ -87,8 +90,9 @@
                 // whole story - so any value behaves identically.
                 "Crest\\Project\\Bootstrap::container",
                 // mkdir() mode bits are masked by umask, so the created
-                // directory is identical either way.
-                "Crest\\Command\\Make\\ActionCommand::handle",
+                // directory is identical either way. One entry, not one per
+                // generator: every command writes through ArtifactWriter.
+                "Crest\\Generator\\ArtifactWriter::write",
                 // The max() seed only has to be <= the shortest cell; any
                 // non-positive seed gives the same width.
                 "Crest\\Console\\Output::table"
@@ -96,9 +100,6 @@
         },
         "FalseValue": {
             "ignore": [
-                // A flag's declared default is dead: resolveOptions() supplies
-                // false for OptionMode::None without consulting it.
-                "Crest\\Command\\Make\\ActionCommand::define",
                 // class_exists()'s second argument only decides whether an
                 // autoloader runs. Crest does not autoload the target
                 // project's classes, so both values answer the same; false is
@@ -122,7 +123,7 @@
         "IncrementInteger": {
             "ignore": [
                 "Crest\\Project\\Bootstrap::container",
-                "Crest\\Command\\Make\\ActionCommand::handle",
+                "Crest\\Generator\\ArtifactWriter::write",
                 // Widening the slice by one includes the '--' token itself,
                 // which is never '--trace', '--help' or '-h'.
                 "Crest\\Console\\Kernel::beforeLiteral"

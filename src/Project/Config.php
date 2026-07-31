@@ -18,10 +18,10 @@ use Crest\Console\Exceptions\Exception;
 use function array_keys;
 use function dirname;
 use function explode;
-use function in_array;
 use function file_get_contents;
 use function getcwd;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -45,8 +45,6 @@ use function trim;
  */
 final class Config
 {
-    private const DEFAULT_PATHS = ['action' => 'src/Action'];
-
     /**
      * @param array<string, string> $paths
      * @param array<string, string> $namespaces
@@ -88,9 +86,192 @@ final class Config
         return self::infer($directory);
     }
 
+    /**
+     * Where each generated artifact lands when crest.php does not say.
+     *
+     * Keyed by flavor rather than shared, because the artifacts themselves are
+     * flavor-specific: a provider registers against `Phalcon\Container` under
+     * ADR and against DI under MVC, so one flat set would offer every project
+     * directories for artifacts it can never generate.
+     *
+     * Only ADR is populated. The others get their keys when their generators
+     * land - defaults no command reads would show up in `config:show` as
+     * locations that mean nothing.
+     *
+     * @return array<string, string>
+     */
+    private static function defaultPaths(Flavor $flavor): array
+    {
+        return match ($flavor) {
+            Flavor::ADR => [
+                'action' => 'src/Action',
+                // Not an ADR artifact: a crest command is the same class in any
+                // flavor. It sits here because ADR is the only populated set,
+                // and moves to a shared one when cli, mvc and micro arrive.
+                'command'    => 'src/Command',
+                'middleware' => 'src/Middleware',
+                'provider'   => 'src/Provider',
+                'responder'  => 'src/Responder',
+            ],
+            Flavor::CLI, Flavor::MVC => [],
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $declared
+     */
+    private static function fromArray(array $declared, string $root, string $source): self
+    {
+        $stated = [];
+
+        // `namespaces` is deliberately absent: nothing reads its origin yet, and
+        // tracking a key no caller asks about is a claim with no way to be wrong.
+        foreach (['flavor', 'namespace', 'paths'] as $key) {
+            if (true === isset($declared[$key])) {
+                $stated[] = $key;
+            }
+        }
+
+        $flavor = Flavor::ADR;
+        if (true === isset($declared['flavor']) && true === is_string($declared['flavor'])) {
+            $flavor = Flavor::tryFrom($declared['flavor'])
+                ?? throw new Exception(sprintf("unknown flavor '%s'", $declared['flavor']));
+        }
+
+        $namespace = 'App';
+        if (true === isset($declared['namespace']) && true === is_string($declared['namespace'])) {
+            $namespace = trim($declared['namespace'], '\\');
+        }
+
+        $paths = self::defaultPaths($flavor);
+        if (true === isset($declared['paths']) && true === is_array($declared['paths'])) {
+            /** @var array<string, string> $supplied */
+            $supplied = $declared['paths'];
+            $paths    = [...$paths, ...$supplied];
+
+            // Per key, not just the block: declaring `views` leaves `action` on
+            // its default, and calling that one declared would be a lie.
+            foreach (array_keys($supplied) as $name) {
+                $stated[] = 'paths.' . $name;
+            }
+        }
+
+        $namespaces = [];
+        if (true === isset($declared['namespaces']) && true === is_array($declared['namespaces'])) {
+            /** @var array<string, string> $namespaces */
+            $namespaces = $declared['namespaces'];
+        }
+
+        // crest.php never restates the autoload map; namespaceFor() still needs
+        // it whenever `namespaces` does not answer the question outright.
+        $bootstrap = null;
+        if (true === isset($declared['bootstrap']) && true === is_string($declared['bootstrap'])) {
+            $bootstrap = $declared['bootstrap'];
+        }
+
+        return new self(
+            $flavor,
+            $namespace,
+            $root,
+            $paths,
+            $namespaces,
+            self::psr4Map($root),
+            $source,
+            $stated,
+            $bootstrap
+        );
+    }
+
+    /**
+     * No crest.php: take the first psr-4 entry whose directory actually
+     * exists and build defaults around it. The whole map is retained, not just
+     * the winning prefix, because namespaceFor() needs it.
+     */
+    private static function infer(string $directory): self
+    {
+        if (false === is_file($directory . '/composer.json')) {
+            throw new Exception('no crest.php and no composer.json found');
+        }
+
+        $psr4 = self::psr4Map($directory);
+
+        foreach ($psr4 as $prefix => $target) {
+            if (false === is_dir($directory . '/' . trim($target, '/'))) {
+                continue;
+            }
+
+            return new self(
+                Flavor::ADR,
+                trim($prefix, '\\'),
+                $directory,
+                self::defaultPaths(Flavor::ADR),
+                [],
+                $psr4
+            );
+        }
+
+        throw new Exception('no crest.php and no usable psr-4 autoload entry found');
+    }
+
+    /**
+     * composer.json's psr-4 map, flattened so each prefix has exactly one
+     * directory. Returns an empty map when composer.json is missing or has no
+     * psr-4 section.
+     *
+     * @return array<string, string>
+     */
+    private static function psr4Map(string $root): array
+    {
+        $composer = $root . '/composer.json';
+
+        if (false === is_file($composer)) {
+            return [];
+        }
+
+        /** @var array{autoload?: array{psr-4?: array<string, string|list<string>>}} $decoded */
+        $decoded = json_decode((string) file_get_contents($composer), true) ?: [];
+
+        $map = [];
+        foreach ($decoded['autoload']['psr-4'] ?? [] as $prefix => $target) {
+            $target = is_array($target) ? ($target[0] ?? '') : $target;
+
+            if ('' === $target) {
+                continue;
+            }
+
+            $map[$prefix] = $target;
+        }
+
+        return $map;
+    }
+
+    /**
+     * How the project boots, as declared - either a front controller class or
+     * a path to a file returning a container. Null when nothing was declared.
+     *
+     * Returned verbatim rather than resolved, because the two forms resolve
+     * differently and only the caller knows which it is looking at.
+     *
+     * Services and listeners cannot be read off the filesystem the way routes
+     * can: they exist only once the application has registered them.
+     */
+    public function bootstrap(): ?string
+    {
+        return $this->bootstrap;
+    }
+
     public function flavor(): Flavor
     {
         return $this->flavor;
+    }
+
+    /**
+     * Whether the config file stated this top-level key, as opposed to it
+     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
+     */
+    public function isDeclared(string $key): bool
+    {
+        return in_array($key, $this->declared, true);
     }
 
     public function namespace(): string
@@ -159,27 +340,15 @@ final class Config
     }
 
     /**
-     * How the project boots, as declared - either a front controller class or
-     * a path to a file returning a container. Null when nothing was declared.
-     *
-     * Returned verbatim rather than resolved, because the two forms resolve
-     * differently and only the caller knows which it is looking at.
-     *
-     * Services and listeners cannot be read off the filesystem the way routes
-     * can: they exist only once the application has registered them.
+     * Absolute path for a named location.
      */
-    public function bootstrap(): ?string
+    public function path(string $key): string
     {
-        return $this->bootstrap;
-    }
+        if (false === isset($this->paths[$key])) {
+            throw new Exception(sprintf("unknown path '%s'", $key));
+        }
 
-    /**
-     * Whether the config file stated this top-level key, as opposed to it
-     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
-     */
-    public function isDeclared(string $key): bool
-    {
-        return in_array($key, $this->declared, true);
+        return $this->root . '/' . trim($this->paths[$key], '/');
     }
 
     /**
@@ -198,6 +367,11 @@ final class Config
         return $resolved;
     }
 
+    public function root(): string
+    {
+        return $this->root;
+    }
+
     /**
      * The config file this was read from, or null when everything was inferred
      * from composer.json.
@@ -205,150 +379,5 @@ final class Config
     public function source(): ?string
     {
         return $this->source;
-    }
-
-    /**
-     * Absolute path for a named location.
-     */
-    public function path(string $key): string
-    {
-        if (false === isset($this->paths[$key])) {
-            throw new Exception(sprintf("unknown path '%s'", $key));
-        }
-
-        return $this->root . '/' . trim($this->paths[$key], '/');
-    }
-
-    public function root(): string
-    {
-        return $this->root;
-    }
-
-    /**
-     * @param array<string, mixed> $declared
-     */
-    private static function fromArray(array $declared, string $root, string $source): self
-    {
-        $stated = [];
-
-        // `namespaces` is deliberately absent: nothing reads its origin yet, and
-        // tracking a key no caller asks about is a claim with no way to be wrong.
-        foreach (['flavor', 'namespace', 'paths'] as $key) {
-            if (true === isset($declared[$key])) {
-                $stated[] = $key;
-            }
-        }
-
-        $flavor = Flavor::ADR;
-        if (true === isset($declared['flavor']) && true === is_string($declared['flavor'])) {
-            $flavor = Flavor::tryFrom($declared['flavor'])
-                ?? throw new Exception(sprintf("unknown flavor '%s'", $declared['flavor']));
-        }
-
-        $namespace = 'App';
-        if (true === isset($declared['namespace']) && true === is_string($declared['namespace'])) {
-            $namespace = trim($declared['namespace'], '\\');
-        }
-
-        $paths = self::DEFAULT_PATHS;
-        if (true === isset($declared['paths']) && true === is_array($declared['paths'])) {
-            /** @var array<string, string> $supplied */
-            $supplied = $declared['paths'];
-            $paths    = [...$paths, ...$supplied];
-
-            // Per key, not just the block: declaring `views` leaves `action` on
-            // its default, and calling that one declared would be a lie.
-            foreach (array_keys($supplied) as $name) {
-                $stated[] = 'paths.' . $name;
-            }
-        }
-
-        $namespaces = [];
-        if (true === isset($declared['namespaces']) && true === is_array($declared['namespaces'])) {
-            /** @var array<string, string> $namespaces */
-            $namespaces = $declared['namespaces'];
-        }
-
-        // crest.php never restates the autoload map; namespaceFor() still needs
-        // it whenever `namespaces` does not answer the question outright.
-        $bootstrap = null;
-        if (true === isset($declared['bootstrap']) && true === is_string($declared['bootstrap'])) {
-            $bootstrap = $declared['bootstrap'];
-        }
-
-        return new self(
-            $flavor,
-            $namespace,
-            $root,
-            $paths,
-            $namespaces,
-            self::psr4Map($root),
-            $source,
-            $stated,
-            $bootstrap
-        );
-    }
-
-    /**
-     * No crest.php: take the first psr-4 entry whose directory actually
-     * exists and build defaults around it. The whole map is retained, not just
-     * the winning prefix, because namespaceFor() needs it.
-     */
-    private static function infer(string $directory): self
-    {
-        if (false === is_file($directory . '/composer.json')) {
-            throw new Exception('no crest.php and no composer.json found');
-        }
-
-        $psr4 = self::psr4Map($directory);
-
-        foreach ($psr4 as $prefix => $target) {
-            if (false === is_dir($directory . '/' . trim($target, '/'))) {
-                continue;
-            }
-
-            return new self(
-                Flavor::ADR,
-                trim($prefix, '\\'),
-                $directory,
-                self::DEFAULT_PATHS,
-                [],
-                $psr4
-            );
-        }
-
-        throw new Exception('no crest.php and no usable psr-4 autoload entry found');
-    }
-
-    /**
-     * composer.json's psr-4 map, flattened so each prefix has exactly one
-     * directory. Returns an empty map when composer.json is missing or has no
-     * psr-4 section.
-     *
-     * @return array<string, string>
-     */
-    private static function psr4Map(string $root): array
-    {
-        $composer = $root . '/composer.json';
-
-        if (false === is_file($composer)) {
-            return [];
-        }
-
-        /** @var array{autoload?: array{psr-4?: array<string, string|list<string>>}} $decoded */
-        $decoded = json_decode((string) file_get_contents($composer), true) ?: [];
-
-        $map = [];
-        foreach ($decoded['autoload']['psr-4'] ?? [] as $prefix => $target) {
-            $target = is_array($target) ? ($target[0] ?? '') : $target;
-
-            if ('' === $target) {
-                continue;
-            }
-
-            $map[$prefix] = $target;
-        }
-
-        return $map;
     }
 }

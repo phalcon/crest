@@ -13,14 +13,14 @@ declare(strict_types=1);
 
 namespace Crest\Command\Container;
 
-use Crest\Console\Command\Command;
+use Crest\Command\ProjectCommand;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Bootstrap;
-use Crest\Project\Config;
-use Phalcon\Container\Container;
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\Contracts\Container\Service\Enumerable;
 
 use function get_class;
 use function sort;
@@ -31,7 +31,7 @@ use function sort;
  * Names come from the container; everything else is looked up per name, which
  * is all the container exposes and all this needs.
  */
-final class ListCommand extends Command
+final class ListCommand extends ProjectCommand
 {
     public function define(): Definition
     {
@@ -40,12 +40,7 @@ final class ListCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $config = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
-
-        $container = $this->container(Bootstrap::container($config));
+        $container = $this->container(Bootstrap::container($this->config($input)));
 
         $names = $container->getServiceNames();
         sort($names);
@@ -73,7 +68,7 @@ final class ListCommand extends Command
     /**
      * What the service builds, when the definition names a class.
      */
-    private function concrete(Container $container, string $name): string
+    private function concrete(Collection $container, string $name): string
     {
         $definition = $container->getDefinition($name);
 
@@ -83,12 +78,21 @@ final class ListCommand extends Command
     }
 
     /**
-     * @throws Exception when the bootstrap returned something that is not a container
+     * @throws Exception when the bootstrap returned something that is not a
+     *                   container, or one that cannot report what it holds
      */
-    private function container(object $container): Container
+    private function container(object $container): Collection&Enumerable
     {
-        if (false === $container instanceof Container) {
+        if (false === $container instanceof Collection) {
             throw new Exception(get_class($container) . ' is not a Phalcon container');
+        }
+
+        // Two contracts because the command needs both halves: Collection for
+        // the per-name lookups, Enumerable for the names themselves. Enumeration
+        // is an optional capability, so a container can satisfy Collection and
+        // still be unable to say what it holds.
+        if (false === $container instanceof Enumerable) {
+            throw new Exception(get_class($container) . ' cannot list its services');
         }
 
         return $container;

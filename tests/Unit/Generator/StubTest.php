@@ -35,6 +35,27 @@ final class StubTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    public function testPackagedRootIsAlsoStrippedOfATrailingSlash(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+
+        $stub = new Stub($this->root . '/packaged/');
+
+        $this->assertSame(
+            $this->root . '/packaged/adr/action.stub',
+            $stub->resolve('adr', 'action')
+        );
+    }
+
+    public function testPackagedRootIsUsedWhenNoProjectRootIsGivenAtAll(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged {{ class }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->assertSame('packaged X', $stub->render('adr', 'action', ['class' => 'X']));
+    }
+
     public function testPackagedStubIsUsedWhenNoProjectOverrideExists(): void
     {
         file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged {{ class }}');
@@ -52,6 +73,19 @@ final class StubTest extends TestCase
         $stub = new Stub($this->root . '/packaged', $this->root . '/project');
 
         $this->assertSame('project GetHealth', $stub->render('adr', 'action', ['class' => 'GetHealth']));
+    }
+
+    public function testResolveReturnsTheWinningPath(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+        file_put_contents($this->root . '/project/resources/stubs/adr/action.stub', 'project');
+
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertSame(
+            $this->root . '/project/resources/stubs/adr/action.stub',
+            $stub->resolve('adr', 'action')
+        );
     }
 
     public function testShippedActionStubsExistAndAreValidPhp(): void
@@ -91,38 +125,14 @@ final class StubTest extends TestCase
         );
     }
 
-    public function testPackagedRootIsUsedWhenNoProjectRootIsGivenAtAll(): void
+    public function testUnknownStubThrows(): void
     {
-        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged {{ class }}');
-
-        $stub = new Stub($this->root . '/packaged');
-
-        $this->assertSame('packaged X', $stub->render('adr', 'action', ['class' => 'X']));
-    }
-
-    public function testPackagedRootIsAlsoStrippedOfATrailingSlash(): void
-    {
-        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
-
-        $stub = new Stub($this->root . '/packaged/');
-
-        $this->assertSame(
-            $this->root . '/packaged/adr/action.stub',
-            $stub->resolve('adr', 'action')
-        );
-    }
-
-    public function testResolveReturnsTheWinningPath(): void
-    {
-        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
-        file_put_contents($this->root . '/project/resources/stubs/adr/action.stub', 'project');
-
         $stub = new Stub($this->root . '/packaged', $this->root . '/project');
 
-        $this->assertSame(
-            $this->root . '/project/resources/stubs/adr/action.stub',
-            $stub->resolve('adr', 'action')
-        );
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("stub 'adr/nope' not found");
+
+        $stub->resolve('adr', 'nope');
     }
 
     public function testUnreplacedPlaceholdersAreLeftAlone(): void
@@ -132,15 +142,5 @@ final class StubTest extends TestCase
         $stub = new Stub($this->root . '/packaged');
 
         $this->assertSame('X|{{ b }}', $stub->render('adr', 'action', ['a' => 'X']));
-    }
-
-    public function testUnknownStubThrows(): void
-    {
-        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage("stub 'adr/nope' not found");
-
-        $stub->resolve('adr', 'nope');
     }
 }

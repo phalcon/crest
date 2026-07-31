@@ -42,25 +42,20 @@ final class AboutCommandTest extends TestCase
         $this->closeStreams();
     }
 
+    public function testCrestRowResolvesToARealVersion(): void
+    {
+        $this->about();
+
+        $this->assertStringContainsString(
+            'Crest    ' . PackageVersion::of(Commands::PACKAGE),
+            $this->readStdout()
+        );
+        $this->assertNotSame(PackageVersion::UNKNOWN, PackageVersion::of(Commands::PACKAGE));
+    }
+
     public function testDefinitionNamesItselfAbout(): void
     {
         $this->assertSame('about', (new AboutCommand())->define()->getName());
-    }
-
-    public function testReportsPhalconPhpAndCrestRows(): void
-    {
-        $status = $this->about();
-
-        // Asserted whole rather than by substring: the row values are built by
-        // concatenation, and a loose assertion lets a dropped separator or a
-        // reordered operand through unnoticed.
-        $expected = 'ITEM     VALUE' . PHP_EOL
-            . 'PHP      ' . PHP_VERSION . PHP_EOL
-            . 'Phalcon  ' . $this->expectedPhalcon() . PHP_EOL
-            . 'Crest    ' . PackageVersion::of(Commands::PACKAGE) . PHP_EOL;
-
-        $this->assertSame(0, $status);
-        $this->assertSame($expected, $this->readStdout());
     }
 
     public function testPhalconRowNamesTheSourceItResolvedFrom(): void
@@ -80,15 +75,20 @@ final class AboutCommandTest extends TestCase
         $this->assertStringContainsString(' (phalcon/phalcon)', $text);
     }
 
-    public function testCrestRowResolvesToARealVersion(): void
+    public function testReportsPhalconPhpAndCrestRows(): void
     {
-        $this->about();
+        $status = $this->about();
 
-        $this->assertStringContainsString(
-            'Crest    ' . PackageVersion::of(Commands::PACKAGE),
-            $this->readStdout()
-        );
-        $this->assertNotSame(PackageVersion::UNKNOWN, PackageVersion::of(Commands::PACKAGE));
+        // Asserted whole rather than by substring: the row values are built by
+        // concatenation, and a loose assertion lets a dropped separator or a
+        // reordered operand through unnoticed.
+        $expected = 'ITEM     VALUE' . PHP_EOL
+            . 'PHP      ' . PHP_VERSION . PHP_EOL
+            . 'Phalcon  ' . $this->expectedPhalcon() . PHP_EOL
+            . 'Crest    ' . PackageVersion::of(Commands::PACKAGE) . PHP_EOL;
+
+        $this->assertSame(0, $status);
+        $this->assertSame($expected, $this->readStdout());
     }
 
     private function about(): int

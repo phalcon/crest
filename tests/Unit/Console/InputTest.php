@@ -29,17 +29,6 @@ final class InputTest extends TestCase
         $this->assertSame('GET', $this->input()->argumentString('method'));
     }
 
-    public function testNonStringValuesDoNotLeakThroughTheStringAccessors(): void
-    {
-        // A list option is a list<string>, not a string. The typed accessor
-        // reports absence rather than handing back something uncastable.
-        $input = $this->input();
-
-        $this->assertSame('', $input->optionString('fields'));
-        $this->assertNull($input->optionStringOrNull('fields'));
-        $this->assertSame(['id', 'name'], $input->option('fields'));
-    }
-
     public function testCommandNameIsExposed(): void
     {
         $this->assertSame('make:action', $this->input()->command);
@@ -51,6 +40,17 @@ final class InputTest extends TestCase
 
         $this->assertTrue($input->hasOption('responder'));
         $this->assertFalse($input->hasOption('force'));
+    }
+
+    public function testNonStringValuesDoNotLeakThroughTheStringAccessors(): void
+    {
+        // A list option is a list<string>, not a string. The typed accessor
+        // reports absence rather than handing back something uncastable.
+        $input = $this->input();
+
+        $this->assertSame('', $input->optionString('fields'));
+        $this->assertNull($input->optionStringOrNull('fields'));
+        $this->assertSame(['id', 'name'], $input->option('fields'));
     }
 
     public function testOptionAndArgumentReturnRawValues(): void

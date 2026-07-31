@@ -26,12 +26,11 @@ use function sprintf;
 use function str_starts_with;
 
 /**
- * Two boundaries, both of which turn into package boundaries later:
+ * Two boundaries that keep the console core independent of the tool built on it:
  *
- *  - Crest\Console must be extractable to phalcon/console. That holds only
- *    while nothing under it names crest or reaches into the rest of the tree.
- *  - Crest\Console\Parsing must be extractable to phalcon/cli-options-parser,
- *    which holds only while it never reaches back into Crest\Console.
+ *  - Nothing under Crest\Console may name crest or reach into the rest of the
+ *    tree.
+ *  - Crest\Console\Parsing may never reach back into Crest\Console.
  */
 final class IsolationTest extends TestCase
 {
@@ -42,6 +41,12 @@ final class IsolationTest extends TestCase
         'Crest\\Generator',
         'crest',
         'Crest ',
+        // Matching is case-sensitive and has to stay that way - every file here
+        // declares `namespace Crest\Console`. So the shouted form is listed
+        // separately: a constant named CREST slipped past the lowercase needle
+        // once, and naming a tool from inside this cluster is the one thing
+        // these tests exist to prevent.
+        'CREST',
     ];
 
     /**
@@ -61,6 +66,27 @@ final class IsolationTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{string}>
+     */
+    private static function filesUnder(string $root): iterable
+    {
+        // SKIP_DOTS is not optional: without it the iterator descends into '.'
+        // and never terminates.
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+        );
+
+        /** @var SplFileInfo $file */
+        foreach ($iterator as $file) {
+            if ('php' !== $file->getExtension()) {
+                continue;
+            }
+
+            yield $file->getPathname() => [$file->getPathname()];
+        }
+    }
+
+    /**
      * @dataProvider consoleFiles
      */
     public function testConsoleFileCarriesNoCrestIdentity(string $path): void
@@ -77,9 +103,8 @@ final class IsolationTest extends TestCase
     }
 
     /**
-     * The parsing cluster becomes its own package first, so the arrow only
-     * ever points application -> parsing. Any `use Crest\Console\X` that is not
-     * itself under Parsing reverses it.
+     * The arrow only ever points application -> parsing. Any
+     * `use Crest\Console\X` that is not itself under Parsing reverses it.
      *
      * @dataProvider parsingFiles
      */
@@ -103,26 +128,5 @@ final class IsolationTest extends TestCase
             $violations,
             sprintf('%s may not depend on the application cluster', $path)
         );
-    }
-
-    /**
-     * @return iterable<string, array{string}>
-     */
-    private static function filesUnder(string $root): iterable
-    {
-        // SKIP_DOTS is not optional: without it the iterator descends into '.'
-        // and never terminates.
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
-        );
-
-        /** @var SplFileInfo $file */
-        foreach ($iterator as $file) {
-            if ('php' !== $file->getExtension()) {
-                continue;
-            }
-
-            yield $file->getPathname() => [$file->getPathname()];
-        }
     }
 }

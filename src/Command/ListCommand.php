@@ -20,8 +20,6 @@ use Crest\Console\Output;
 use Crest\Console\PackageVersion;
 use Crest\Console\Parsing\Definition;
 
-use function ksort;
-
 /**
  * Every command the tool can run, one row each.
  *
@@ -40,17 +38,10 @@ final class ListCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $commands = Commands::registry()->all();
-        ksort($commands);
-
-        $rows = [];
-        foreach ($commands as $name => $class) {
-            $rows[] = [$name, (new $class())->define()->getDescription()];
-        }
-
-        $output->line(Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE));
-        $output->line();
-        $output->table(['COMMAND', 'DESCRIPTION'], $rows);
+        $output->commandTable(
+            Commands::NAME . ' ' . PackageVersion::of(Commands::PACKAGE),
+            Commands::registry()->descriptions()
+        );
 
         return 0;
     }

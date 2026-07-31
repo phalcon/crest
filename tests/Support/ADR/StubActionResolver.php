@@ -27,6 +27,7 @@ final class StubActionResolver implements ActionResolver
     public function __construct(
         private readonly string $class,
         private readonly ?string $path = null,
+        private readonly ?string $method = null,
     ) {
     }
 
@@ -35,6 +36,11 @@ final class StubActionResolver implements ActionResolver
         $this->calls[] = [$baseNamespace, $method, $path];
 
         return $this->class;
+    }
+
+    public function methodFor(string $baseNamespace, string $class): ?string
+    {
+        return $this->method;
     }
 
     public function pathFor(string $baseNamespace, string $class): ?string

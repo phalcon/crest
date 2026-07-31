@@ -22,7 +22,6 @@ use Throwable;
 use function array_search;
 use function array_slice;
 use function in_array;
-use function ksort;
 use function str_starts_with;
 
 use const STDERR;
@@ -33,8 +32,7 @@ use const STDOUT;
  * binds, runs, and turns console exceptions into clean stderr lines.
  *
  * Owns no identity: the tool's name, its package and its command set are
- * supplied by the caller, which is what allows this class to be moved to
- * phalcon/console without edits.
+ * supplied by the caller.
  */
 final class Kernel
 {
@@ -90,7 +88,7 @@ final class Kernel
         $first  = $tokens[0] ?? null;
 
         if ('--version' === $first || '-V' === $first) {
-            $this->output->line($this->name . ' ' . $this->version());
+            $this->output->banner($this->name . ' ' . $this->version());
 
             return 0;
         }
@@ -143,18 +141,10 @@ final class Kernel
 
     private function listCommands(): void
     {
-        $commands = $this->registry->all();
-        ksort($commands);
-
-        $rows = [];
-        foreach ($commands as $name => $class) {
-            $command = new $class();
-            $rows[]  = [$name, $command->define()->getDescription()];
-        }
-
-        $this->output->line($this->name . ' ' . $this->version());
-        $this->output->line();
-        $this->output->table(['COMMAND', 'DESCRIPTION'], $rows);
+        $this->output->commandTable(
+            $this->name . ' ' . $this->version(),
+            $this->registry->descriptions()
+        );
     }
 
     /**

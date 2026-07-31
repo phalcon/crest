@@ -14,47 +14,123 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ActionCommand;
-use Crest\Commands;
+use Crest\Console\Input;
 use Crest\Console\Kernel;
-use Crest\Console\Registry;
-use Crest\Tests\Support\CapturesOutput;
-use Crest\Tests\Support\ScratchDirectory;
+use Crest\Console\Output;
+use Crest\Generator\Stub;
+use Crest\Tests\Support\ADR\StubActionResolver;
+use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\ADR\Router\Router;
 use PHPUnit\Framework\TestCase;
 
-use function chdir;
+use function dirname;
 use function file_get_contents;
 use function file_put_contents;
-use function getcwd;
+use function mkdir;
 
 final class ActionCommandTest extends TestCase
 {
-    use CapturesOutput;
-    use ScratchDirectory;
-
-    private string $previousCwd = '';
+    use GeneratesInAScratchProject;
 
     protected function setUp(): void
     {
-        $this->makeScratchDirectory('make-action', 'src/Action');
-        $this->writeComposerJson(['App\\' => 'src/']);
-        $this->captureStreams();
-
-        // The command writes real files, and Config::discover() falls back to
-        // the working directory when --directory does not reach it. Under
-        // mutation testing that fallback is reachable, and from the repository
-        // root it would generate into the actual src/ tree. Running from the
-        // scratch directory keeps even the fallback contained.
-        $this->previousCwd = (string) getcwd();
-        chdir($this->root);
+        $this->startScratchProject('make-action', 'src/Action');
     }
 
     protected function tearDown(): void
     {
-        chdir($this->previousCwd);
+        $this->endScratchProject();
+    }
 
-        $this->closeStreams();
-        $this->removeScratchDirectory();
+    public function testActionWithNoPlaceholdersDeclaresNoParams(): void
+    {
+        $this->runCommand(['GET', '/health']);
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Health/GetHealth.php'
+        );
+
+        $this->assertStringNotContainsString('params()', $contents);
+    }
+
+    public function testActionWithNoPlaceholdersHasNoAccessorBlock(): void
+    {
+        $this->runCommand(['GET', '/health']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php');
+
+        $this->assertStringNotContainsString('getAttributes()', $contents);
+        $this->assertStringContainsString(
+            "    {\n        \$payload = Payload::success([]);",
+            $contents
+        );
+    }
+
+    public function testANamedStubIsRenderedInsteadOfTheResponderDefault(): void
+    {
+        // Resolved through the same two-level chain as everything else, so a
+        // project that has run stub:publish can generate from its own copy.
+        $this->publishStub('minimal', "<?php\n\n// {{ namespace }}\\{{ class }}\n");
+
+        $status = $this->runCommand(['GET', '/health', '--stub=minimal']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            "<?php\n\n// App\Action\Health\GetHealth\n",
+            (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php')
+        );
+    }
+
+    public function testAnEmptyStubOptionFallsBackToTheResponderDefault(): void
+    {
+        // `--stub=` is a shell mishap, not a request for a stub called ''. It
+        // reads as absent, matching how optionString() treats every option.
+        $status = $this->runCommand(['GET', '/health', '--stub=']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'implements Action',
+            (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php')
+        );
+    }
+
+    public function testAStubThatDoesNotExistIsReported(): void
+    {
+        $status = $this->runCommand(['GET', '/health', '--stub=nope']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("stub 'adr/nope' not found", $this->readStderr());
+    }
+
+    public function testAttributeAccessorsAreSeparatedFromTheBodyByABlankLine(): void
+    {
+        $this->runCommand(['GET', '/company/users/{id}/{userId}']);
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Company/Users/GetCompanyUsers.php'
+        );
+
+        // Exact block: one accessor per placeholder, then a single blank line
+        // before the body the stub already carries.
+        $expected = "        \$id = \$request->getAttributes()->get('id');\n"
+            . "        \$userId = \$request->getAttributes()->get('userId');\n"
+            . "\n"
+            . '        $payload = Payload::success([]);';
+
+        $this->assertStringContainsString($expected, $contents);
+    }
+
+    public function testCreatedPathAndRouteAreReported(): void
+    {
+        $this->runCommand(['GET', '/company/all']);
+
+        $output = $this->readStdout();
+
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/src/Action/Company/All/GetCompanyAll.php',
+            $output
+        );
+        $this->assertStringContainsString('Answers GET /company/all', $output);
     }
 
     public function testDefinitionNamesItselfMakeAction(): void
@@ -76,61 +152,31 @@ final class ActionCommandTest extends TestCase
         );
     }
 
-    public function testPlaceholderPathGeneratesTheResourceAction(): void
+    public function testGeneratedActionIsTheOnlyClassThatAnswersItsRoute(): void
     {
-        $status = $this->runCommand(['GET', '/company/{id}']);
+        // One path names exactly one class, so nothing can shadow what is
+        // generated. This replaces the old candidate warning, which existed
+        // only because the router used to try several class shapes per path.
+        $this->runCommand(['GET', '/company/all']);
 
-        $this->assertSame(0, $status);
-        $this->assertFileExists($this->root . '/src/Action/Company/GetCompany.php');
+        $router = new Router();
+        $router->setBaseNamespace('App\Action');
+
+        $this->assertSame(
+            '/company/all',
+            $router->pathFor('App\Action\Company\All\GetCompanyAll')
+        );
     }
 
-    public function testRefusesToOverwriteWithoutForce(): void
+    public function testMethodArgumentIsRequired(): void
     {
-        $this->runCommand(['GET', '/health']);
-
-        $status = $this->runCommand(['GET', '/health']);
+        $status = $this->runCommand([]);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('already exists', $this->readStderr());
+        $this->assertStringContainsString("missing required argument 'method'", $this->readStderr());
     }
 
-    public function testStaticTwoSegmentPathWritesTheOperationAction(): void
-    {
-        $status = $this->runCommand(['GET', '/company/all']);
-
-        $file = $this->root . '/src/Action/Company/All/GetCompanyAll.php';
-
-        $this->assertSame(0, $status);
-        $this->assertFileExists($file);
-
-        $contents = (string) file_get_contents($file);
-
-        $this->assertStringContainsString('namespace App\Action\Company\All;', $contents);
-        $this->assertStringContainsString('final class GetCompanyAll implements Action', $contents);
-        $this->assertStringContainsString('Responder $responder', $contents);
-    }
-
-    public function testViewResponderUsesTheViewStub(): void
-    {
-        $status = $this->runCommand(['GET', '/privacy', '--responder=view']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Action/Privacy/GetPrivacy.php');
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString('ViewResponder $responder', $contents);
-        $this->assertStringContainsString("withTemplate('privacy/index')", $contents);
-    }
-
-    public function testWritesTheAttributeAccessorForPlaceholders(): void
-    {
-        $this->runCommand(['GET', '/company/{id}']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
-
-        $this->assertStringContainsString("\$id = \$request->getAttributes()->get('id');", $contents);
-    }
-
-    public function testAttributeAccessorsAreSeparatedFromTheBodyByABlankLine(): void
+    public function testParamsAreDeclaredInPathOrder(): void
     {
         $this->runCommand(['GET', '/company/users/{id}/{userId}']);
 
@@ -138,14 +184,29 @@ final class ActionCommandTest extends TestCase
             $this->root . '/src/Action/Company/Users/GetCompanyUsers.php'
         );
 
-        // Exact block: one accessor per placeholder, then a single blank line
-        // before the body the stub already carries.
-        $expected = "        \$id = \$request->getAttributes()->get('id');\n"
-            . "        \$userId = \$request->getAttributes()->get('userId');\n"
-            . "\n"
-            . "        \$payload = Payload::success([]);";
+        // Declaration order matches path order, so the accessors and the
+        // constraints line up with the segments they describe.
+        $this->assertStringContainsString(
+            "            'id' => ['type' => 'string'],\n"
+            . "            'userId' => ['type' => 'string'],",
+            $contents
+        );
+    }
 
-        $this->assertStringContainsString($expected, $contents);
+    public function testPathArgumentIsRequired(): void
+    {
+        $status = $this->runCommand(['GET']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("missing required argument 'path'", $this->readStderr());
+    }
+
+    public function testPlaceholderPathGeneratesTheResourceAction(): void
+    {
+        $status = $this->runCommand(['GET', '/company/{id}']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists($this->root . '/src/Action/Company/GetCompany.php');
     }
 
     public function testPlaceholdersProduceAParamsDeclaration(): void
@@ -171,97 +232,19 @@ final class ActionCommandTest extends TestCase
             . "            'id' => ['type' => 'string'],\n"
             . "        ];\n"
             . "    }\n"
-            . "}";
+            . '}';
 
         $this->assertStringContainsString($expected, $contents);
     }
 
-    public function testParamsAreDeclaredInPathOrder(): void
-    {
-        $this->runCommand(['GET', '/company/users/{id}/{userId}']);
-
-        $contents = (string) file_get_contents(
-            $this->root . '/src/Action/Company/Users/GetCompanyUsers.php'
-        );
-
-        // Declaration order matches path order, so the accessors and the
-        // constraints line up with the segments they describe.
-        $this->assertStringContainsString(
-            "            'id' => ['type' => 'string'],\n"
-            . "            'userId' => ['type' => 'string'],",
-            $contents
-        );
-    }
-
-    public function testActionWithNoPlaceholdersDeclaresNoParams(): void
+    public function testRefusesToOverwriteWithoutForce(): void
     {
         $this->runCommand(['GET', '/health']);
 
-        $contents = (string) file_get_contents(
-            $this->root . '/src/Action/Health/GetHealth.php'
-        );
-
-        $this->assertStringNotContainsString('params()', $contents);
-    }
-
-    public function testViewTemplateStripsPlaceholderBraces(): void
-    {
-        $this->runCommand(['GET', '/company/{id}', '--responder=view']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
-
-        // Braces must not survive into the template name: dropping either
-        // str_replace would leave 'company/{id/index' or 'company/id}/index'.
-        $this->assertStringContainsString("withTemplate('company/id/index')", $contents);
-    }
-
-    public function testRootRouteGetsTheIndexTemplate(): void
-    {
-        $this->runCommand(['GET', '/', '--responder=view']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Action/Get.php');
-
-        $this->assertStringContainsString("withTemplate('index/index')", $contents);
-    }
-
-    public function testActionWithNoPlaceholdersHasNoAccessorBlock(): void
-    {
-        $this->runCommand(['GET', '/health']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php');
-
-        $this->assertStringNotContainsString('getAttributes()', $contents);
-        $this->assertStringContainsString(
-            "    {\n        \$payload = Payload::success([]);",
-            $contents
-        );
-    }
-
-    public function testPathArgumentIsRequired(): void
-    {
-        $status = $this->runCommand(['GET']);
+        $status = $this->runCommand(['GET', '/health']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'path'", $this->readStderr());
-    }
-
-    public function testMethodArgumentIsRequired(): void
-    {
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'method'", $this->readStderr());
-    }
-
-    public function testUnknownResponderIsRejected(): void
-    {
-        $status = $this->runCommand(['GET', '/health', '--responder', 'xml']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "unknown responder 'xml'; expected json or view",
-            $this->readStderr()
-        );
+        $this->assertStringContainsString('already exists', $this->readStderr());
     }
 
     public function testResponderNameIsCaseInsensitive(): void
@@ -275,33 +258,156 @@ final class ActionCommandTest extends TestCase
         );
     }
 
-    public function testGeneratedActionIsTheOnlyClassThatAnswersItsRoute(): void
+    public function testRootRouteGetsTheIndexTemplate(): void
     {
-        // One path names exactly one class, so nothing can shadow what is
-        // generated. This replaces the old candidate warning, which existed
-        // only because the router used to try several class shapes per path.
-        $this->runCommand(['GET', '/company/all']);
+        $this->runCommand(['GET', '/', '--responder=view']);
 
-        $router = new Router();
-        $router->setBaseNamespace('App\Action');
+        $contents = (string) file_get_contents($this->root . '/src/Action/Get.php');
 
-        $this->assertSame(
-            '/company/all',
-            $router->pathFor('App\Action\Company\All\GetCompanyAll')
+        $this->assertStringContainsString("withTemplate('index/index')", $contents);
+    }
+
+    public function testStaticTwoSegmentPathWritesTheOperationAction(): void
+    {
+        $status = $this->runCommand(['GET', '/company/all']);
+
+        $file = $this->root . '/src/Action/Company/All/GetCompanyAll.php';
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists($file);
+
+        $contents = (string) file_get_contents($file);
+
+        $this->assertStringContainsString('namespace App\Action\Company\All;', $contents);
+        $this->assertStringContainsString('final class GetCompanyAll implements Action', $contents);
+        $this->assertStringContainsString('Responder $responder', $contents);
+    }
+
+    public function testStubAndResponderTogetherAreRejected(): void
+    {
+        $this->publishStub('minimal', 'x');
+
+        $status = $this->runCommand(['GET', '/health', '--stub=minimal', '--responder=view']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            '--stub and --responder both name a stub to render; pass one or the other',
+            $this->readStderr()
         );
     }
 
-    public function testCreatedPathAndRouteAreReported(): void
+    public function testTemplateOptionReplacesTheDerivedName(): void
+    {
+        $status = $this->runCommand(
+            ['GET', '/company/all', '--responder=view', '--template=shared/table']
+        );
+
+        $contents = (string) file_get_contents(
+            $this->root . '/src/Action/Company/All/GetCompanyAll.php'
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString("withTemplate('shared/table')", $contents);
+        $this->assertStringNotContainsString('company/all/index', $contents);
+        $this->assertStringContainsString('    shared/table', $this->readStdout());
+    }
+
+    public function testTheJsonResponderReportsNoTemplate(): void
     {
         $this->runCommand(['GET', '/company/all']);
 
+        $this->assertStringNotContainsString('Nothing renders it yet', $this->readStdout());
+    }
+
+    public function testTheTargetClassComesFromTheResolver(): void
+    {
+        // `/company/all` would normally name App\Action\Company\All\GetCompanyAll.
+        // Nothing crest could derive turns it into this, so the file landing here
+        // proves the class name was asked for rather than computed - and the
+        // recorded call proves what it was asked.
+        $resolver = new StubActionResolver('App\Action\Totally\Elsewhere\Surprise');
+        $command  = new ActionCommand($resolver);
+
+        $status = $command->handle(
+            new Input(
+                'make:action',
+                $command->define()
+                    ->merge(Kernel::globals())
+                    ->bind(['GET', '/company/all', '--directory', $this->root])
+            ),
+            new Output($this->stdout, $this->stderr, false)
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists($this->root . '/src/Action/Totally/Elsewhere/Surprise.php');
+        $this->assertSame([['App\Action', 'GET', '/company/all']], $resolver->calls);
+    }
+
+    public function testTheViewResponderReportsTheTemplateItAsksFor(): void
+    {
+        // The action is inert until the template exists, and crest does not
+        // write it: Renderer::render() takes a name, so only the project's
+        // renderer knows where it lives.
+        $this->runCommand(['GET', '/company/all', '--responder=view']);
+
         $output = $this->readStdout();
 
+        $this->assertStringContainsString('Nothing renders it yet', $output);
+        $this->assertStringContainsString('    company/all/index', $output);
+    }
+
+    public function testUnknownResponderIsRejected(): void
+    {
+        $status = $this->runCommand(['GET', '/health', '--responder', 'xml']);
+
+        $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            'Created ' . $this->root . '/src/Action/Company/All/GetCompanyAll.php',
-            $output
+            "unknown responder 'xml'; expected json or view",
+            $this->readStderr()
         );
-        $this->assertStringContainsString('Answers GET /company/all', $output);
+    }
+
+    public function testViewResponderUsesTheViewStub(): void
+    {
+        $status = $this->runCommand(['GET', '/privacy', '--responder=view']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Privacy/GetPrivacy.php');
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('ViewResponder $responder', $contents);
+        $this->assertStringContainsString("withTemplate('privacy/index')", $contents);
+    }
+
+    public function testViewTemplateStripsPlaceholderBraces(): void
+    {
+        $this->runCommand(['GET', '/company/{id}', '--responder=view']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
+
+        // Braces must not survive into the template name: dropping either
+        // str_replace would leave 'company/{id/index' or 'company/id}/index'.
+        $this->assertStringContainsString("withTemplate('company/id/index')", $contents);
+    }
+
+    public function testWritesTheAttributeAccessorForPlaceholders(): void
+    {
+        $this->runCommand(['GET', '/company/{id}']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
+
+        $this->assertStringContainsString("\$id = \$request->getAttributes()->get('id');", $contents);
+    }
+
+    /**
+     * Writes a stub into the project override directory, where stub:publish puts
+     * them and Stub::resolve() looks first.
+     */
+    private function publishStub(string $name, string $contents): void
+    {
+        $path = Stub::overridePath($this->root, 'adr', $name);
+
+        mkdir(dirname($path), 0o775, true);
+        file_put_contents($path, $contents);
     }
 
     /**
@@ -309,16 +415,6 @@ final class ActionCommandTest extends TestCase
      */
     private function runCommand(array $arguments): int
     {
-        $registry = (new Registry())->add('make:action', ActionCommand::class);
-        $kernel   = new Kernel(
-            Commands::NAME,
-            $registry,
-            Commands::PACKAGE,
-            $this->stdout,
-            $this->stderr,
-            false
-        );
-
-        return $kernel->handle(['crest', 'make:action', ...$arguments, '--directory', $this->root]);
+        return $this->runProjectCommand('make:action', ActionCommand::class, $arguments);
     }
 }
