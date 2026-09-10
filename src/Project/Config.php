@@ -49,9 +49,9 @@ final class Config
      * @param array<string, string> $paths
      * @param array<string, string> $namespaces
      * @param array<string, string> $psr4
-     * @param list<string>          $declared Top-level keys the config file
-     *                                        actually stated, so a reader can
-     *                                        tell those from the defaults.
+     * @param list<string>          $declared   Top-level keys the config file
+     *                                          actually stated, so a reader can
+     *                                          tell those from the defaults.
      */
     private function __construct(
         private readonly Flavor $flavor,

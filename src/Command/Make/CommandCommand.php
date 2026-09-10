@@ -44,6 +44,7 @@ use function substr;
 final class CommandCommand extends ProjectCommand
 {
     private const KEY    = 'command';
+
     private const SUFFIX = 'Command';
 
     public function define(): Definition

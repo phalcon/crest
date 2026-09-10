@@ -23,8 +23,8 @@ final class Bound
 {
     /**
      * @param array<string, mixed> $arguments
-     * @param array<string, mixed> $options  Every declared option, defaults applied.
-     * @param list<string>         $supplied Only the options the caller actually passed.
+     * @param array<string, mixed> $options   Every declared option, defaults applied.
+     * @param list<string>         $supplied  Only the options the caller actually passed.
      */
     public function __construct(
         private readonly array $arguments,

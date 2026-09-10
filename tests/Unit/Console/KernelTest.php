@@ -230,7 +230,6 @@ final class KernelTest extends TestCase
         );
     }
 
-
     private function kernel(): Kernel
     {
         $registry = (new Registry())->add('fake', FakeCommand::class);

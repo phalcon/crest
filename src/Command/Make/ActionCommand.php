@@ -96,7 +96,7 @@ final class ActionCommand extends ProjectCommand
         }
 
         $convention = new Convention($config->namespaceFor('action'), $this->resolver);
-        $target = $convention->target(
+        $target     = $convention->target(
             $input->argumentString('method'),
             $input->argumentString('path')
         );

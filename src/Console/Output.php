@@ -36,8 +36,11 @@ use const STDOUT;
 final class Output
 {
     public const COLOR_GREEN  = "\033[32m";
+
     public const COLOR_ORANGE = "\033[38;5;208m";
+
     public const COLOR_RED    = "\033[31m";
+
     public const COLOR_RESET  = "\033[0m";
 
     /**

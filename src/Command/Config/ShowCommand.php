@@ -32,6 +32,7 @@ use function ksort;
 final class ShowCommand extends ProjectCommand
 {
     private const DECLARED = 'declared';
+
     private const INFERRED = 'inferred';
 
     public function define(): Definition

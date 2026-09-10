@@ -98,6 +98,7 @@ final class ClassNameTest extends TestCase
         // No case correction: the class written is the class that was asked for.
         $this->assertSame('albumResponder', ClassName::suffixed('album', 'Responder'));
     }
+
     public function testTheSuffixIsAppendedWhenItIsAbsent(): void
     {
         $this->assertSame('CorsMiddleware', ClassName::suffixed('Cors', 'Middleware'));

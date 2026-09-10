@@ -43,6 +43,7 @@ final class BindTest extends TestCase
 
         $this->assertSame('a=b', $bound->option('responder'));
     }
+
     public function testDoubleDashSendsEverythingAfterItToArguments(): void
     {
         $bound = $this->definition()->bind(['GET', '--', '--force']);

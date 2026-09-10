@@ -44,6 +44,7 @@ final class ConventionTest extends TestCase
         $this->assertSame('', $target->namespace);
         $this->assertSame('Get', $target->class);
     }
+
     public function testEmptyPathIsPassedThroughAsRoot(): void
     {
         $resolver = new StubActionResolver('App\Action\Get');

@@ -35,6 +35,7 @@ use function sprintf;
 final class ResponderCommand extends ProjectCommand
 {
     private const KEY    = 'responder';
+
     private const SUFFIX = 'Responder';
 
     public function define(): Definition

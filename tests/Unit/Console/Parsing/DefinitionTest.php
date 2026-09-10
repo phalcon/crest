@@ -28,6 +28,7 @@ final class DefinitionTest extends TestCase
 
         $this->assertNull($definition->bind([])->argument('subject'));
     }
+
     public function testBareSpecIsAFlag(): void
     {
         $definition = Definition::for('make:action')->option('force', 'Overwrite');

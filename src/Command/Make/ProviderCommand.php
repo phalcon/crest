@@ -36,6 +36,7 @@ use function sprintf;
 final class ProviderCommand extends ProjectCommand
 {
     private const KEY    = 'provider';
+
     private const SUFFIX = 'Provider';
 
     public function define(): Definition

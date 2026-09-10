@@ -33,6 +33,7 @@ use function sprintf;
 final class MiddlewareCommand extends ProjectCommand
 {
     private const KEY    = 'middleware';
+
     private const SUFFIX = 'Middleware';
 
     public function define(): Definition

@@ -45,12 +45,11 @@ final class Kernel
     private Registry $registry;
 
     /**
-     * @param string    $name      Tool name used in errors, banner and usage.
-     * @param Registry  $registry  Seeded by the owning tool; never defaulted.
-     * @param string    $package   Composer package name, for --version.
-     * @param resource  $stdout
-     * @param resource  $stderr
-     * @param bool|null $decorated
+     * @param string   $name     Tool name used in errors, banner and usage.
+     * @param Registry $registry Seeded by the owning tool; never defaulted.
+     * @param string   $package  Composer package name, for --version.
+     * @param resource $stdout
+     * @param resource $stderr
      */
     public function __construct(
         string $name,

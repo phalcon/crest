@@ -41,6 +41,7 @@ final class CommandsTest extends TestCase
             array_keys(Commands::registry()->all())
         );
     }
+
     public function testEveryRegisteredCommandNamesItselfConsistently(): void
     {
         foreach (Commands::registry()->all() as $name => $class) {

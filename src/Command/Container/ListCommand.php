@@ -81,7 +81,7 @@ final class ListCommand extends ProjectCommand
      * @throws Exception when the bootstrap returned something that is not a
      *                   container, or one that cannot report what it holds
      */
-    private function container(object $container): Collection&Enumerable
+    private function container(object $container): Collection & Enumerable
     {
         if (false === $container instanceof Collection) {
             throw new Exception(get_class($container) . ' is not a Phalcon container');
