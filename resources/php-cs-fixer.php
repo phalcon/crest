@@ -11,70 +11,14 @@
 
 declare(strict_types=1);
 
-/**
- * Ordering rules:
- * - use statements: alphabetical, class then function then const
- * - class members: by visibility (public -> protected -> private), then
- *   alphabetical within each group
- *
- * Run from the project root:
- *   composer cs-fixer       (dry-run, shows diff)
- *   composer cs-fixer-fix   (applies the changes)
- */
-
-use PhpCsFixer\Config;
-use PhpCsFixer\Finder;
-use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
+use Phalcon\CodeQuality\PhpCsFixer\ConfigFactory;
 
 $root = dirname(__DIR__);
 
-$finder = Finder::create()
-    ->in(
-        [
-            $root . '/src',
-            $root . '/tests',
-        ]
-    );
-
-return (new Config())
-    ->setParallelConfig(ParallelConfigFactory::detect())
-    ->setRiskyAllowed(false)
-    ->setUsingCache(true)
-    ->setCacheFile($root . '/tests/_output/.php-cs-fixer.cache')
-    ->setRules(
-        [
-            '@PSR12'                 => true,
-            'no_unused_imports'      => true,
-            'ordered_imports'        => [
-                'sort_algorithm' => 'alpha',
-                'imports_order'  => ['class', 'function', 'const'],
-            ],
-            'ordered_class_elements' => [
-                'sort_algorithm' => 'alpha',
-                'order'          => [
-                    'use_trait',
-                    'case',
-                    'constant_public',
-                    'constant_protected',
-                    'constant_private',
-                    'property_public_static',
-                    'property_protected_static',
-                    'property_private_static',
-                    'property_public',
-                    'property_protected',
-                    'property_private',
-                    'construct',
-                    'destruct',
-                    'magic',
-                    'phpunit',
-                    'method_public_static',
-                    'method_protected_static',
-                    'method_private_static',
-                    'method_public',
-                    'method_protected',
-                    'method_private',
-                ],
-            ],
-        ]
-    )
-    ->setFinder($finder);
+return ConfigFactory::create(
+    [
+        $root . '/src',
+        $root . '/tests',
+    ],
+    $root . '/tests/_output/.php-cs-fixer.cache'
+);

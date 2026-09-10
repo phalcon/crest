@@ -13,7 +13,8 @@
         "pds/composer-script-names": "^1",
         "pds/skeleton": "^1",
         "phalcon/phalcon": "v6.0.x-dev",
-        "phalcon/talon": "^0.9",
+        "phalcon/talon": "^1.0.0",
+        "phalcon/code-quality": "^1.0",
         "phpstan/phpstan": "^2",
         "phpunit/phpunit": "^10.5",
         "squizlabs/php_codesniffer": "^3 || ^4"
@@ -29,10 +30,12 @@
     },
     "bin": ["bin/crest"],
     "config": {
+    "optimize-autoloader": true,
         "sort-packages": true,
         "allow-plugins": {
             "infection/extension-installer": true,
-            "pds/skeleton": false
+            "pds/skeleton": false,
+            "dealerdirect/phpcodesniffer-composer-installer": true
         },
         "platform": { "php": "8.1.0" }
     },
