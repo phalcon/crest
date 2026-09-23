@@ -184,10 +184,12 @@ final class ConfigTest extends TestCase
         $this->writeComposerJson(['App\\' => 'src/']);
 
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
-        $this->assertSame([], Config::discover($this->root)->paths());
+        $config = Config::discover($this->root);
+        $this->assertSame([], $config->paths());
 
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
-        $this->assertSame([], Config::discover($this->root)->paths());
+        $config = Config::discover($this->root);
+        $this->assertSame([], $config->paths());
     }
 
     public function testInfersNamespaceAndActionPathFromComposerJson(): void
