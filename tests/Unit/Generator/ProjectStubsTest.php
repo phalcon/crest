@@ -50,6 +50,7 @@ final class ProjectStubsTest extends TestCase
     private const REPLACEMENTS = [
         'actionNamespace'   => 'App\\Action',
         'actionPath'        => 'src/Action',
+        'crestConstraint'   => '^1.0',
         'jsonNamespace'     => 'App',
         'namespace'         => 'App',
         'phalconConstraint' => '^5',
@@ -57,6 +58,7 @@ final class ProjectStubsTest extends TestCase
         'phalconVariant'    => 'v5',
         'phpVersion'        => '8.4',
         'project'           => 'my-app',
+        'seed'              => 'Get',
         'service'           => 'app',
         'v5'                => '',
     ];
@@ -130,10 +132,11 @@ final class ProjectStubsTest extends TestCase
     {
         $this->assertSame(
             [
-                'type'     => 'project',
-                'require'  => ['php' => '>=8.4', 'ext-phalcon' => '^5'],
-                'autoload' => ['psr-4' => ['App\\' => 'src/']],
-                'config'   => ['sort-packages' => true],
+                'type'        => 'project',
+                'require'     => ['php' => '>=8.4', 'ext-phalcon' => '^5'],
+                'require-dev' => ['phalcon/crest' => '^1.0'],
+                'autoload'    => ['psr-4' => ['App\\' => 'src/']],
+                'config'      => ['sort-packages' => true],
             ],
             json_decode($this->render('project-composer'), true, 512, JSON_THROW_ON_ERROR)
         );

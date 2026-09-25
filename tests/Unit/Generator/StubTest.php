@@ -35,6 +35,20 @@ final class StubTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    public function testAPlaceholderWithNoValueThrows(): void
+    {
+        // A published copy can keep a placeholder that crest no longer sends.
+        // Without this, the raw placeholder goes into the generated file.
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ a }}|{{ b }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/packaged/adr/action.stub has no value for {{ b }}');
+
+        $stub->render('adr', 'action', ['a' => 'X']);
+    }
+
     public function testPackagedRootIsAlsoStrippedOfATrailingSlash(): void
     {
         file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
@@ -133,14 +147,5 @@ final class StubTest extends TestCase
         $this->expectExceptionMessage("stub 'adr/nope' not found");
 
         $stub->resolve('adr', 'nope');
-    }
-
-    public function testUnreplacedPlaceholdersAreLeftAlone(): void
-    {
-        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ a }}|{{ b }}');
-
-        $stub = new Stub($this->root . '/packaged');
-
-        $this->assertSame('X|{{ b }}', $stub->render('adr', 'action', ['a' => 'X']));
     }
 }

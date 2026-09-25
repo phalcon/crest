@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command;
 
 use Crest\Command\NewCommand;
+use Crest\Command\Stub\PublishCommand;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Tests\Support\GeneratesInAScratchProject;
@@ -188,6 +189,31 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist(dirname($this->root) . '/elsewhere');
     }
 
+    public function testAProjectStubFromStubPublishIsUsed(): void
+    {
+        // stub:publish must write where `new` reads, with the same
+        // --directory. That directory is not a project: it has no crest.php
+        // and no composer.json.
+        $directory = $this->root . '/work';
+
+        mkdir($directory);
+
+        $published = $this->runThroughKernel(
+            'stub:publish',
+            PublishCommand::class,
+            ['project-readme', '--directory', $directory]
+        );
+
+        $this->assertSame(0, $published);
+
+        file_put_contents(Stub::overridePath($directory, 'adr', 'project-readme'), "custom {{ project }}\n");
+
+        $status = $this->runThroughKernel('new', NewCommand::class, ['my-app', '--directory', $directory]);
+
+        $this->assertSame(0, $status);
+        $this->assertSame("custom my-app\n", (string) file_get_contents($directory . '/my-app/README.md'));
+    }
+
     public function testAPublishedProjectStubInTheParentDirectoryIsUsed(): void
     {
         $override = Stub::overridePath($this->root, 'adr', 'project-readme');
@@ -199,6 +225,22 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertSame("custom my-app\n", $this->read('README.md'));
+    }
+
+    public function testAPublishedStubWithAnUnknownPlaceholderStopsBeforeAnyWrite(): void
+    {
+        // project-front renders last. Without the render pass before the first
+        // write, the files before it are already on disk when it fails.
+        $override = Stub::overridePath($this->root, 'adr', 'project-front');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents($override, "{{ old }}\n");
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString($override . ' has no value for {{ old }}', $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
     public function testATargetThatIsAFileIsRefused(): void
@@ -220,10 +262,11 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(
             [
-                'type'     => 'project',
-                'require'  => ['php' => '>=8.4', 'ext-phalcon' => '^5.18'],
-                'autoload' => ['psr-4' => ['App\\' => 'src/']],
-                'config'   => ['sort-packages' => true],
+                'type'        => 'project',
+                'require'     => ['php' => '>=8.4', 'ext-phalcon' => '^5.18'],
+                'require-dev' => ['phalcon/crest' => 'dev-master'],
+                'autoload'    => ['psr-4' => ['App\\' => 'src/']],
+                'config'      => ['sort-packages' => true],
             ],
             $this->composer()
         );
@@ -505,6 +548,7 @@ final class NewCommandTest extends TestCase
             . "    'flavor'    => 'adr',\n"
             . "    'namespace' => 'App',\n"
             . "    'bootstrap' => App\\AppFront::class,\n"
+            . "    'paths'     => ['action' => 'src/Action'],\n"
             . "];\n",
             $this->read('crest.php')
         );

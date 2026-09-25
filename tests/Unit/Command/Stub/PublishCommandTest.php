@@ -20,13 +20,16 @@ use Crest\Tests\Support\GeneratesInAScratchProject;
 use PHPUnit\Framework\TestCase;
 
 use function basename;
+use function chdir;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
+use function mkdir;
 use function preg_match_all;
 use function setlocale;
 use function sort;
 use function str_starts_with;
+use function unlink;
 
 use const LC_COLLATE;
 
@@ -78,8 +81,63 @@ final class PublishCommandTest extends TestCase
         );
     }
 
+    public function testAProjectStubGoesIntoTheDirectoryOptionAndNotAParentProject(): void
+    {
+        // `new --directory work` reads the overrides from work/. A crest.php
+        // above it must not take the stub somewhere else.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
+        mkdir($this->root . '/work');
+
+        $status = $this->runThroughKernel(
+            'stub:publish',
+            PublishCommand::class,
+            ['project-front', '--directory', $this->root . '/work']
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'adr', 'project-front'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
+    public function testAProjectStubGoesIntoTheWorkingDirectoryAndNotAParentProject(): void
+    {
+        // `new` with no --directory reads the overrides from the working
+        // directory. endScratchProject() restores the working directory.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
+        mkdir($this->root . '/work');
+        chdir($this->root . '/work');
+
+        $status = $this->runThroughKernel('stub:publish', PublishCommand::class, ['project-front']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'adr', 'project-front'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
+    public function testAProjectStubIgnoresTheConfiguredFlavor(): void
+    {
+        // `new` creates only ADR projects, so it reads only ADR overrides.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
+        $status = $this->runCommand(['project-front']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
     public function testAProjectStubMayBePublishedByName(): void
     {
+        $status = $this->runCommand(['project-front']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
+    public function testAProjectStubNeedsNoProjectConfiguration(): void
+    {
+        // The directory that `new` runs in is not a project.
+        unlink($this->root . '/composer.json');
+
         $status = $this->runCommand(['project-front']);
 
         $this->assertSame(0, $status);
@@ -185,8 +243,8 @@ final class PublishCommandTest extends TestCase
 
     public function testProjectStubsAreNotPublishedInBulk(): void
     {
-        // They only have an effect in the directory `crest new` runs from.
-        // In a project they do nothing.
+        // They have an effect only in the directory that `crest new` puts the
+        // project into. In a project they do nothing.
         $projectStubs = glob(Paths::stubs() . '/adr/' . Stub::PROJECT_PREFIX . '*.stub') ?: [];
 
         $this->assertNotEmpty($projectStubs);
