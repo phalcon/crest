@@ -26,6 +26,7 @@ use function glob;
 use function interface_exists;
 use function json_decode;
 use function preg_match_all;
+use function sort;
 use function sprintf;
 use function str_contains;
 use function token_get_all;
@@ -90,6 +91,10 @@ final class ProjectStubsTest extends TestCase
         foreach ($found ?: [] as $file) {
             $names[] = basename($file, '.stub');
         }
+
+        // glob() sorts with the collation of the locale, so its order changes
+        // from machine to machine. sort() gives byte order everywhere.
+        sort($names);
 
         return $names;
     }

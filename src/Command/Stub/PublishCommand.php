@@ -27,6 +27,7 @@ use function file_get_contents;
 use function glob;
 use function is_file;
 use function preg_match;
+use function sort;
 use function sprintf;
 use function str_starts_with;
 
@@ -121,8 +122,6 @@ final class PublishCommand extends ProjectCommand
 
         $found = [];
 
-        // glob() sorts alphabetically unless told not to, so the listing is
-        // stable without a sort of its own.
         foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
             if (true === str_starts_with(basename($path), self::PROJECT_STUBS)) {
                 continue;
@@ -130,6 +129,10 @@ final class PublishCommand extends ProjectCommand
 
             $found[] = $path;
         }
+
+        // glob() sorts with the collation of the locale, so its order changes
+        // from machine to machine. sort() gives byte order everywhere.
+        sort($found);
 
         if ([] === $found) {
             throw new Exception(sprintf("no stubs are packaged for the '%s' flavor", $flavor));

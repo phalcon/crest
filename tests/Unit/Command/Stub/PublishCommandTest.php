@@ -23,7 +23,12 @@ use function basename;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
+use function preg_match_all;
+use function setlocale;
+use function sort;
 use function str_starts_with;
+
+use const LC_COLLATE;
 
 final class PublishCommandTest extends TestCase
 {
@@ -219,6 +224,35 @@ final class PublishCommandTest extends TestCase
                 Stub::overridePath($this->root, 'adr', $name)
             );
         }
+    }
+
+    public function testStubsArePublishedInByteOrderOnEveryMachine(): void
+    {
+        // glob() sorts with the collation of the locale. Under en_US.UTF-8,
+        // `action.stub` comes before `action-view.stub`; in byte order it is
+        // the other way round. The listing must be the same on every machine.
+        $previous = (string) setlocale(LC_COLLATE, '0');
+
+        if (false === setlocale(LC_COLLATE, 'en_US.UTF-8', 'en_US.utf8')) {
+            $this->markTestSkipped('the en_US.UTF-8 locale is not installed');
+        }
+
+        try {
+            $this->runCommand([]);
+        } finally {
+            setlocale(LC_COLLATE, $previous);
+        }
+
+        // Whole file names: without `.stub`, `action` sorts before
+        // `action-view` in byte order too, and the test would prove nothing.
+        preg_match_all('#/([a-z-]+\.stub)$#m', $this->readStdout(), $matches);
+
+        $published = $matches[1];
+        $sorted    = $published;
+        sort($sorted);
+
+        $this->assertNotEmpty($published);
+        $this->assertSame($sorted, $published);
     }
 
     /**
