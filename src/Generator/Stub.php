@@ -17,6 +17,7 @@ use Crest\Console\Exceptions\Exception;
 
 use function file_get_contents;
 use function is_file;
+use function preg_match;
 use function rtrim;
 use function sprintf;
 use function str_replace;
@@ -32,6 +33,13 @@ use function str_replace;
 final class Stub
 {
     /**
+     * The name prefix of the stubs that `crest new` renders into a new
+     * project. They are not artifact stubs, so stub:publish with no name
+     * leaves them out.
+     */
+    public const PROJECT_PREFIX = 'project-';
+
+    /**
      * Where a project keeps the stubs it has taken over, relative to its root.
      *
      * Private: callers ask for a path rather than assembling one, so the layout
@@ -40,6 +48,11 @@ final class Stub
      * to diagnose.
      */
     private const OVERRIDE_DIRECTORY = 'resources/stubs';
+
+    /**
+     * A placeholder: a name between `{{ ` and ` }}`.
+     */
+    private const PLACEHOLDER = '/\{\{ \w+ \}\}/';
 
     private string $packagedRoot;
 
@@ -87,14 +100,23 @@ final class Stub
     }
 
     /**
+     * Fails when a placeholder has no value. A published copy can keep a
+     * placeholder that crest no longer sends, and the raw placeholder must not
+     * go into the generated file.
+     *
      * @param array<string, string> $replacements
      */
     public function render(string $flavor, string $name, array $replacements): string
     {
-        $template = (string) file_get_contents($this->resolve($flavor, $name));
+        $path     = $this->resolve($flavor, $name);
+        $template = (string) file_get_contents($path);
 
         foreach ($replacements as $key => $value) {
             $template = str_replace('{{ ' . $key . ' }}', $value, $template);
+        }
+
+        if (1 === preg_match(self::PLACEHOLDER, $template, $matches)) {
+            throw new Exception(sprintf('%s has no value for %s', $path, $matches[0]));
         }
 
         return $template;

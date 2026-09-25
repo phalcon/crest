@@ -24,8 +24,8 @@
 #     installed" fallback (2 lines)
 #   - Registry::discover, the "Composer\InstalledVersions is missing" return
 #     (1 line)
-# The ext-phalcon branch starts being covered once the v5 matrix cell is added
-# (blocked on ext-phalcon 5.18).
+# The ext-phalcon branch stays uncovered: the unit-tests job runs the v5
+# variant, but the coverage job runs v6 only.
 #
 # The gate is deliberately set well below the measured value while the suite is
 # still growing, so ordinary work is not blocked by the floor. Ratchet it up as

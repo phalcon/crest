@@ -14,18 +14,75 @@ for the same listing from the tool itself.
 | `about` (`info`, `i`) | environment and version report |
 | `config:show` | the project configuration crest resolved, and where each value came from |
 | `container:list` | services registered in the project container |
+| `down` | stop and remove the project containers |
 | `event:list` | listeners attached to the project events manager |
+| `install` | install composer dependencies in the project container |
 | `list` (`commands`, `enumerate`) | the available commands |
 | `make:action` | create an ADR action for a route |
 | `make:command` | create a crest command |
 | `make:middleware` | create an ADR middleware |
 | `make:provider` | create a service provider |
 | `make:responder` | create an ADR responder |
+| `new` | create an ADR project |
 | `route:list` | every route the application answers |
 | `stub:publish` | copy packaged stubs into the project for editing |
+| `up` | start the project containers |
 
 Only the `adr` flavor has generators. A `cli` or `mvc` project can still run
 `about`, `config:show` and `list`.
+
+## Creating a project
+
+`new` writes an ADR project that runs:
+
+    crest new my-app
+
+| Option | Purpose |
+|---|---|
+| `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
+| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
+| `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
+| `--force` | write into a directory that is not empty, and overwrite files with the same names |
+
+The project goes into the working directory, or into `--directory` if you give
+one. `new` runs nothing: no composer, no docker, no network. It prints the
+next steps:
+
+    cd my-app
+    crest up          docker compose up -d
+    crest install     composer install in the app container
+
+`crest down` stops and removes the containers. `up --build` rebuilds the image
+first, and `down --volumes` also removes the named volumes.
+
+`new`, `up`, `down` and `install` run before the project has a `vendor/`. Run
+them with a crest outside the project, for example one that you install with
+`composer global require phalcon/crest`.
+
+The generated project requires `phalcon/crest` as a dev dependency. The
+commands that work on the project, for example `make:action` and
+`route:list`, need the autoloader and the Phalcon of the project. After
+`crest install` or `composer install`, run them with the crest in `vendor/`:
+
+    vendor/bin/crest make:action GET /hello
+    docker compose exec app vendor/bin/crest make:action GET /hello
+
+The files come from the `project-*` stubs. To change them, publish them by
+name in the directory that the project goes into (the working directory, or
+`--directory`), then edit the copies:
+
+    crest stub:publish project-front
+
+A project stub needs no `crest.php`, and it always uses the `adr` flavor. A
+publish with no name leaves the project stubs out, because they do nothing
+inside a project.
+
+You can change each project stub on its own, but `project-front`,
+`project-config` and `project-index` must agree with each other. Do not change
+the name of the front controller class `AppFront` or the paths of the
+generated files, because `new` does not read them from the stubs. A published
+copy must use only the placeholders of the packaged copy. If a placeholder has
+no value, `new` stops before it writes a file.
 
 ## Commands that boot the project
 

@@ -13,13 +13,6 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
-use Crest\Console\Input;
-use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
-
-use function sprintf;
-
 /**
  * Generates an ADR Responder - the one layer that speaks HTTP, turning a domain
  * payload into a response.
@@ -32,41 +25,25 @@ use function sprintf;
  * Boots nothing - it reads config and writes a file, so it keeps working on a
  * project that does not currently run.
  */
-final class ResponderCommand extends ProjectCommand
+final class ResponderCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'responder';
-
-    private const SUFFIX = 'Responder';
-
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:responder', 'Create an ADR responder')
-            ->argument('name', true, 'Responder name, e.g. Album')
-            // No declared default: resolveOptions() supplies false for a flag
-            // without consulting one, so passing it would state something that
-            // is never read.
-            ->option('force', 'Overwrite an existing responder');
+        return 'Create an ADR responder';
     }
 
-    public function handle(Input $input, Output $output): int
+    protected function example(): string
     {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
+        return 'Album';
+    }
 
-        $writer = $this->writer($config);
+    protected function key(): string
+    {
+        return 'responder';
+    }
 
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
-
-        return 0;
+    protected function suffix(): string
+    {
+        return 'Responder';
     }
 }

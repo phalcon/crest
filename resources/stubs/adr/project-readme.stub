@@ -1,0 +1,39 @@
+# {{ project }}
+
+A Phalcon ADR application.
+
+## Run it
+
+With docker:
+
+    crest up
+    crest install
+
+With PHP and composer on the host:
+
+    composer install
+    php -S localhost:8080 -t public .htrouter.php
+
+Then open http://localhost:8080/.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `public/index.php` | The web entry point |
+| `src/AppFront.php` | The front controller: container, providers, application |
+| `{{ actionPath }}/` | One class for each route. `GET /` is `{{ actionPath }}/{{ seed }}.php` |
+| `crest.php` | The crest configuration |
+
+## Next steps
+
+Use the crest in `vendor/` for these commands. It uses the autoloader and
+the Phalcon of this project. On the host:
+
+    vendor/bin/crest make:action GET /hello
+    vendor/bin/crest route:list
+
+With docker:
+
+    docker compose exec {{ service }} vendor/bin/crest make:action GET /hello
+    docker compose exec {{ service }} vendor/bin/crest route:list

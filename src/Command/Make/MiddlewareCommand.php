@@ -13,10 +13,8 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
-use Crest\Console\Input;
 use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
+use Crest\Generator\Placement;
 
 use function sprintf;
 
@@ -30,37 +28,20 @@ use function sprintf;
  * the registration instead: the file is crest's to write, the wiring is the
  * developer's to place.
  */
-final class MiddlewareCommand extends ProjectCommand
+final class MiddlewareCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'middleware';
-
-    private const SUFFIX = 'Middleware';
-
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:middleware', 'Create an ADR middleware')
-            ->argument('name', true, 'Middleware name, e.g. Auth')
-            ->option('force', 'Overwrite an existing middleware');
+        return 'Create an ADR middleware';
     }
 
-    public function handle(Input $input, Output $output): int
+    protected function example(): string
     {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
+        return 'Auth';
+    }
 
-        $writer = $this->writer($config);
-
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
+    protected function guidance(Placement $placement, Output $output): void
+    {
         $output->line('Nothing runs it yet. Add it to the router\'s middleware map:');
         $output->line();
         $output->line(
@@ -75,7 +56,15 @@ final class MiddlewareCommand extends ProjectCommand
             "The key is a namespace suffix under the base namespace: '' guards every "
             . "action, '\\Album' only the actions beneath it."
         );
+    }
 
-        return 0;
+    protected function key(): string
+    {
+        return 'middleware';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Middleware';
     }
 }

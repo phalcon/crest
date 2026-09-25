@@ -26,6 +26,11 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Command\ProjectCommand::writer()`, assembling the stub writer once instead of repeating the same three-argument construction in five `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
 - Added `methodFor()` to `Crest\ADR\ActionResolver`, so the HTTP method an Action answers is asked of the framework rather than derived from the class name. [#1](https://github.com/phalcon/crest/issues/1)
 - Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`, so a bare `crest` and `crest list` render the command listing through one path instead of two copies kept in agreement by hand.
+- Added `new`, creating an ADR project from stubs: front controller, web entry point, `crest.php`, an action for `GET /`, `composer.json` and docker files. It runs nothing - no composer, no docker, no network. `--namespace`, `--php` and `--phalcon` set the root namespace, the PHP version and the Phalcon variant. The project requires `phalcon/crest` as a dev dependency: the commands that work on the project need its autoloader and its Phalcon, so they run as `vendor/bin/crest`, not with the crest that created the project. The generated `crest.php` states `paths.action`, so a later crest default does not move the actions. `new` renders every file before it writes the first one, so a published stub that does not render leaves no files. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `up`, `down` and `install`, running `docker compose up -d`, `docker compose down` and `composer install` in the `app` container of a project that `new` created. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Process\Runner`, the seam through which commands run external programs, with `ShellRunner` as the default. A missing program or working directory is reported as a crest error. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Generator\ClassName::namespace()`, validating a namespace with the same identifier rule as a class name. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Command\Make\NamedArtifactCommand`, the base of `make:command`, `make:middleware`, `make:provider` and `make:responder`. The four commands repeated the same `handle()` and `define()`; each now gives only its key, its suffix, its description, an example name and the instructions it prints after the file is written. The base declares the `name` argument and the `--force` option, because `handle()` reads both, so a new generator cannot leave them out.
 
 ### Changed
 
@@ -40,6 +45,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `route:list` and `make:action` now accept an `ActionResolver`, defaulted so the kernel still constructs them with no arguments. This is what lets a test prove the routing answers come from the framework rather than from crest. [#5](https://github.com/phalcon/crest/issues/5)
 - `event:list` now reads every listener in a single `getListenerMap()` call instead of one call per event type. [#1](https://github.com/phalcon/crest/issues/1)
 - `phalcon/talon` moved from `^0.8` to `^0.9`.
+- `stub:publish` with no name leaves out the `project-*` stubs that `new` renders. They have an effect only in the directory that `new` puts the project into; publish one by name. A `project-*` name goes where `new` reads it - the working directory, or `--directory` - with the `adr` flavor, and needs no `crest.php`. [#8](https://github.com/phalcon/crest/issues/8)
+- Rendering a stub now fails when a placeholder has no value, and the error names the stub file. A published copy that kept a placeholder crest no longer sends put the raw `{{ name }}` into the generated file. [#8](https://github.com/phalcon/crest/issues/8)
 
 ### Fixed
 

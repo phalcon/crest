@@ -13,10 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Support;
 
-use Crest\Commands;
 use Crest\Console\Command\Command;
-use Crest\Console\Kernel;
-use Crest\Console\Registry;
 
 use function chdir;
 use function getcwd;
@@ -33,7 +30,7 @@ use function getcwd;
  */
 trait GeneratesInAScratchProject
 {
-    use CapturesOutput;
+    use RunsThroughTheKernel;
     use ScratchDirectory;
 
     private string $previousCwd = '';
@@ -52,17 +49,7 @@ trait GeneratesInAScratchProject
      */
     protected function runProjectCommand(string $name, string $class, array $arguments): int
     {
-        $registry = (new Registry())->add($name, $class);
-        $kernel   = new Kernel(
-            Commands::NAME,
-            $registry,
-            Commands::PACKAGE,
-            $this->stdout,
-            $this->stderr,
-            false
-        );
-
-        return $kernel->handle(['crest', $name, ...$arguments, '--directory', $this->root]);
+        return $this->runThroughKernel($name, $class, [...$arguments, '--directory', $this->root]);
     }
 
     protected function startScratchProject(string $prefix, string ...$subdirectories): void

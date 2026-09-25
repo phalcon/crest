@@ -1,0 +1,16 @@
+services:
+  {{ service }}:
+    build:
+      context: .
+      dockerfile: resources/docker/Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: ${PROJECT_PREFIX:-{{ project }}}-app
+    hostname: ${PROJECT_PREFIX:-{{ project }}}-app
+    working_dir: /srv
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - .:/srv
+    env_file: .env

@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Crest configuration. Paths that are not listed here take the ADR defaults;
+ * run `crest config:show` to see every value and where it came from.
+ */
+
+declare(strict_types=1);
+
+return [
+    'flavor'    => 'adr',
+    'namespace' => '{{ namespace }}',
+    'bootstrap' => {{ namespace }}\AppFront::class,
+    'paths'     => ['action' => '{{ actionPath }}'],
+];

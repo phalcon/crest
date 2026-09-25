@@ -13,11 +13,9 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
 use Crest\Commands;
-use Crest\Console\Input;
 use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
+use Crest\Generator\Placement;
 
 use function sprintf;
 use function str_replace;
@@ -41,39 +39,20 @@ use function substr;
  * `migration:run` from a class name, so the generated definition is a starting
  * point either way.
  */
-final class CommandCommand extends ProjectCommand
+final class CommandCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'command';
-
-    private const SUFFIX = 'Command';
-
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:command', 'Create a crest command')
-            ->argument('name', true, 'Command name, e.g. Greet')
-            ->option('force', 'Overwrite an existing command');
+        return 'Create a crest command';
     }
 
-    public function handle(Input $input, Output $output): int
+    protected function example(): string
     {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
-        $name      = $this->registryName($placement->class);
+        return 'Greet';
+    }
 
-        $writer = $this->writer($config);
-
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-                'command'   => $name,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
+    protected function guidance(Placement $placement, Output $output): void
+    {
         $output->line('Nothing lists it yet. Declare it in the package composer.json:');
         $output->line();
         $output->line('    "extra": {');
@@ -82,15 +61,28 @@ final class CommandCommand extends ProjectCommand
         $output->line(
             sprintf(
                 '                "%s": "%s"',
-                $name,
+                $this->registryName($placement->class),
                 str_replace('\\', '\\\\', $placement->namespace . '\\' . $placement->class)
             )
         );
         $output->line('            }');
         $output->line('        }');
         $output->line('    }');
+    }
 
-        return 0;
+    protected function key(): string
+    {
+        return 'command';
+    }
+
+    protected function replacements(Placement $placement): array
+    {
+        return ['command' => $this->registryName($placement->class)];
+    }
+
+    protected function suffix(): string
+    {
+        return 'Command';
     }
 
     /**
@@ -100,6 +92,6 @@ final class CommandCommand extends ProjectCommand
      */
     private function registryName(string $class): string
     {
-        return strtolower(substr($class, 0, -strlen(self::SUFFIX))) ?: strtolower($class);
+        return strtolower(substr($class, 0, -strlen($this->suffix()))) ?: strtolower($class);
     }
 }
