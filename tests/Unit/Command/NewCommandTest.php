@@ -399,7 +399,7 @@ final class NewCommandTest extends TestCase
             . PHP_EOL
             . '    cd ' . $target . PHP_EOL
             . '    composer install' . PHP_EOL
-            . '    php -S localhost:8080 -t public .htrouter.php' . PHP_EOL
+            . '    crest serve' . PHP_EOL
             . PHP_EOL
             . 'Then GET / answers from src/Action/Get.php' . PHP_EOL,
             $this->readStdout()
@@ -597,7 +597,8 @@ final class NewCommandTest extends TestCase
             "<?php\n"
             . "\n"
             . "/**\n"
-            . " * Router for PHP's built-in server: php -S localhost:8080 -t public .htrouter.php\n"
+            . " * Router for PHP's built-in server. crest serve and the container\n"
+            . " * (resources/docker/Dockerfile) use it.\n"
             . " * A request for a real file under public/ gets that file. All other requests\n"
             . " * go to the front controller.\n"
             . " */\n"

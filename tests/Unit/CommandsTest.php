@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit;
 
+use Crest\Command\ServeCommand;
 use Crest\Commands;
 use PHPUnit\Framework\TestCase;
 
@@ -39,6 +40,7 @@ final class CommandsTest extends TestCase
                 'make:responder',
                 'new',
                 'route:list',
+                'serve',
                 'stub:publish',
                 'up',
             ],
@@ -87,5 +89,11 @@ final class CommandsTest extends TestCase
         $this->assertTrue($registry->has('list'));
         $this->assertTrue($registry->has('commands'));
         $this->assertTrue($registry->has('enumerate'));
+    }
+
+    public function testRegistryResolvesTheServeAlias(): void
+    {
+        // devtools answered to `server` too.
+        $this->assertSame(ServeCommand::class, Commands::registry()->get('server'));
     }
 }
