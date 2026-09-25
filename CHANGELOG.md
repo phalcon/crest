@@ -26,6 +26,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Command\ProjectCommand::writer()`, assembling the stub writer once instead of repeating the same three-argument construction in five `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
 - Added `methodFor()` to `Crest\ADR\ActionResolver`, so the HTTP method an Action answers is asked of the framework rather than derived from the class name. [#1](https://github.com/phalcon/crest/issues/1)
 - Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`, so a bare `crest` and `crest list` render the command listing through one path instead of two copies kept in agreement by hand.
+- Added `new`, creating an ADR project from stubs: front controller, web entry point, `crest.php`, an action for `GET /`, `composer.json` and docker files. It runs nothing - no composer, no docker, no network. `--namespace`, `--php` and `--phalcon` set the root namespace, the PHP version and the Phalcon variant. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `up`, `down` and `install`, running `docker compose up -d`, `docker compose down` and `composer install` in the `app` container of a project that `new` created. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Process\Runner`, the seam through which commands run external programs, with `ShellRunner` as the default. A missing program or working directory is reported as a crest error. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Generator\ClassName::namespace()`, validating a namespace with the same identifier rule as a class name. [#8](https://github.com/phalcon/crest/issues/8)
 
 ### Changed
 
@@ -40,6 +44,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `route:list` and `make:action` now accept an `ActionResolver`, defaulted so the kernel still constructs them with no arguments. This is what lets a test prove the routing answers come from the framework rather than from crest. [#5](https://github.com/phalcon/crest/issues/5)
 - `event:list` now reads every listener in a single `getListenerMap()` call instead of one call per event type. [#1](https://github.com/phalcon/crest/issues/1)
 - `phalcon/talon` moved from `^0.8` to `^0.9`.
+- `stub:publish` with no name leaves out the `project-*` stubs that `new` renders. They only have an effect where `new` runs; publish one by name. [#8](https://github.com/phalcon/crest/issues/8)
 
 ### Fixed
 

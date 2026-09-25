@@ -32,13 +32,14 @@ Command line application for Phalcon - generators, introspection and project too
     vendor/bin/crest                      list available commands
     vendor/bin/crest about                environment and version report
     vendor/bin/crest make:action GET /company/all
+    vendor/bin/crest new my-app           create an ADR project
 
 ## Global options
 
 | Option | Purpose |
 |---|---|
 | `--config=<file>` | explicit path to `crest.php` |
-| `--directory=<dir>` | project root override |
+| `--directory=<dir>` | project root override; for `new`, the directory the project is created in |
 | `--trace` | full exception trace |
 | `--help`, `-h` | usage for the current command |
 | `--quiet`, `-q` | suppress non-essential output |
@@ -92,6 +93,9 @@ filesystem and keeps working on a project that does not currently run.
 
 Copy a stub into `resources/stubs/<flavor>/` in your project and crest uses yours instead
 of the packaged one.
+
+The `project-*` stubs that `new` renders are published by name only. See
+[docs/index.md](docs/index.md#creating-a-project).
 
 ## Development
 
