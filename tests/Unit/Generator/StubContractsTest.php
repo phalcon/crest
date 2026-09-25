@@ -40,6 +40,7 @@ use function interface_exists;
 use function preg_match_all;
 use function sprintf;
 use function str_contains;
+use function str_starts_with;
 use function token_get_all;
 use function trait_exists;
 
@@ -114,6 +115,12 @@ final class StubContractsTest extends TestCase
 
         foreach (glob($directory . '/*.stub') ?: [] as $file) {
             $name = basename($file, '.stub');
+
+            // The project stubs render a whole application, not one artifact
+            // class. ProjectStubsTest holds their contract.
+            if (true === str_starts_with($name, 'project-')) {
+                continue;
+            }
 
             yield $name => [$name];
         }

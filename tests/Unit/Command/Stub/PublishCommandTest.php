@@ -23,6 +23,7 @@ use function basename;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
+use function str_starts_with;
 
 final class PublishCommandTest extends TestCase
 {
@@ -70,6 +71,14 @@ final class PublishCommandTest extends TestCase
             'Skipped ' . $published . '; it exists already, pass --force to overwrite',
             $this->readStdout()
         );
+    }
+
+    public function testAProjectStubMayBePublishedByName(): void
+    {
+        $status = $this->runCommand(['project-front']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
     }
 
     public function testAPublishedStubIsAByteForByteCopy(): void
@@ -169,6 +178,23 @@ final class PublishCommandTest extends TestCase
         );
     }
 
+    public function testProjectStubsAreNotPublishedInBulk(): void
+    {
+        // They only have an effect in the directory `crest new` runs from.
+        // In a project they do nothing.
+        $projectStubs = glob(Paths::stubs() . '/adr/project-*.stub') ?: [];
+
+        $this->assertNotEmpty($projectStubs);
+
+        $this->runCommand([]);
+
+        foreach ($projectStubs as $path) {
+            $this->assertFileDoesNotExist(
+                Stub::overridePath($this->root, 'adr', basename($path, '.stub'))
+            );
+        }
+    }
+
     public function testPublishedPathsAreReported(): void
     {
         $this->runCommand(['action']);
@@ -196,6 +222,9 @@ final class PublishCommandTest extends TestCase
     }
 
     /**
+     * The stubs a publish with no name copies: every packaged ADR stub except
+     * the project stubs.
+     *
      * @return list<string>
      */
     private function packagedStubs(): array
@@ -203,7 +232,13 @@ final class PublishCommandTest extends TestCase
         $names = [];
 
         foreach (glob(Paths::stubs() . '/adr/*.stub') ?: [] as $path) {
-            $names[] = basename($path, '.stub');
+            $name = basename($path, '.stub');
+
+            if (true === str_starts_with($name, 'project-')) {
+                continue;
+            }
+
+            $names[] = $name;
         }
 
         return $names;

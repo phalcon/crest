@@ -57,6 +57,34 @@ final class ClassNameTest extends TestCase
         ClassName::suffixed('Admin/Album', 'Responder');
     }
 
+    public function testANamespaceLosesItsSurroundingBackslashes(): void
+    {
+        $this->assertSame('Acme\\Shop', ClassName::namespace('\\Acme\\Shop\\'));
+    }
+
+    public function testANamespaceMayHaveSeveralSegments(): void
+    {
+        $this->assertSame('Acme\\Shop', ClassName::namespace('Acme\\Shop'));
+    }
+
+    public function testANamespaceWithAHyphenIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "'my-app' is not a usable namespace; expected something like 'App' or 'Acme\\Shop'"
+        );
+
+        ClassName::namespace('my-app');
+    }
+
+    public function testANamespaceWithAnEmptySegmentIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'Acme\\\\Shop' is not a usable namespace");
+
+        ClassName::namespace('Acme\\\\Shop');
+    }
+
     public function testANameWithASpaceIsRejected(): void
     {
         $this->expectException(Exception::class);
@@ -71,6 +99,14 @@ final class ClassNameTest extends TestCase
         $this->expectExceptionMessage("'' is not a usable class name");
 
         ClassName::suffixed('', 'Responder');
+    }
+
+    public function testAnEmptyNamespaceIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'' is not a usable namespace");
+
+        ClassName::namespace('');
     }
 
     public function testANonLatinNameIsAccepted(): void
