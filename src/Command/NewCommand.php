@@ -1,0 +1,290 @@
+<?php
+
+/**
+ * This file is part of the Phalcon Crest.
+ *
+ * (c) Phalcon Team <team@phalcon.io>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+namespace Crest\Command;
+
+use Crest\Console\Command\Command;
+use Crest\Console\Exceptions\Exception;
+use Crest\Console\Input;
+use Crest\Console\Output;
+use Crest\Console\Parsing\Definition;
+use Crest\Generator\ArtifactWriter;
+use Crest\Generator\ClassName;
+use Crest\Generator\Stub;
+use Crest\Paths;
+use Crest\Project\Flavor;
+use FilesystemIterator;
+
+use function file_exists;
+use function getcwd;
+use function is_dir;
+use function preg_match;
+use function rtrim;
+use function sprintf;
+use function str_replace;
+use function strtolower;
+use function version_compare;
+
+/**
+ * Creates a new ADR project from stubs.
+ *
+ * This command runs where no project exists yet: no crest.php, no
+ * composer.json, no vendor/. Thus it extends the console Command, not
+ * ProjectCommand. It gets all values from its arguments, and it writes
+ * crest.php. It does not read it.
+ *
+ * It runs nothing: no composer, no docker, no network. Thus it cannot stop
+ * halfway. Either it writes the tree, or an error tells why it did not.
+ */
+final class NewCommand extends Command
+{
+    /**
+     * Where the actions go, relative to the project root. The seed action and
+     * the front controller use it.
+     */
+    private const ACTION_PATH = 'src/Action';
+
+    /**
+     * Stub name => path in the new project. The seed action is not here: it
+     * uses the action stub with its own placeholders.
+     */
+    private const FILES = [
+        'project-composer'   => 'composer.json',
+        'project-config'     => 'crest.php',
+        'project-env'        => '.env',
+        'project-gitignore'  => '.gitignore',
+        'project-htrouter'   => '.htrouter.php',
+        'project-readme'     => 'README.md',
+        'project-compose'    => 'docker-compose.yml',
+        'project-dockerfile' => 'resources/docker/Dockerfile',
+        'project-index'      => 'public/index.php',
+        'project-front'      => 'src/AppFront.php',
+    ];
+
+    /**
+     * A project name: letters, digits, '-' and '_', with a letter or digit
+     * first. It is a directory name, not a path. It is also the docker
+     * container prefix, which must start with a letter or digit.
+     */
+    private const NAME = '/^[A-Za-z0-9][A-Za-z0-9_-]*$/';
+
+    /**
+     * Variant => the composer requirement and its constraint. v5 needs 5.18,
+     * because Phalcon\ADR first ships in cphalcon 5.18.0; an older extension
+     * installs and then fails on every request. v6 has @RC because
+     * phalcon/phalcon has no stable 6.0 release yet. Composer still selects a
+     * stable release when one exists.
+     */
+    private const PHALCON = [
+        'v5' => ['ext-phalcon', '^5.18'],
+        'v6' => ['phalcon/phalcon', '^6.0@RC'],
+    ];
+
+    /**
+     * major.minor only. The Dockerfile base image `php:<version>-cli` has no
+     * patch tags, and composer.json uses the same value.
+     */
+    private const PHP = '/^\d+\.\d+$/';
+
+    /**
+     * The oldest PHP that runs the generated code. It uses readonly promoted
+     * properties, which need PHP 8.1.
+     */
+    private const PHP_FLOOR = '8.1';
+
+    public function define(): Definition
+    {
+        return Definition::for('new', 'Create an ADR project')
+            ->argument('name', true, 'Project directory, e.g. my-app')
+            ->option('namespace=s', 'Root namespace for the generated code', 'App')
+            ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
+            ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
+            ->option('force', 'Write into a directory that is not empty');
+    }
+
+    public function handle(Input $input, Output $output): int
+    {
+        $name      = $this->name($input->argumentString('name'));
+        $namespace = ClassName::namespace($input->optionString('namespace'));
+        $php       = $this->php($input->optionString('php'));
+        $variant   = strtolower($input->optionString('phalcon'));
+
+        if (false === isset(self::PHALCON[$variant])) {
+            throw new Exception(
+                sprintf("unknown Phalcon version '%s'; expected v5 or v6", $variant)
+            );
+        }
+
+        [$package, $constraint] = self::PHALCON[$variant];
+
+        $parent = $this->parent($input);
+        $target = $parent . '/' . $name;
+        $force  = true === $input->option('force');
+
+        $this->guard($target, $force);
+
+        // Overrides come from the directory that the project goes into. A
+        // team that publishes the project stubs there gets its own
+        // conventions in each project that it creates there.
+        $writer = new ArtifactWriter(new Stub(Paths::stubs(), $parent), Flavor::ADR->value);
+
+        $replacements = [
+            'actionNamespace'   => $namespace . '\\Action',
+            'actionPath'        => self::ACTION_PATH,
+            'jsonNamespace'     => str_replace('\\', '\\\\', $namespace),
+            'namespace'         => $namespace,
+            'phalconConstraint' => $constraint,
+            'phalconPackage'    => $package,
+            'phalconVariant'    => $variant,
+            'phpVersion'        => $php,
+            'project'           => $name,
+            // The prefix of each line of the extension install in the
+            // Dockerfile: active for v5, commented out for v6.
+            'v5'                => 'v5' === $variant ? '' : '# ',
+        ];
+
+        foreach (self::FILES as $stub => $path) {
+            $writer->render($target . '/' . $path, $stub, $replacements, $force);
+        }
+
+        // The seed action uses the usual action stub. Convention cannot name
+        // it, because Convention asks the router, and there is no vendor/ yet.
+        $writer->render(
+            $target . '/' . self::ACTION_PATH . '/Get.php',
+            'action',
+            [
+                'attributes' => '',
+                'class'      => 'Get',
+                'namespace'  => $namespace . '\\Action',
+                'params'     => '',
+            ],
+            $force
+        );
+
+        $this->report(
+            $output,
+            '' === $input->optionString('directory') ? $name : $target
+        );
+
+        return 0;
+    }
+
+    /**
+     * Refuses a target that would mix the new project into other files,
+     * unless --force says that this is the intent. A missing or empty
+     * directory is always correct.
+     */
+    private function guard(string $target, bool $force): void
+    {
+        if (true === file_exists($target) && false === is_dir($target)) {
+            throw new Exception(sprintf('%s exists and is not a directory', $target));
+        }
+
+        if (true === $force || false === is_dir($target)) {
+            return;
+        }
+
+        // FilesystemIterator skips . and .., so valid() is true only when the
+        // directory contains something.
+        if (true === (new FilesystemIterator($target))->valid()) {
+            throw new Exception(
+                sprintf('%s exists and is not empty; pass --force to write into it', $target)
+            );
+        }
+    }
+
+    /**
+     * A name, not a path: `crest new ../elsewhere` must not write outside the
+     * directory it runs in.
+     */
+    private function name(string $name): string
+    {
+        if (0 === preg_match(self::NAME, $name)) {
+            throw new Exception(
+                sprintf(
+                    "'%s' is not a usable project name; expected letters, digits, '-' and '_', "
+                    . 'starting with a letter or digit',
+                    $name
+                )
+            );
+        }
+
+        return $name;
+    }
+
+    /**
+     * The directory that the project goes into.
+     *
+     * --directory is the global project-root option. This command has no
+     * project yet, so for it the option names where the project goes.
+     *
+     * An empty value reads as absent, as optionString() reads every other
+     * option. Otherwise `--directory="$DIR"` with an unset variable puts the
+     * project in the filesystem root.
+     */
+    private function parent(Input $input): string
+    {
+        $directory = $input->optionString('directory');
+
+        return rtrim('' === $directory ? (string) getcwd() : $directory, '/');
+    }
+
+    /**
+     * major.minor, and not older than the generated code needs.
+     */
+    private function php(string $version): string
+    {
+        if (0 === preg_match(self::PHP, $version)) {
+            throw new Exception(
+                sprintf("'%s' is not a PHP version; expected major.minor, e.g. 8.4", $version)
+            );
+        }
+
+        if (true === version_compare($version, self::PHP_FLOOR, '<')) {
+            throw new Exception(
+                sprintf(
+                    'PHP %s is too old; the generated code needs %s or later',
+                    $version,
+                    self::PHP_FLOOR
+                )
+            );
+        }
+
+        return $version;
+    }
+
+    /**
+     * Both ways to run the project, always. The generated files are the same
+     * on every host. Only this text names the two ways, so nothing here
+     * examines the environment.
+     */
+    private function report(Output $output, string $shown): void
+    {
+        $output->success(sprintf('Created %s/', $shown));
+        $output->line();
+        $output->line('Nothing runs it yet. With docker:');
+        $output->line();
+        $output->line(sprintf('    cd %s', $shown));
+        $output->line('    crest up');
+        $output->line('    crest install');
+        $output->line();
+        $output->line('Or with PHP and composer on the host:');
+        $output->line();
+        $output->line(sprintf('    cd %s', $shown));
+        $output->line('    composer install');
+        // Until `crest serve` exists, the host way names the server directly.
+        $output->line('    php -S localhost:8080 -t public .htrouter.php');
+        $output->line();
+        $output->line('Then GET / answers from src/Action/Get.php');
+    }
+}

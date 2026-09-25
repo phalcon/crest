@@ -28,6 +28,7 @@ use function glob;
 use function is_file;
 use function preg_match;
 use function sprintf;
+use function str_starts_with;
 
 /**
  * Copies packaged stubs into the project so they can be edited.
@@ -46,6 +47,14 @@ final class PublishCommand extends ProjectCommand
      * A packaged stub name. Hyphens are in because `action-view` is one.
      */
     private const NAME = '/^[A-Za-z0-9_-]+$/';
+
+    /**
+     * The prefix of the stubs that `crest new` renders. They only have an
+     * effect in the directory `new` runs from, not in a project. Thus a
+     * publish with no name leaves them out. A publish by name still copies
+     * them.
+     */
+    private const PROJECT_STUBS = 'project-';
 
     public function define(): Definition
     {
@@ -110,9 +119,17 @@ final class PublishCommand extends ProjectCommand
             return [$single];
         }
 
+        $found = [];
+
         // glob() sorts alphabetically unless told not to, so the listing is
         // stable without a sort of its own.
-        $found = glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [];
+        foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
+            if (true === str_starts_with(basename($path), self::PROJECT_STUBS)) {
+                continue;
+            }
+
+            $found[] = $path;
+        }
 
         if ([] === $found) {
             throw new Exception(sprintf("no stubs are packaged for the '%s' flavor", $flavor));
