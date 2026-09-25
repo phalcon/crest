@@ -80,6 +80,21 @@ final class ProjectStubsTest extends TestCase
     }
 
     /**
+     * @return list<string>
+     */
+    private static function packagedNames(): array
+    {
+        $names = [];
+        $found = glob(Stub::packagedDirectory(Paths::stubs(), self::FLAVOR) . '/project-*.stub');
+
+        foreach ($found ?: [] as $file) {
+            $names[] = basename($file, '.stub');
+        }
+
+        return $names;
+    }
+
+    /**
      * @dataProvider projectStubs
      */
     public function testNoPlaceholderIsLeftUnrendered(string $name): void
@@ -156,21 +171,6 @@ final class ProjectStubsTest extends TestCase
             ],
             self::packagedNames()
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function packagedNames(): array
-    {
-        $names = [];
-        $found = glob(Stub::packagedDirectory(Paths::stubs(), self::FLAVOR) . '/project-*.stub');
-
-        foreach ($found ?: [] as $file) {
-            $names[] = basename($file, '.stub');
-        }
-
-        return $names;
     }
 
     private function render(string $name): string

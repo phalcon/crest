@@ -32,7 +32,7 @@ final class UpCommandTest extends TestCase
     use RunsACommandDirectly;
     use ScratchDirectory;
 
-    private string|false $savedPath = false;
+    private false | string $savedPath = false;
 
     protected function setUp(): void
     {

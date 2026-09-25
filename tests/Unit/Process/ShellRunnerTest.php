@@ -29,7 +29,7 @@ final class ShellRunnerTest extends TestCase
 {
     use ScratchDirectory;
 
-    private string|false $savedPath = false;
+    private false | string $savedPath = false;
 
     protected function setUp(): void
     {
