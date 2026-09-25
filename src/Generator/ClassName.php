@@ -15,9 +15,11 @@ namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
 
+use function explode;
 use function preg_match;
 use function sprintf;
 use function str_ends_with;
+use function trim;
 
 /**
  * Turns the name a user typed into the class name a generator writes.
@@ -46,6 +48,29 @@ final class ClassName
      * decides what may name a class.
      */
     private const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/';
+
+    /**
+     * A namespace: one name, or more names that backslashes join. Each name
+     * follows the identifier rule above. Leading and trailing backslashes are
+     * removed, because `\App` and `App\` both mean App.
+     */
+    public static function namespace(string $namespace): string
+    {
+        $trimmed = trim($namespace, '\\');
+
+        foreach (explode('\\', $trimmed) as $segment) {
+            if (0 === preg_match(self::PATTERN, $segment)) {
+                throw new Exception(
+                    sprintf(
+                        "'%s' is not a usable namespace; expected something like 'App' or 'Acme\\Shop'",
+                        $namespace
+                    )
+                );
+            }
+        }
+
+        return $trimmed;
+    }
 
     public static function suffixed(string $name, string $suffix): string
     {
