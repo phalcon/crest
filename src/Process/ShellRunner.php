@@ -95,7 +95,7 @@ final class ShellRunner implements Runner
         $process = proc_open($command, [], $pipes, $directory);
 
         if (false === $process) {
-            throw new Exception(sprintf('could not start %s', $command[0]));
+            throw new Exception(sprintf('could not start %s', $command[0])); // @codeCoverageIgnore
         }
 
         return $process;

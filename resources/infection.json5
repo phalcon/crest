@@ -140,6 +140,18 @@
         "NotIdentical": {
             "ignore": ["Crest\\Console\\Output::detectDecoration"]
         },
+        "ProtectedVisibility": {
+            // The default hooks run only for the commands that do not override
+            // them, so only the tests of those commands cover these lines, and
+            // they cannot see an override. The full suite kills both mutants:
+            // with a private hook, handle() calls the default and not the
+            // override, and the make:command, make:middleware and
+            // make:provider tests fail.
+            "ignore": [
+                "Crest\\Command\\Make\\NamedArtifactCommand::guidance",
+                "Crest\\Command\\Make\\NamedArtifactCommand::replacements"
+            ]
+        },
         "Throw_": {
             "ignore": [
                 "Crest\\ADR\\PhalconRouterResolver::router",

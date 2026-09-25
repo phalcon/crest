@@ -27,6 +27,10 @@ env:
   # dev dependency.
   EXTENSIONS: mbstring, zip
 
+  # The cphalcon constraint for the v5 variant. 5.18 is the first release with
+  # Phalcon\ADR.
+  PHALCON_CONSTRAINT: "^5.18"
+
 permissions: { }
 
 concurrency:
@@ -63,6 +67,9 @@ jobs:
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: "Validate composer"
+        run: composer validate --no-check-all --no-check-publish
+
       # No --ignore-platform-reqs: composer.json pins config.platform.php to
       # 8.1.0, so the lock resolves against the floor and installs cleanly on
       # every matrix cell.
@@ -77,8 +84,11 @@ jobs:
       - name: "PHPStan"
         run: composer analyze
 
+      - name: "PHP CS Fixer (dry-run)"
+        run: composer cs-fixer
+
   unit-tests:
-    name: "Unit tests"
+    name: "Unit tests (PHP ${{ matrix.php }}, Phalcon ${{ matrix.variant }})"
 
     permissions:
       contents: read
@@ -99,7 +109,8 @@ jobs:
           - '8.3'
           - '8.4'
           - '8.5'
-        phalcon:
+        variant:
+          # v5 = cphalcon C extension; v6 = phalcon/phalcon composer package
           - 'v5'
           - 'v6'
 
@@ -120,15 +131,17 @@ jobs:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # v5 only, with the same PIE install as resources/docker/Dockerfile.
+      # PIE writes to the extension directory, so it needs sudo. sudo resets
+      # PATH, so "$(which php)" names the PHP that setup-php installed.
       # phalcon/phalcon stays in vendor/, as in the v5 dev container. The
       # extension classes load first, so the package does not replace them.
       - name: "Install the Phalcon extension"
-        if: matrix.phalcon == 'v5'
+        if: matrix.variant == 'v5'
         env:
           PIE_VERSION: '1.5.0'
         run: |
           curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
-          php "${RUNNER_TEMP}/pie.phar" install --no-interaction 'phalcon/cphalcon:^5.18'
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
           php -m | grep -i phalcon
 
       # No --ignore-platform-reqs: composer.json pins config.platform.php to
@@ -191,7 +204,10 @@ jobs:
       - name: "Tests with coverage"
         run: composer test-coverage
 
+      # Push only: a pull request from a fork gets no SONAR_TOKEN. SonarQube
+      # runs before octocov, so a failed octocov gate cannot skip the upload.
       - name: "SonarQube Scan"
+        if: github.event_name == 'push'
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
