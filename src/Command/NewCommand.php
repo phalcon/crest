@@ -73,7 +73,7 @@ final class NewCommand extends Command
         Stub::PROJECT_PREFIX . 'config'     => 'crest.php',
         Stub::PROJECT_PREFIX . 'env'        => '.env',
         Stub::PROJECT_PREFIX . 'gitignore'  => '.gitignore',
-        Stub::PROJECT_PREFIX . 'htrouter'   => '.htrouter.php',
+        Stub::PROJECT_PREFIX . 'htrouter'   => ServeCommand::ROUTER,
         Stub::PROJECT_PREFIX . 'readme'     => 'README.md',
         Stub::PROJECT_PREFIX . 'compose'    => 'docker-compose.yml',
         Stub::PROJECT_PREFIX . 'dockerfile' => 'resources/docker/Dockerfile',
@@ -320,8 +320,7 @@ final class NewCommand extends Command
         $output->line();
         $output->line($cd);
         $output->line('    composer install');
-        // Until `crest serve` exists, the host way names the server directly.
-        $output->line('    php -S localhost:8080 -t public .htrouter.php');
+        $output->line('    crest serve');
         $output->line();
         $output->line(sprintf('Then GET / answers from %s/%s.php', self::ACTION_PATH, self::SEED));
     }

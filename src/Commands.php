@@ -27,6 +27,7 @@ use Crest\Command\Make\ProviderCommand;
 use Crest\Command\Make\ResponderCommand;
 use Crest\Command\NewCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
+use Crest\Command\ServeCommand;
 use Crest\Command\Stub\PublishCommand as StubPublishCommand;
 use Crest\Command\UpCommand;
 use Crest\Console\Registry;
@@ -73,6 +74,7 @@ final class Commands
             ->add('make:responder', ResponderCommand::class)
             ->add('new', NewCommand::class)
             ->add('route:list', RouteListCommand::class)
+            ->add('serve', ServeCommand::class, 'server')
             ->add('stub:publish', StubPublishCommand::class)
             ->add('up', UpCommand::class)
             ->withDiscovery(self::KEY);
