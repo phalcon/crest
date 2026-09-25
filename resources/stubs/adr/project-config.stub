@@ -11,4 +11,5 @@ return [
     'flavor'    => 'adr',
     'namespace' => '{{ namespace }}',
     'bootstrap' => {{ namespace }}\AppFront::class,
+    'paths'     => ['action' => '{{ actionPath }}'],
 ];

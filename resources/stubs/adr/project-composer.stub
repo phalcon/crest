@@ -4,6 +4,9 @@
         "php": ">={{ phpVersion }}",
         "{{ phalconPackage }}": "{{ phalconConstraint }}"
     },
+    "require-dev": {
+        "phalcon/crest": "{{ crestConstraint }}"
+    },
     "autoload": {
         "psr-4": {
             "{{ jsonNamespace }}\\": "src/"

@@ -22,10 +22,18 @@ Then open http://localhost:8080/.
 |---|---|
 | `public/index.php` | The web entry point |
 | `src/AppFront.php` | The front controller: container, providers, application |
-| `src/Action/` | One class for each route. `GET /` is `src/Action/Get.php` |
+| `{{ actionPath }}/` | One class for each route. `GET /` is `{{ actionPath }}/{{ seed }}.php` |
 | `crest.php` | The crest configuration |
 
 ## Next steps
 
-    crest make:action GET /hello
-    crest route:list
+Use the crest in `vendor/` for these commands. It uses the autoloader and
+the Phalcon of this project. On the host:
+
+    vendor/bin/crest make:action GET /hello
+    vendor/bin/crest route:list
+
+With docker:
+
+    docker compose exec {{ service }} vendor/bin/crest make:action GET /hello
+    docker compose exec {{ service }} vendor/bin/crest route:list
