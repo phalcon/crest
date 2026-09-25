@@ -25,6 +25,7 @@ for the same listing from the tool itself.
 | `make:responder` | create an ADR responder |
 | `new` | create an ADR project |
 | `route:list` | every route the application answers |
+| `serve` (`server`) | start PHP's built-in web server for the project |
 | `stub:publish` | copy packaged stubs into the project for editing |
 | `up` | start the project containers |
 
@@ -55,6 +56,29 @@ next steps:
 `crest down` stops and removes the containers. `up --build` rebuilds the image
 first, and `down --volumes` also removes the named volumes.
 
+Without docker, run `composer install`, then `crest serve`. It runs
+`php -S 127.0.0.1:8080 -t public .htrouter.php` in the project root, with the
+same router and document root as the container. The port is `--port`, else
+`APP_PORT` from the environment, else `APP_PORT` in the project `.env`, else
+8080. docker compose reads `APP_PORT` in the same order. `serve` reads `.env`
+as docker compose does: the last `APP_PORT` line wins, and `export`,
+`APP_PORT: <port>`, quotes and `#` comments are allowed. It does not expand
+`${...}`. Such a value stops `serve` with an error. `serve` finds the root
+from a subdirectory, and it does not need the crest in `vendor/`, so the
+global crest runs it. It stops before PHP starts if `.htrouter.php` or
+`vendor/autoload.php` is missing.
+
+The server uses the PHP that runs crest. PHP options on the command line, for
+example `-d extension=phalcon.so`, do not reach it. Put such settings in
+`php.ini`.
+
+Press Ctrl+C to stop the server. If the server continues to run, for example
+after crest was stopped in a different way, stop its PHP process:
+
+    pkill -f -- '-S 127.0.0.1:8080'
+
+Use your port if it is not 8080.
+
 `new`, `up`, `down` and `install` run before the project has a `vendor/`. Run
 them with a crest outside the project, for example one that you install with
 `composer global require phalcon/crest`.
@@ -78,7 +102,10 @@ publish with no name leaves the project stubs out, because they do nothing
 inside a project.
 
 You can change each project stub on its own, but `project-front`,
-`project-config` and `project-index` must agree with each other. Do not change
+`project-config` and `project-index` must agree with each other. Also,
+`project-dockerfile`, `project-compose` and `project-env` must agree with
+`serve`: keep `-t public .htrouter.php` in the `CMD`, and keep `APP_PORT`,
+with the default 8080, as the port variable. Do not change
 the name of the front controller class `AppFront` or the paths of the
 generated files, because `new` does not read them from the stubs. A published
 copy must use only the placeholders of the packaged copy. If a placeholder has
