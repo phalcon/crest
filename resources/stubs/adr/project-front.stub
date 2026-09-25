@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Phalcon\ADR\Application;
+use Phalcon\ADR\Front\AbstractHttpFront;
+use Phalcon\Container\Container;
+use Phalcon\Contracts\ADR\Application as ApplicationInterface;
+
+/**
+ * The front controller. public/index.php runs it for every request, and
+ * crest boots it for container:list and event:list.
+ *
+ * Add services by overriding registerProviders(); `crest make:provider`
+ * prints the override to paste here.
+ */
+final class AppFront extends AbstractHttpFront
+{
+    protected function getApplication(Container $container): ApplicationInterface
+    {
+        return (new Application($container))
+            ->setBaseNamespace('{{ actionNamespace }}')
+            ->setActionDirectory($this->projectRoot . '/{{ actionPath }}');
+    }
+}

@@ -1,0 +1,8 @@
+# Docker settings. docker-compose.yml reads them.
+PROJECT_PREFIX={{ project }}
+APP_PORT=8080
+
+# Set these to your host user and group IDs if they are not 1000.
+# Then the files that the container writes belong to you.
+UID=1000
+GID=1000

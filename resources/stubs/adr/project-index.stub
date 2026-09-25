@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+use {{ namespace }}\AppFront;
+
+$root = dirname(__DIR__);
+
+require_once $root . '/vendor/autoload.php';
+
+exit((new AppFront($root))->run());

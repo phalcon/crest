@@ -1,0 +1,15 @@
+{
+    "type": "project",
+    "require": {
+        "php": ">={{ phpVersion }}",
+        "{{ phalconPackage }}": "{{ phalconConstraint }}"
+    },
+    "autoload": {
+        "psr-4": {
+            "{{ jsonNamespace }}\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

@@ -37,6 +37,10 @@
                 // getcwd() returns false only when the working directory is
                 // unreadable, which the suite cannot produce.
                 "Crest\\Project\\Config::discover",
+                // Same as Config::discover: getcwd() returns false only when
+                // the working directory cannot be read, which the suite
+                // cannot cause.
+                "Crest\\Command\\NewCommand::parent",
                 // Environment branch. See the note on Identical below.
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
@@ -108,7 +112,9 @@
                 // NO_COLOR and the tty check both yield "undecorated" against
                 // the php://memory streams the suite uses, so the two branches
                 // cannot be told apart without a real terminal.
-                "Crest\\Console\\Output::detectDecoration"
+                "Crest\\Console\\Output::detectDecoration",
+                // The guard that the suite cannot reach. See Throw_.
+                "Crest\\Process\\ShellRunner::start"
             ]
         },
         "FunctionCallRemoval": {
@@ -126,14 +132,24 @@
                 "Crest\\Generator\\ArtifactWriter::write",
                 // Widening the slice by one includes the '--' token itself,
                 // which is never '--trace', '--help' or '-h'.
-                "Crest\\Console\\Kernel::beforeLiteral"
+                "Crest\\Console\\Kernel::beforeLiteral",
+                // The guard that the suite cannot reach. See Throw_.
+                "Crest\\Process\\ShellRunner::start"
             ]
         },
         "NotIdentical": {
             "ignore": ["Crest\\Console\\Output::detectDecoration"]
         },
         "Throw_": {
-            "ignore": ["Crest\\ADR\\PhalconRouterResolver::router"]
+            "ignore": [
+                "Crest\\ADR\\PhalconRouterResolver::router",
+                // proc_open() returns false only when it cannot create the
+                // process. ShellRunner::run() checks the program and the
+                // directory first, so the suite cannot make it fail. The same
+                // reason covers the FalseValue and IncrementInteger entries
+                // for this method.
+                "Crest\\Process\\ShellRunner::start"
+            ]
         },
         "UnwrapArrayValues": {
             // The routes are keyed by path so they can be sorted; table()
