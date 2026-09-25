@@ -118,7 +118,7 @@ final class StubContractsTest extends TestCase
 
             // The project stubs render a whole application, not one artifact
             // class. ProjectStubsTest holds their contract.
-            if (true === str_starts_with($name, 'project-')) {
+            if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
                 continue;
             }
 

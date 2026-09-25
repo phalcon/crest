@@ -14,11 +14,9 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command;
 
 use Crest\Command\UpCommand;
-use Crest\Commands;
-use Crest\Console\Kernel;
-use Crest\Console\Registry;
 use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\RunsACommandDirectly;
+use Crest\Tests\Support\RunsThroughTheKernel;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
@@ -30,6 +28,7 @@ use const PHP_EOL;
 final class UpCommandTest extends TestCase
 {
     use RunsACommandDirectly;
+    use RunsThroughTheKernel;
     use ScratchDirectory;
 
     private false | string $savedPath = false;
@@ -55,22 +54,24 @@ final class UpCommandTest extends TestCase
         // PATH. The user sees one crest line, not a PHP warning.
         putenv('PATH=' . $this->root . '/bin');
 
-        $kernel = new Kernel(
-            Commands::NAME,
-            (new Registry())->add('up', UpCommand::class),
-            Commands::PACKAGE,
-            $this->stdout,
-            $this->stderr,
-            false
-        );
-
-        $status = $kernel->handle(['crest', 'up']);
+        $status = $this->runThroughKernel('up', UpCommand::class, []);
 
         $this->assertSame(1, $status);
         $this->assertSame(
             "crest: 'docker' was not found; install it or add it to the PATH" . PHP_EOL,
             $this->readStderr()
         );
+    }
+
+    public function testAnEmptyDirectoryOptionMeansTheWorkingDirectory(): void
+    {
+        // `--directory="$DIR"` with an unset variable. As for `new`, empty
+        // reads as absent, not as a directory named ''.
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new UpCommand($runner), ['--directory=']);
+
+        $this->assertSame([[['docker', 'compose', 'up', '-d'], null]], $runner->calls);
     }
 
     public function testBuildRebuildsTheImagesFirst(): void

@@ -23,32 +23,18 @@ use function str_replace;
 /**
  * The tests that every Crest\Command\Make\NamedArtifactCommand must pass.
  *
- * A subclass sets the constants for its command and keeps only the tests that
- * are specific to that command. PHPUnit reports each test with the name of the
- * subclass, so a failure still identifies the command.
+ * A subclass gives the values for its command through the abstract methods
+ * and keeps only the tests that are specific to that command. PHPUnit reports
+ * each test with the name of the subclass, so a failure still identifies the
+ * command.
  */
 abstract class NamedArtifactCommandTestCase extends TestCase
 {
     use GeneratesInAScratchProject;
 
-    /** @var class-string<Command> */
-    protected const COMMAND = Command::class;
-
-    /** @var string */
-    protected const DECLARATION = '';
-
-    /** @var string */
-    protected const DIRECTORY = '';
-
-    /** @var string */
-    protected const NAME = '';
-
-    /** @var string */
-    protected const SUFFIX = '';
-
     protected function setUp(): void
     {
-        $this->startScratchProject(str_replace(':', '-', static::NAME), static::DIRECTORY);
+        $this->startScratchProject(str_replace(':', '-', $this->commandName()), $this->directory());
     }
 
     protected function tearDown(): void
@@ -72,21 +58,21 @@ abstract class NamedArtifactCommandTestCase extends TestCase
         $this->runCommand(['Sample']);
 
         $this->assertStringContainsString(
-            'Created ' . $this->file('Sample' . static::SUFFIX),
+            'Created ' . $this->file('Sample' . $this->suffix()),
             $this->readStdout()
         );
     }
 
     public function testDefinitionNamesItself(): void
     {
-        $class = static::COMMAND;
+        $class = $this->command();
 
-        $this->assertSame(static::NAME, (new $class())->define()->getName());
+        $this->assertSame($this->commandName(), (new $class())->define()->getName());
     }
 
     public function testForceOverwritesAnExistingFile(): void
     {
-        $file = $this->file('Sample' . static::SUFFIX);
+        $file = $this->file('Sample' . $this->suffix());
 
         $this->runCommand(['Sample']);
         file_put_contents($file, 'stale');
@@ -119,12 +105,12 @@ abstract class NamedArtifactCommandTestCase extends TestCase
     {
         // The configured path is only a default. A project that never had this
         // artifact does not have the directory.
-        $this->safeDeleteDirectory($this->root . '/' . static::DIRECTORY);
+        $this->safeDeleteDirectory($this->root . '/' . $this->directory());
 
         $status = $this->runCommand(['Sample']);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists($this->file('Sample' . static::SUFFIX));
+        $this->assertFileExists($this->file('Sample' . $this->suffix()));
     }
 
     public function testTheImportIsAliasedSoTheNameCanNeverCollide(): void
@@ -132,34 +118,64 @@ abstract class NamedArtifactCommandTestCase extends TestCase
         // The name that is only the suffix is the pathological case: the class
         // gets the same name as the contract or base class that the stub
         // imports. Without the alias, the generated file does not compile.
-        $status = $this->runCommand([static::SUFFIX]);
+        $status = $this->runCommand([$this->suffix()]);
 
         $this->assertSame(0, $status);
         $this->assertStringContainsString(
-            static::DECLARATION,
-            (string) file_get_contents($this->file(static::SUFFIX))
+            $this->declaration(),
+            (string) file_get_contents($this->file($this->suffix()))
         );
     }
 
     public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
     {
-        $status = $this->runCommand(['Sample' . static::SUFFIX]);
+        $status = $this->runCommand(['Sample' . $this->suffix()]);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists($this->file('Sample' . static::SUFFIX));
-        $this->assertFileDoesNotExist($this->file('Sample' . static::SUFFIX . static::SUFFIX));
+        $this->assertFileExists($this->file('Sample' . $this->suffix()));
+        $this->assertFileDoesNotExist($this->file('Sample' . $this->suffix() . $this->suffix()));
     }
+
+    /**
+     * The command under test.
+     *
+     * @return class-string<Command>
+     */
+    abstract protected function command(): string;
+
+    /**
+     * The name that the command registers, for example `make:middleware`.
+     * Not name(): PHPUnit's TestCase declares that method final.
+     */
+    abstract protected function commandName(): string;
+
+    /**
+     * The class declaration that the stub writes when the name is only the
+     * suffix, for example `final class Middleware implements
+     * MiddlewareContract`.
+     */
+    abstract protected function declaration(): string;
+
+    /**
+     * Where the command writes, relative to the project root.
+     */
+    abstract protected function directory(): string;
 
     /**
      * @param list<string> $arguments
      */
     protected function runCommand(array $arguments): int
     {
-        return $this->runProjectCommand(static::NAME, static::COMMAND, $arguments);
+        return $this->runProjectCommand($this->commandName(), $this->command(), $arguments);
     }
+
+    /**
+     * The suffix of the class name, for example `Middleware`.
+     */
+    abstract protected function suffix(): string;
 
     private function file(string $class): string
     {
-        return $this->root . '/' . static::DIRECTORY . '/' . $class . '.php';
+        return $this->root . '/' . $this->directory() . '/' . $class . '.php';
     }
 }

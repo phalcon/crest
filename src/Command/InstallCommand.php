@@ -26,9 +26,10 @@ final class InstallCommand extends ComposeCommand
 {
     /**
      * The service in docker-compose.yml. crest wrote that file
-     * (project-compose.stub), so the name belongs to crest.
+     * (project-compose.stub), so the name belongs to crest. NewCommand writes
+     * this value into the stub.
      */
-    private const SERVICE = 'app';
+    public const SERVICE = 'app';
 
     public function define(): Definition
     {

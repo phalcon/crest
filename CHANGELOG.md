@@ -30,6 +30,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `up`, `down` and `install`, running `docker compose up -d`, `docker compose down` and `composer install` in the `app` container of a project that `new` created. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
 - Added `Crest\Process\Runner`, the seam through which commands run external programs, with `ShellRunner` as the default. A missing program or working directory is reported as a crest error. [#8](https://github.com/phalcon/crest/issues/8)
 - Added `Crest\Generator\ClassName::namespace()`, validating a namespace with the same identifier rule as a class name. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Command\Make\NamedArtifactCommand`, the base of `make:command`, `make:middleware`, `make:provider` and `make:responder`. The four commands repeated the same `handle()`; each now gives only its key, its suffix and the instructions it prints after the file is written.
 
 ### Changed
 

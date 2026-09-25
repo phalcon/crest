@@ -32,6 +32,13 @@ use function str_replace;
 final class Stub
 {
     /**
+     * The name prefix of the stubs that `crest new` renders into a new
+     * project. They are not artifact stubs, so stub:publish with no name
+     * leaves them out.
+     */
+    public const PROJECT_PREFIX = 'project-';
+
+    /**
      * Where a project keeps the stubs it has taken over, relative to its root.
      *
      * Private: callers ask for a path rather than assembling one, so the layout

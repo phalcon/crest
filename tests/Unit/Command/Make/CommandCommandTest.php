@@ -23,16 +23,6 @@ use const PHP_EOL;
 
 final class CommandCommandTest extends NamedArtifactCommandTestCase
 {
-    protected const COMMAND     = CommandCommand::class;
-
-    protected const DECLARATION = 'final class Command extends CrestCommand';
-
-    protected const DIRECTORY   = 'src/Command';
-
-    protected const NAME        = 'make:command';
-
-    protected const SUFFIX      = 'Command';
-
     public function testTheExtraBlockIsPrintedWithEscapedBackslashes(): void
     {
         // The registry has no other way in, so the block is the deliverable.
@@ -116,5 +106,30 @@ final class CommandCommandTest extends NamedArtifactCommandTestCase
             $expected,
             (string) file_get_contents($this->root . '/src/Command/GreetCommand.php')
         );
+    }
+
+    protected function command(): string
+    {
+        return CommandCommand::class;
+    }
+
+    protected function commandName(): string
+    {
+        return 'make:command';
+    }
+
+    protected function declaration(): string
+    {
+        return 'final class Command extends CrestCommand';
+    }
+
+    protected function directory(): string
+    {
+        return 'src/Command';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Command';
     }
 }

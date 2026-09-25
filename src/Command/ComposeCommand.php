@@ -44,7 +44,7 @@ abstract class ComposeCommand extends Command
 
     /**
      * Runs `docker compose` with the arguments, in --directory if the user
-     * gave one.
+     * gave one. An empty value reads as absent, as it does for `new`.
      *
      * @param list<string> $arguments
      */
@@ -52,7 +52,7 @@ abstract class ComposeCommand extends Command
     {
         return $this->runner->run(
             ['docker', 'compose', ...$arguments],
-            $input->optionStringOrNull('directory')
+            $input->optionStringOrNull('directory') ?: null
         );
     }
 }

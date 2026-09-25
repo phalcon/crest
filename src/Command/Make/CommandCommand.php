@@ -42,10 +42,6 @@ use function substr;
  */
 final class CommandCommand extends NamedArtifactCommand
 {
-    protected const KEY    = 'command';
-
-    protected const SUFFIX = 'Command';
-
     public function define(): Definition
     {
         return Definition::for('make:command', 'Create a crest command')
@@ -72,9 +68,19 @@ final class CommandCommand extends NamedArtifactCommand
         $output->line('    }');
     }
 
+    protected function key(): string
+    {
+        return 'command';
+    }
+
     protected function replacements(Placement $placement): array
     {
         return ['command' => $this->registryName($placement->class)];
+    }
+
+    protected function suffix(): string
+    {
+        return 'Command';
     }
 
     /**
@@ -84,6 +90,6 @@ final class CommandCommand extends NamedArtifactCommand
      */
     private function registryName(string $class): string
     {
-        return strtolower(substr($class, 0, -strlen(self::SUFFIX))) ?: strtolower($class);
+        return strtolower(substr($class, 0, -strlen($this->suffix()))) ?: strtolower($class);
     }
 }

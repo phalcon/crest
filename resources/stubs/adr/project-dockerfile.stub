@@ -9,11 +9,12 @@ ARG USER=app
 ARG GROUP=app
 
 # System packages and a user with the host UID and GID. Files that the
-# container writes through the bind mount then belong to you.
+# container writes through the bind mount then belong to you. -o accepts an ID
+# that the image already uses, for example GID 20 on macOS.
 RUN <<EOT
 set -eux
-groupadd -g "${GID}" "${GROUP}"
-useradd -l -m -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
+groupadd -o -g "${GID}" "${GROUP}"
+useradd -l -m -o -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
 apt-get update -y
 apt-get install -yq --no-install-recommends curl git libzip-dev unzip zip
 docker-php-ext-install zip
@@ -31,11 +32,12 @@ COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
 # To change the variant, change these two items together:
 #   - this block: active for v5, commented out for v6
 #   - "require" in composer.json: "ext-phalcon" for v5, "phalcon/phalcon" for v6
+{{ v5 }}ARG PIE_VERSION=1.5.0
 {{ v5 }}RUN <<EOT
 {{ v5 }}set -eux
 {{ v5 }}apt-get update -y
 {{ v5 }}apt-get install -yq --no-install-recommends ${PHPIZE_DEPS} libtool
-{{ v5 }}curl -fsSL https://github.com/php/pie/releases/latest/download/pie.phar -o /usr/local/bin/pie
+{{ v5 }}curl -fsSL https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar -o /usr/local/bin/pie
 {{ v5 }}chmod +x /usr/local/bin/pie
 {{ v5 }}pie install --no-interaction phalcon/cphalcon:^5.18
 {{ v5 }}php -m | grep -i phalcon

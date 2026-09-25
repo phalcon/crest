@@ -49,14 +49,6 @@ final class PublishCommand extends ProjectCommand
      */
     private const NAME = '/^[A-Za-z0-9_-]+$/';
 
-    /**
-     * The prefix of the stubs that `crest new` renders. They only have an
-     * effect in the directory `new` runs from, not in a project. Thus a
-     * publish with no name leaves them out. A publish by name still copies
-     * them.
-     */
-    private const PROJECT_STUBS = 'project-';
-
     public function define(): Definition
     {
         return Definition::for('stub:publish', 'Copy packaged stubs into the project for editing')
@@ -122,8 +114,11 @@ final class PublishCommand extends ProjectCommand
 
         $found = [];
 
+        // The project stubs only have an effect in the directory `new` runs
+        // from, not in a project. Thus a publish with no name leaves them out.
+        // A publish by name still copies them.
         foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
-            if (true === str_starts_with(basename($path), self::PROJECT_STUBS)) {
+            if (true === str_starts_with(basename($path), Stub::PROJECT_PREFIX)) {
                 continue;
             }
 

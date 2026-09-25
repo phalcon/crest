@@ -42,7 +42,7 @@ Only the `adr` flavor has generators. A `cli` or `mvc` project can still run
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
-| `--force` | write into a directory that is not empty |
+| `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 The project goes into the working directory, or into `--directory` if you give
 one. `new` runs nothing: no composer, no docker, no network. It prints the

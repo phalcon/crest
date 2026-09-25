@@ -34,10 +34,6 @@ use function sprintf;
  */
 final class ProviderCommand extends NamedArtifactCommand
 {
-    protected const KEY    = 'provider';
-
-    protected const SUFFIX = 'Provider';
-
     public function define(): Definition
     {
         return Definition::for('make:provider', 'Create a service provider')
@@ -63,5 +59,15 @@ final class ProviderCommand extends NamedArtifactCommand
         $output->line('    }');
         $output->line();
         $output->line('Keep the parent call: it is what registers the ADR services.');
+    }
+
+    protected function key(): string
+    {
+        return 'provider';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Provider';
     }
 }

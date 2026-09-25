@@ -25,12 +25,14 @@ use Crest\Paths;
 use Crest\Project\Flavor;
 use FilesystemIterator;
 
+use function escapeshellarg;
 use function file_exists;
 use function getcwd;
 use function is_dir;
 use function preg_match;
 use function rtrim;
 use function sprintf;
+use function str_contains;
 use function str_replace;
 use function strtolower;
 use function version_compare;
@@ -43,8 +45,9 @@ use function version_compare;
  * ProjectCommand. It gets all values from its arguments, and it writes
  * crest.php. It does not read it.
  *
- * It runs nothing: no composer, no docker, no network. Thus it cannot stop
- * halfway. Either it writes the tree, or an error tells why it did not.
+ * It runs nothing: no composer, no docker, no network. It checks all its
+ * input before it writes the first file. Only a write error, for example a
+ * full disk, can stop it after it has written some of the files.
  */
 final class NewCommand extends Command
 {
@@ -59,16 +62,16 @@ final class NewCommand extends Command
      * uses the action stub with its own placeholders.
      */
     private const FILES = [
-        'project-composer'   => 'composer.json',
-        'project-config'     => 'crest.php',
-        'project-env'        => '.env',
-        'project-gitignore'  => '.gitignore',
-        'project-htrouter'   => '.htrouter.php',
-        'project-readme'     => 'README.md',
-        'project-compose'    => 'docker-compose.yml',
-        'project-dockerfile' => 'resources/docker/Dockerfile',
-        'project-index'      => 'public/index.php',
-        'project-front'      => 'src/AppFront.php',
+        Stub::PROJECT_PREFIX . 'composer'   => 'composer.json',
+        Stub::PROJECT_PREFIX . 'config'     => 'crest.php',
+        Stub::PROJECT_PREFIX . 'env'        => '.env',
+        Stub::PROJECT_PREFIX . 'gitignore'  => '.gitignore',
+        Stub::PROJECT_PREFIX . 'htrouter'   => '.htrouter.php',
+        Stub::PROJECT_PREFIX . 'readme'     => 'README.md',
+        Stub::PROJECT_PREFIX . 'compose'    => 'docker-compose.yml',
+        Stub::PROJECT_PREFIX . 'dockerfile' => 'resources/docker/Dockerfile',
+        Stub::PROJECT_PREFIX . 'index'      => 'public/index.php',
+        Stub::PROJECT_PREFIX . 'front'      => 'src/AppFront.php',
     ];
 
     /**
@@ -109,7 +112,7 @@ final class NewCommand extends Command
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
             ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
-            ->option('force', 'Write into a directory that is not empty');
+            ->option('force', 'Write into a directory that is not empty, and overwrite files with the same names');
     }
 
     public function handle(Input $input, Output $output): int
@@ -148,6 +151,7 @@ final class NewCommand extends Command
             'phalconVariant'    => $variant,
             'phpVersion'        => $php,
             'project'           => $name,
+            'service'           => InstallCommand::SERVICE,
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',
@@ -270,17 +274,20 @@ final class NewCommand extends Command
      */
     private function report(Output $output, string $shown): void
     {
+        // Quoted when the path has a space, so that the line works when pasted.
+        $cd = sprintf('    cd %s', true === str_contains($shown, ' ') ? escapeshellarg($shown) : $shown);
+
         $output->success(sprintf('Created %s/', $shown));
         $output->line();
         $output->line('Nothing runs it yet. With docker:');
         $output->line();
-        $output->line(sprintf('    cd %s', $shown));
+        $output->line($cd);
         $output->line('    crest up');
         $output->line('    crest install');
         $output->line();
         $output->line('Or with PHP and composer on the host:');
         $output->line();
-        $output->line(sprintf('    cd %s', $shown));
+        $output->line($cd);
         $output->line('    composer install');
         // Until `crest serve` exists, the host way names the server directly.
         $output->line('    php -S localhost:8080 -t public .htrouter.php');

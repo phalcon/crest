@@ -14,19 +14,22 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command;
 
 use Crest\Command\NewCommand;
-use Crest\Commands;
-use Crest\Console\Kernel;
-use Crest\Console\Registry;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Tests\Support\GeneratesInAScratchProject;
+use FilesystemIterator;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
 use function json_decode;
 use function mkdir;
+use function preg_match;
+use function sprintf;
 
 use const JSON_THROW_ON_ERROR;
 use const PHP_EOL;
@@ -43,6 +46,15 @@ final class NewCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->endScratchProject();
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function variants(): iterable
+    {
+        yield 'v5' => ['v5'];
+        yield 'v6' => ['v6'];
     }
 
     public function testANamespacedRootReachesEveryFile(): void
@@ -288,6 +300,36 @@ final class NewCommandTest extends TestCase
         $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
     }
 
+    /**
+     * @dataProvider variants
+     */
+    public function testNoPlaceholderIsLeftInAnyWrittenFile(string $variant): void
+    {
+        // ProjectStubsTest renders the stubs with its own values. This test
+        // uses the values that NewCommand supplies, so a key that NewCommand
+        // does not supply fails here.
+        $this->runCommand(['my-app', '--phalcon', $variant]);
+
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->root . '/my-app', FilesystemIterator::SKIP_DOTS)
+        );
+
+        $scanned = 0;
+
+        /** @var SplFileInfo $file */
+        foreach ($files as $file) {
+            $scanned++;
+
+            $this->assertStringNotContainsString(
+                '{{',
+                (string) file_get_contents($file->getPathname()),
+                sprintf('%s still has a placeholder', $file->getPathname())
+            );
+        }
+
+        $this->assertGreaterThan(0, $scanned);
+    }
+
     public function testSurroundingBackslashesAreDropped(): void
     {
         $this->runCommand(['my-app', '--namespace', '\\Acme\\']);
@@ -335,6 +377,21 @@ final class NewCommandTest extends TestCase
         );
     }
 
+    public function testTheDockerfileAcceptsIdsThatTheImageAlreadyUses(): void
+    {
+        // GID 20 is the main group on macOS, and the Debian image already has
+        // it. Without -o, groupadd fails and the build stops.
+        $this->runCommand(['my-app']);
+
+        $dockerfile = $this->read('resources/docker/Dockerfile');
+
+        $this->assertStringContainsString('groupadd -o -g "${GID}" "${GROUP}"', $dockerfile);
+        $this->assertStringContainsString(
+            'useradd -l -m -o -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"',
+            $dockerfile
+        );
+    }
+
     public function testTheDockerfileCommentsTheExtensionOutForV6(): void
     {
         $this->runCommand(['my-app', '--phalcon', 'v6']);
@@ -357,6 +414,25 @@ final class NewCommandTest extends TestCase
         $this->assertStringContainsString(
             'CMD ["php", "-S", "0.0.0.0:8080", "-t", "public", ".htrouter.php"]',
             $dockerfile
+        );
+    }
+
+    public function testTheDockerfileInstallsTheExtensionVersionThatComposerRequires(): void
+    {
+        // The constraint is in two places: NewCommand writes it into
+        // composer.json, and the Dockerfile stub has its own copy. They must
+        // agree.
+        $this->runCommand(['my-app']);
+
+        preg_match(
+            '#^pie install --no-interaction phalcon/cphalcon:(\S+)$#m',
+            $this->read('resources/docker/Dockerfile'),
+            $matches
+        );
+
+        $this->assertSame(
+            ['php' => '>=8.4', 'ext-phalcon' => $matches[1] ?? ''],
+            $this->composer()['require']
         );
     }
 
@@ -578,15 +654,6 @@ final class NewCommandTest extends TestCase
      */
     private function runInWorkingDirectory(array $arguments): int
     {
-        $kernel = new Kernel(
-            Commands::NAME,
-            (new Registry())->add('new', NewCommand::class),
-            Commands::PACKAGE,
-            $this->stdout,
-            $this->stderr,
-            false
-        );
-
-        return $kernel->handle(['crest', 'new', ...$arguments]);
+        return $this->runThroughKernel('new', NewCommand::class, $arguments);
     }
 }

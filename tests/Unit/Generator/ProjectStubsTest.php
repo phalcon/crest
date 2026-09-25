@@ -57,6 +57,7 @@ final class ProjectStubsTest extends TestCase
         'phalconVariant'    => 'v5',
         'phpVersion'        => '8.4',
         'project'           => 'my-app',
+        'service'           => 'app',
         'v5'                => '',
     ];
 
@@ -86,7 +87,7 @@ final class ProjectStubsTest extends TestCase
     private static function packagedNames(): array
     {
         $names = [];
-        $found = glob(Stub::packagedDirectory(Paths::stubs(), self::FLAVOR) . '/project-*.stub');
+        $found = glob(Stub::packagedDirectory(Paths::stubs(), self::FLAVOR) . '/' . Stub::PROJECT_PREFIX . '*.stub');
 
         foreach ($found ?: [] as $file) {
             $names[] = basename($file, '.stub');

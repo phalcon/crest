@@ -22,17 +22,6 @@ use const PHP_EOL;
 
 final class ProviderCommandTest extends NamedArtifactCommandTestCase
 {
-    protected const COMMAND     = ProviderCommand::class;
-
-    // Collection is left unaliased: no artifact suffix can produce that name.
-    protected const DECLARATION = 'final class Provider implements ProviderContract';
-
-    protected const DIRECTORY   = 'src/Provider';
-
-    protected const NAME        = 'make:provider';
-
-    protected const SUFFIX      = 'Provider';
-
     public function testTheRegistrationSnippetIsPrintedWithTheParentCall(): void
     {
         // The whole hint is the deliverable, asserted as one block: the blank
@@ -88,5 +77,31 @@ final class ProviderCommandTest extends NamedArtifactCommandTestCase
             $expected,
             (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
         );
+    }
+
+    protected function command(): string
+    {
+        return ProviderCommand::class;
+    }
+
+    protected function commandName(): string
+    {
+        return 'make:provider';
+    }
+
+    protected function declaration(): string
+    {
+        // Collection is left unaliased: no artifact suffix can produce that name.
+        return 'final class Provider implements ProviderContract';
+    }
+
+    protected function directory(): string
+    {
+        return 'src/Provider';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Provider';
     }
 }

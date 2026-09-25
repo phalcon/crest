@@ -1,5 +1,5 @@
 services:
-  app:
+  {{ service }}:
     build:
       context: .
       dockerfile: resources/docker/Dockerfile

@@ -20,16 +20,6 @@ use function file_get_contents;
 
 final class ResponderCommandTest extends NamedArtifactCommandTestCase
 {
-    protected const COMMAND     = ResponderCommand::class;
-
-    protected const DECLARATION = 'final class Responder implements ResponderContract';
-
-    protected const DIRECTORY   = 'src/Responder';
-
-    protected const NAME        = 'make:responder';
-
-    protected const SUFFIX      = 'Responder';
-
     public function testTheWholeResponderIsRendered(): void
     {
         // Asserted whole rather than by substring: this is generated code nobody
@@ -66,5 +56,30 @@ final class ResponderCommandTest extends NamedArtifactCommandTestCase
             $expected,
             (string) file_get_contents($this->root . '/src/Responder/AlbumResponder.php')
         );
+    }
+
+    protected function command(): string
+    {
+        return ResponderCommand::class;
+    }
+
+    protected function commandName(): string
+    {
+        return 'make:responder';
+    }
+
+    protected function declaration(): string
+    {
+        return 'final class Responder implements ResponderContract';
+    }
+
+    protected function directory(): string
+    {
+        return 'src/Responder';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Responder';
     }
 }

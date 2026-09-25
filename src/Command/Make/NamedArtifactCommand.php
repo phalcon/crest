@@ -23,29 +23,23 @@ use function sprintf;
 /**
  * Base for a make:* command that writes one class from a user-given name.
  *
- * A subclass sets KEY and SUFFIX, and its definition must declare a `name`
- * argument and a `--force` option: this class reads both. KEY selects the
- * configured path, the namespace and the stub.
+ * A subclass gives key() and suffix(), and its definition must declare a
+ * `name` argument and a `--force` option: this class reads both.
  *
  * A subclass that must tell the developer how to wire the class overrides
  * guidance(). A subclass whose stub needs more values overrides replacements().
  */
 abstract class NamedArtifactCommand extends ProjectCommand
 {
-    /** @var string */
-    protected const KEY = '';
-
-    /** @var string */
-    protected const SUFFIX = '';
-
     public function handle(Input $input, Output $output): int
     {
+        $key       = $this->key();
         $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), static::KEY, static::SUFFIX);
+        $placement = $this->placement($config, $input->argumentString('name'), $key, $this->suffix());
 
         $this->writer($config)->render(
             $placement->file,
-            static::KEY,
+            $key,
             [
                 'namespace' => $placement->namespace,
                 'class'     => $placement->class,
@@ -68,6 +62,12 @@ abstract class NamedArtifactCommand extends ProjectCommand
     }
 
     /**
+     * The configuration key. It selects the configured path, the namespace and
+     * the stub.
+     */
+    abstract protected function key(): string;
+
+    /**
      * Stub values in addition to `namespace` and `class`.
      *
      * @return array<string, string>
@@ -76,4 +76,9 @@ abstract class NamedArtifactCommand extends ProjectCommand
     {
         return [];
     }
+
+    /**
+     * The suffix of the class name, for example `Middleware`.
+     */
+    abstract protected function suffix(): string;
 }

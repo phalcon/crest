@@ -31,10 +31,6 @@ use function sprintf;
  */
 final class MiddlewareCommand extends NamedArtifactCommand
 {
-    protected const KEY    = 'middleware';
-
-    protected const SUFFIX = 'Middleware';
-
     public function define(): Definition
     {
         return Definition::for('make:middleware', 'Create an ADR middleware')
@@ -58,5 +54,15 @@ final class MiddlewareCommand extends NamedArtifactCommand
             "The key is a namespace suffix under the base namespace: '' guards every "
             . "action, '\\Album' only the actions beneath it."
         );
+    }
+
+    protected function key(): string
+    {
+        return 'middleware';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Middleware';
     }
 }

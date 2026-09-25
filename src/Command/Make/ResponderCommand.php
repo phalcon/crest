@@ -29,10 +29,6 @@ use Crest\Console\Parsing\Definition;
  */
 final class ResponderCommand extends NamedArtifactCommand
 {
-    protected const KEY    = 'responder';
-
-    protected const SUFFIX = 'Responder';
-
     public function define(): Definition
     {
         return Definition::for('make:responder', 'Create an ADR responder')
@@ -41,5 +37,15 @@ final class ResponderCommand extends NamedArtifactCommand
             // without consulting one, so passing it would state something that
             // is never read.
             ->option('force', 'Overwrite an existing responder');
+    }
+
+    protected function key(): string
+    {
+        return 'responder';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Responder';
     }
 }

@@ -187,7 +187,7 @@ final class PublishCommandTest extends TestCase
     {
         // They only have an effect in the directory `crest new` runs from.
         // In a project they do nothing.
-        $projectStubs = glob(Paths::stubs() . '/adr/project-*.stub') ?: [];
+        $projectStubs = glob(Paths::stubs() . '/adr/' . Stub::PROJECT_PREFIX . '*.stub') ?: [];
 
         $this->assertNotEmpty($projectStubs);
 
@@ -268,7 +268,7 @@ final class PublishCommandTest extends TestCase
         foreach (glob(Paths::stubs() . '/adr/*.stub') ?: [] as $path) {
             $name = basename($path, '.stub');
 
-            if (true === str_starts_with($name, 'project-')) {
+            if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
                 continue;
             }
 

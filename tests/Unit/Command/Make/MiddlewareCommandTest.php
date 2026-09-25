@@ -22,16 +22,6 @@ use const PHP_EOL;
 
 final class MiddlewareCommandTest extends NamedArtifactCommandTestCase
 {
-    protected const COMMAND     = MiddlewareCommand::class;
-
-    protected const DECLARATION = 'final class Middleware implements MiddlewareContract';
-
-    protected const DIRECTORY   = 'src/Middleware';
-
-    protected const NAME        = 'make:middleware';
-
-    protected const SUFFIX      = 'Middleware';
-
     public function testTheRegistrationSnippetIsPrintedWithTheFullClassName(): void
     {
         // The generated class is inert until the router names it, and crest will
@@ -84,5 +74,30 @@ final class MiddlewareCommandTest extends NamedArtifactCommandTestCase
             $expected,
             (string) file_get_contents($this->root . '/src/Middleware/AuthMiddleware.php')
         );
+    }
+
+    protected function command(): string
+    {
+        return MiddlewareCommand::class;
+    }
+
+    protected function commandName(): string
+    {
+        return 'make:middleware';
+    }
+
+    protected function declaration(): string
+    {
+        return 'final class Middleware implements MiddlewareContract';
+    }
+
+    protected function directory(): string
+    {
+        return 'src/Middleware';
+    }
+
+    protected function suffix(): string
+    {
+        return 'Middleware';
     }
 }
