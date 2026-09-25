@@ -55,14 +55,34 @@ next steps:
 `crest down` stops and removes the containers. `up --build` rebuilds the image
 first, and `down --volumes` also removes the named volumes.
 
+`new`, `up`, `down` and `install` run before the project has a `vendor/`. Run
+them with a crest outside the project, for example one that you install with
+`composer global require phalcon/crest`.
+
+The generated project requires `phalcon/crest` as a dev dependency. The
+commands that work on the project, for example `make:action` and
+`route:list`, need the autoloader and the Phalcon of the project. After
+`crest install` or `composer install`, run them with the crest in `vendor/`:
+
+    vendor/bin/crest make:action GET /hello
+    docker compose exec app vendor/bin/crest make:action GET /hello
+
 The files come from the `project-*` stubs. To change them, publish them by
-name in the directory that you run `new` from, then edit the copies:
+name in the directory that the project goes into (the working directory, or
+`--directory`), then edit the copies:
 
     crest stub:publish project-front
 
-`stub:publish` reads the project configuration, so that directory needs a
-`crest.php`. `<?php return [];` is enough. A publish with no name leaves the
-project stubs out, because they do nothing inside a project.
+A project stub needs no `crest.php`, and it always uses the `adr` flavor. A
+publish with no name leaves the project stubs out, because they do nothing
+inside a project.
+
+You can change each project stub on its own, but `project-front`,
+`project-config` and `project-index` must agree with each other. Do not change
+the name of the front controller class `AppFront` or the paths of the
+generated files, because `new` does not read them from the stubs. A published
+copy must use only the placeholders of the packaged copy. If a placeholder has
+no value, `new` stops before it writes a file.
 
 ## Commands that boot the project
 

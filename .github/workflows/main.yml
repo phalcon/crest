@@ -21,11 +21,10 @@ env:
   LANGUAGE: en_US.UTF-8
   LC_ALL: en_US.UTF-8
 
-  # PHP extensions required by Composer and the suite. No Phalcon extension:
-  # this workflow runs the v6 variant, where Phalcon arrives as the
-  # phalcon/phalcon composer dev dependency. When ext-phalcon 5.18 ships, the
-  # v5 variant is added by extending the matrix and installing the extension
-  # through setup-php's `extensions` input.
+  # PHP extensions required by Composer and the suite. The Phalcon extension is
+  # not here: the unit-tests job installs it for the v5 variant only. The v6
+  # variant, and the other jobs, get Phalcon from the phalcon/phalcon composer
+  # dev dependency.
   EXTENSIONS: mbstring, zip
 
 permissions: { }
@@ -100,6 +99,9 @@ jobs:
           - '8.3'
           - '8.4'
           - '8.5'
+        phalcon:
+          - 'v5'
+          - 'v6'
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,6 +118,18 @@ jobs:
           extensions: ${{ env.EXTENSIONS }}
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v5 only, with the same PIE install as resources/docker/Dockerfile.
+      # phalcon/phalcon stays in vendor/, as in the v5 dev container. The
+      # extension classes load first, so the package does not replace them.
+      - name: "Install the Phalcon extension"
+        if: matrix.phalcon == 'v5'
+        env:
+          PIE_VERSION: '1.5.0'
+        run: |
+          curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
+          php "${RUNNER_TEMP}/pie.phar" install --no-interaction 'phalcon/cphalcon:^5.18'
+          php -m | grep -i phalcon
 
       # No --ignore-platform-reqs: composer.json pins config.platform.php to
       # 8.1.0, so the lock resolves against the floor and installs cleanly on

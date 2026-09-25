@@ -20,19 +20,33 @@ Command line application for Phalcon - generators, introspection and project too
 ## Requirements
 
 - PHP `^8.1`
-- Phalcon, either the `ext-phalcon` C extension (`^5`) or the `phalcon/phalcon` PHP
+- Phalcon, either the `ext-phalcon` C extension (`^5.18`) or the `phalcon/phalcon` PHP
   implementation (`^6`) - crest itself needs neither to run
 
 ## Install
 
+In a project:
+
     composer require --dev phalcon/crest
 
+To create projects, also install crest globally. The global composer `vendor/bin`
+directory must be in your `PATH`:
+
+    composer global require phalcon/crest
+
 ## Usage
+
+In a project, use the crest in `vendor/`. The commands that work on the project need
+the project autoloader and its Phalcon:
 
     vendor/bin/crest                      list available commands
     vendor/bin/crest about                environment and version report
     vendor/bin/crest make:action GET /company/all
-    vendor/bin/crest new my-app           create an ADR project
+
+To create a project, use the global crest. The new project requires `phalcon/crest`, so
+after `composer install` it has its own `vendor/bin/crest`:
+
+    crest new my-app                      create an ADR project
 
 ## Global options
 
