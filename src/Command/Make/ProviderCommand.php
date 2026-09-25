@@ -14,7 +14,6 @@ declare(strict_types=1);
 namespace Crest\Command\Make;
 
 use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
 use Crest\Generator\Placement;
 
 use function sprintf;
@@ -34,11 +33,14 @@ use function sprintf;
  */
 final class ProviderCommand extends NamedArtifactCommand
 {
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:provider', 'Create a service provider')
-            ->argument('name', true, 'Provider name, e.g. Cache')
-            ->option('force', 'Overwrite an existing provider');
+        return 'Create a service provider';
+    }
+
+    protected function example(): string
+    {
+        return 'Cache';
     }
 
     protected function guidance(Placement $placement, Output $output): void

@@ -14,7 +14,6 @@ declare(strict_types=1);
 namespace Crest\Command\Make;
 
 use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
 use Crest\Generator\Placement;
 
 use function sprintf;
@@ -31,11 +30,14 @@ use function sprintf;
  */
 final class MiddlewareCommand extends NamedArtifactCommand
 {
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:middleware', 'Create an ADR middleware')
-            ->argument('name', true, 'Middleware name, e.g. Auth')
-            ->option('force', 'Overwrite an existing middleware');
+        return 'Create an ADR middleware';
+    }
+
+    protected function example(): string
+    {
+        return 'Auth';
     }
 
     protected function guidance(Placement $placement, Output $output): void

@@ -58,6 +58,13 @@ final class NewCommand extends Command
     private const ACTION_PATH = 'src/Action';
 
     /**
+     * The crest that the new project requires. This crest creates the project,
+     * and the project crest (vendor/bin/crest) runs the project commands,
+     * because they need the project autoloader and its Phalcon.
+     */
+    private const CREST = 'dev-master';
+
+    /**
      * Stub name => path in the new project. The seed action is not here: it
      * uses the action stub with its own placeholders.
      */
@@ -105,6 +112,35 @@ final class NewCommand extends Command
      */
     private const PHP_FLOOR = '8.1';
 
+    /**
+     * The class of the seed action, which answers GET /. This is a copy of the
+     * framework routing rule, because there is no vendor/ to ask yet.
+     * GeneratedProjectTest sends GET / through the generated application to
+     * make sure that the copy is correct.
+     */
+    private const SEED = 'Get';
+
+    /**
+     * The directory that the project goes into.
+     *
+     * --directory is the global project-root option. This command has no
+     * project yet, so for it the option names where the project goes.
+     *
+     * The project stub overrides are also read from here. stub:publish calls
+     * this method, so that it writes the overrides where this command reads
+     * them.
+     *
+     * An empty value reads as absent, as optionString() reads every other
+     * option. Otherwise `--directory="$DIR"` with an unset variable puts the
+     * project in the filesystem root.
+     */
+    public static function parent(Input $input): string
+    {
+        $directory = $input->optionString('directory');
+
+        return rtrim('' === $directory ? (string) getcwd() : $directory, '/');
+    }
+
     public function define(): Definition
     {
         return Definition::for('new', 'Create an ADR project')
@@ -130,7 +166,7 @@ final class NewCommand extends Command
 
         [$package, $constraint] = self::PHALCON[$variant];
 
-        $parent = $this->parent($input);
+        $parent = self::parent($input);
         $target = $parent . '/' . $name;
         $force  = true === $input->option('force');
 
@@ -139,11 +175,13 @@ final class NewCommand extends Command
         // Overrides come from the directory that the project goes into. A
         // team that publishes the project stubs there gets its own
         // conventions in each project that it creates there.
-        $writer = new ArtifactWriter(new Stub(Paths::stubs(), $parent), Flavor::ADR->value);
+        $stub   = new Stub(Paths::stubs(), $parent);
+        $flavor = Flavor::ADR->value;
 
         $replacements = [
             'actionNamespace'   => $namespace . '\\Action',
             'actionPath'        => self::ACTION_PATH,
+            'crestConstraint'   => self::CREST,
             'jsonNamespace'     => str_replace('\\', '\\\\', $namespace),
             'namespace'         => $namespace,
             'phalconConstraint' => $constraint,
@@ -151,29 +189,39 @@ final class NewCommand extends Command
             'phalconVariant'    => $variant,
             'phpVersion'        => $php,
             'project'           => $name,
+            'seed'              => self::SEED,
             'service'           => InstallCommand::SERVICE,
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',
         ];
 
-        foreach (self::FILES as $stub => $path) {
-            $writer->render($target . '/' . $path, $stub, $replacements, $force);
+        // All files render before the first write. A published stub that does
+        // not render then stops the command before it writes a file.
+        $files = [];
+
+        foreach (self::FILES as $stubName => $path) {
+            $files[$path] = $stub->render($flavor, $stubName, $replacements);
         }
 
         // The seed action uses the usual action stub. Convention cannot name
         // it, because Convention asks the router, and there is no vendor/ yet.
-        $writer->render(
-            $target . '/' . self::ACTION_PATH . '/Get.php',
+        $files[self::ACTION_PATH . '/' . self::SEED . '.php'] = $stub->render(
+            $flavor,
             'action',
             [
                 'attributes' => '',
-                'class'      => 'Get',
+                'class'      => self::SEED,
                 'namespace'  => $namespace . '\\Action',
                 'params'     => '',
-            ],
-            $force
+            ]
         );
+
+        // guard() has refused a directory that is not empty, unless --force
+        // is given. Thus a file that exists here can be overwritten.
+        foreach ($files as $path => $contents) {
+            ArtifactWriter::write($target . '/' . $path, $contents);
+        }
 
         $this->report(
             $output,
@@ -227,23 +275,6 @@ final class NewCommand extends Command
     }
 
     /**
-     * The directory that the project goes into.
-     *
-     * --directory is the global project-root option. This command has no
-     * project yet, so for it the option names where the project goes.
-     *
-     * An empty value reads as absent, as optionString() reads every other
-     * option. Otherwise `--directory="$DIR"` with an unset variable puts the
-     * project in the filesystem root.
-     */
-    private function parent(Input $input): string
-    {
-        $directory = $input->optionString('directory');
-
-        return rtrim('' === $directory ? (string) getcwd() : $directory, '/');
-    }
-
-    /**
      * major.minor, and not older than the generated code needs.
      */
     private function php(string $version): string
@@ -292,6 +323,6 @@ final class NewCommand extends Command
         // Until `crest serve` exists, the host way names the server directly.
         $output->line('    php -S localhost:8080 -t public .htrouter.php');
         $output->line();
-        $output->line('Then GET / answers from src/Action/Get.php');
+        $output->line(sprintf('Then GET / answers from %s/%s.php', self::ACTION_PATH, self::SEED));
     }
 }

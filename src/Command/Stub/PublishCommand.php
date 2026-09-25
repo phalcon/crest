@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Command\Stub;
 
+use Crest\Command\NewCommand;
 use Crest\Command\ProjectCommand;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
@@ -21,6 +22,7 @@ use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Project\Flavor;
 
 use function basename;
 use function file_get_contents;
@@ -58,14 +60,22 @@ final class PublishCommand extends ProjectCommand
 
     public function handle(Input $input, Output $output): int
     {
-        $config = $this->config($input);
+        $name  = $input->argumentString('name');
+        $force = true === $input->option('force');
 
-        $flavor = $config->flavor()->value;
-        $name   = $input->argumentString('name');
-        $force  = true === $input->option('force');
+        // A project stub has an effect only where `new` reads it. That
+        // directory is not a project, and `new` creates only ADR projects.
+        if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
+            $root   = NewCommand::parent($input);
+            $flavor = Flavor::ADR->value;
+        } else {
+            $config = $this->config($input);
+            $root   = $config->root();
+            $flavor = $config->flavor()->value;
+        }
 
         foreach ($this->sources($flavor, $name) as $source) {
-            $target = Stub::overridePath($config->root(), $flavor, basename($source, '.stub'));
+            $target = Stub::overridePath($root, $flavor, basename($source, '.stub'));
 
             if (true === is_file($target) && false === $force) {
                 $output->line(
@@ -114,9 +124,9 @@ final class PublishCommand extends ProjectCommand
 
         $found = [];
 
-        // The project stubs only have an effect in the directory `new` runs
-        // from, not in a project. Thus a publish with no name leaves them out.
-        // A publish by name still copies them.
+        // The project stubs have an effect only in the directory that the
+        // project goes into, not in a project. Thus a publish with no name
+        // leaves them out. A publish by name still copies them.
         foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
             if (true === str_starts_with(basename($path), Stub::PROJECT_PREFIX)) {
                 continue;

@@ -13,8 +13,6 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Console\Parsing\Definition;
-
 /**
  * Generates an ADR Responder - the one layer that speaks HTTP, turning a domain
  * payload into a response.
@@ -29,14 +27,14 @@ use Crest\Console\Parsing\Definition;
  */
 final class ResponderCommand extends NamedArtifactCommand
 {
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:responder', 'Create an ADR responder')
-            ->argument('name', true, 'Responder name, e.g. Album')
-            // No declared default: resolveOptions() supplies false for a flag
-            // without consulting one, so passing it would state something that
-            // is never read.
-            ->option('force', 'Overwrite an existing responder');
+        return 'Create an ADR responder';
+    }
+
+    protected function example(): string
+    {
+        return 'Album';
     }
 
     protected function key(): string

@@ -15,7 +15,6 @@ namespace Crest\Command\Make;
 
 use Crest\Commands;
 use Crest\Console\Output;
-use Crest\Console\Parsing\Definition;
 use Crest\Generator\Placement;
 
 use function sprintf;
@@ -42,11 +41,14 @@ use function substr;
  */
 final class CommandCommand extends NamedArtifactCommand
 {
-    public function define(): Definition
+    protected function description(): string
     {
-        return Definition::for('make:command', 'Create a crest command')
-            ->argument('name', true, 'Command name, e.g. Greet')
-            ->option('force', 'Overwrite an existing command');
+        return 'Create a crest command';
+    }
+
+    protected function example(): string
+    {
+        return 'Greet';
     }
 
     protected function guidance(Placement $placement, Output $output): void
