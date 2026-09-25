@@ -12,7 +12,7 @@ With docker:
 With PHP and composer on the host:
 
     composer install
-    php -S localhost:8080 -t public .htrouter.php
+    crest serve
 
 Then open http://localhost:8080/.
 
