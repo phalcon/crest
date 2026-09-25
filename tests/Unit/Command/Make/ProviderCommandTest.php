@@ -14,113 +14,24 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ProviderCommand;
-use Crest\Tests\Support\GeneratesInAScratchProject;
-use PHPUnit\Framework\TestCase;
+use Crest\Tests\Support\NamedArtifactCommandTestCase;
 
 use function file_get_contents;
-use function file_put_contents;
 
 use const PHP_EOL;
 
-final class ProviderCommandTest extends TestCase
+final class ProviderCommandTest extends NamedArtifactCommandTestCase
 {
-    use GeneratesInAScratchProject;
+    protected const COMMAND     = ProviderCommand::class;
 
-    protected function setUp(): void
-    {
-        $this->startScratchProject('make-provider', 'src/Provider');
-    }
+    // Collection is left unaliased: no artifact suffix can produce that name.
+    protected const DECLARATION = 'final class Provider implements ProviderContract';
 
-    protected function tearDown(): void
-    {
-        $this->endScratchProject();
-    }
+    protected const DIRECTORY   = 'src/Provider';
 
-    public function testAnUnusableNameIsReported(): void
-    {
-        $status = $this->runCommand(['Admin/Cache']);
+    protected const NAME        = 'make:provider';
 
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "'Admin/Cache' is not a usable class name",
-            $this->readStderr()
-        );
-    }
-
-    public function testCreatedPathIsReported(): void
-    {
-        $this->runCommand(['Cache']);
-
-        $this->assertStringContainsString(
-            'Created ' . $this->root . '/src/Provider/CacheProvider.php',
-            $this->readStdout()
-        );
-    }
-
-    public function testDefinitionNamesItselfMakeProvider(): void
-    {
-        $this->assertSame('make:provider', (new ProviderCommand())->define()->getName());
-    }
-
-    public function testForceOverwritesAnExistingProvider(): void
-    {
-        $this->runCommand(['Cache']);
-        file_put_contents($this->root . '/src/Provider/CacheProvider.php', 'stale');
-
-        $status = $this->runCommand(['Cache', '--force']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringNotContainsString(
-            'stale',
-            (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
-        );
-    }
-
-    public function testNameArgumentIsRequired(): void
-    {
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
-    }
-
-    public function testRefusesToOverwriteWithoutForce(): void
-    {
-        $this->runCommand(['Cache']);
-
-        $status = $this->runCommand(['Cache']);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString('already exists', $this->readStderr());
-    }
-
-    public function testTheContractIsAliasedSoTheNameCanNeverCollide(): void
-    {
-        // `make:provider Provider` is the pathological case: the suffix is
-        // already there, so the class is named Provider - and without the alias
-        // the stub would emit `implements Provider` beside `use ...\Provider;`,
-        // which does not compile. Collection is left unaliased: no artifact
-        // suffix can produce that name.
-        $status = $this->runCommand(['Provider']);
-
-        $contents = (string) file_get_contents($this->root . '/src/Provider/Provider.php');
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString(
-            'final class Provider implements ProviderContract',
-            $contents
-        );
-    }
-
-    public function testTheProviderDirectoryIsCreatedWhenItIsAbsent(): void
-    {
-        $this->safeDeleteDirectory($this->root . '/src/Provider');
-
-        $status = $this->runCommand(['Cache']);
-
-        $this->assertSame(0, $status);
-        $this->assertFileExists($this->root . '/src/Provider/CacheProvider.php');
-    }
+    protected const SUFFIX      = 'Provider';
 
     public function testTheRegistrationSnippetIsPrintedWithTheParentCall(): void
     {
@@ -142,15 +53,6 @@ final class ProviderCommandTest extends TestCase
             . 'Keep the parent call: it is what registers the ADR services.' . PHP_EOL;
 
         $this->assertSame($expected, $this->readStdout());
-    }
-
-    public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
-    {
-        $status = $this->runCommand(['CacheProvider']);
-
-        $this->assertSame(0, $status);
-        $this->assertFileExists($this->root . '/src/Provider/CacheProvider.php');
-        $this->assertFileDoesNotExist($this->root . '/src/Provider/CacheProviderProvider.php');
     }
 
     public function testTheWholeProviderIsRendered(): void
@@ -186,13 +88,5 @@ final class ProviderCommandTest extends TestCase
             $expected,
             (string) file_get_contents($this->root . '/src/Provider/CacheProvider.php')
         );
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function runCommand(array $arguments): int
-    {
-        return $this->runProjectCommand('make:provider', ProviderCommand::class, $arguments);
     }
 }

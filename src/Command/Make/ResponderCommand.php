@@ -13,12 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
-use Crest\Console\Input;
-use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-
-use function sprintf;
 
 /**
  * Generates an ADR Responder - the one layer that speaks HTTP, turning a domain
@@ -32,11 +27,11 @@ use function sprintf;
  * Boots nothing - it reads config and writes a file, so it keeps working on a
  * project that does not currently run.
  */
-final class ResponderCommand extends ProjectCommand
+final class ResponderCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'responder';
+    protected const KEY    = 'responder';
 
-    private const SUFFIX = 'Responder';
+    protected const SUFFIX = 'Responder';
 
     public function define(): Definition
     {
@@ -46,27 +41,5 @@ final class ResponderCommand extends ProjectCommand
             // without consulting one, so passing it would state something that
             // is never read.
             ->option('force', 'Overwrite an existing responder');
-    }
-
-    public function handle(Input $input, Output $output): int
-    {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
-
-        $writer = $this->writer($config);
-
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
-
-        return 0;
     }
 }

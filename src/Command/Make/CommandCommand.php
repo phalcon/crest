@@ -13,11 +13,10 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
 use Crest\Commands;
-use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Generator\Placement;
 
 use function sprintf;
 use function str_replace;
@@ -41,11 +40,11 @@ use function substr;
  * `migration:run` from a class name, so the generated definition is a starting
  * point either way.
  */
-final class CommandCommand extends ProjectCommand
+final class CommandCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'command';
+    protected const KEY    = 'command';
 
-    private const SUFFIX = 'Command';
+    protected const SUFFIX = 'Command';
 
     public function define(): Definition
     {
@@ -54,26 +53,8 @@ final class CommandCommand extends ProjectCommand
             ->option('force', 'Overwrite an existing command');
     }
 
-    public function handle(Input $input, Output $output): int
+    protected function guidance(Placement $placement, Output $output): void
     {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
-        $name      = $this->registryName($placement->class);
-
-        $writer = $this->writer($config);
-
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-                'command'   => $name,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
         $output->line('Nothing lists it yet. Declare it in the package composer.json:');
         $output->line();
         $output->line('    "extra": {');
@@ -82,15 +63,18 @@ final class CommandCommand extends ProjectCommand
         $output->line(
             sprintf(
                 '                "%s": "%s"',
-                $name,
+                $this->registryName($placement->class),
                 str_replace('\\', '\\\\', $placement->namespace . '\\' . $placement->class)
             )
         );
         $output->line('            }');
         $output->line('        }');
         $output->line('    }');
+    }
 
-        return 0;
+    protected function replacements(Placement $placement): array
+    {
+        return ['command' => $this->registryName($placement->class)];
     }
 
     /**

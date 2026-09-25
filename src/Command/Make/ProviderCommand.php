@@ -13,10 +13,9 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Command\ProjectCommand;
-use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Generator\Placement;
 
 use function sprintf;
 
@@ -33,11 +32,11 @@ use function sprintf;
  * instead, including the parent:: line - omitting that one is a silent failure
  * that takes the ADR services down with it.
  */
-final class ProviderCommand extends ProjectCommand
+final class ProviderCommand extends NamedArtifactCommand
 {
-    private const KEY    = 'provider';
+    protected const KEY    = 'provider';
 
-    private const SUFFIX = 'Provider';
+    protected const SUFFIX = 'Provider';
 
     public function define(): Definition
     {
@@ -46,24 +45,8 @@ final class ProviderCommand extends ProjectCommand
             ->option('force', 'Overwrite an existing provider');
     }
 
-    public function handle(Input $input, Output $output): int
+    protected function guidance(Placement $placement, Output $output): void
     {
-        $config    = $this->config($input);
-        $placement = $this->placement($config, $input->argumentString('name'), self::KEY, self::SUFFIX);
-
-        $writer = $this->writer($config);
-
-        $writer->render(
-            $placement->file,
-            self::KEY,
-            [
-                'namespace' => $placement->namespace,
-                'class'     => $placement->class,
-            ],
-            true === $input->option('force')
-        );
-
-        $output->success(sprintf('Created %s', $placement->file));
         $output->line('Nothing registers it yet. Call it from your front controller:');
         $output->line();
         $output->line('    protected function registerProviders(Container $container): void');
@@ -80,7 +63,5 @@ final class ProviderCommand extends ProjectCommand
         $output->line('    }');
         $output->line();
         $output->line('Keep the parent call: it is what registers the ADR services.');
-
-        return 0;
     }
 }
