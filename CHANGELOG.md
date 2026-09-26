@@ -48,6 +48,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `phalcon/talon` moved from `^0.8` to `^0.9`.
 - `stub:publish` with no name leaves out the `project-*` stubs that `new` renders. They have an effect only in the directory that `new` puts the project into; publish one by name. A `project-*` name goes where `new` reads it - the working directory, or `--directory` - with the `adr` flavor, and needs no `crest.php`. [#8](https://github.com/phalcon/crest/issues/8)
 - Rendering a stub now fails when a placeholder has no value, and the error names the stub file. A published copy that kept a placeholder crest no longer sends put the raw `{{ name }}` into the generated file. [#8](https://github.com/phalcon/crest/issues/8)
+- With no `crest.php`, the error for a `composer.json` whose psr-4 directories do not exist now names those directories: `no crest.php and no usable psr-4 autoload entry found; these psr-4 directories do not exist: 'src'`. Before, the message did not say that a missing directory was the cause. [#18](https://github.com/phalcon/crest/issues/18)
 
 ### Fixed
 
