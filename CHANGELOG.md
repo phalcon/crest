@@ -47,6 +47,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `route:list` and `make:action` take an optional `ActionResolver`. [#5](https://github.com/phalcon/crest/issues/5)
 - `event:list` reads all listeners with one `getListenerMap()` call. [#1](https://github.com/phalcon/crest/issues/1)
 - `phalcon/talon` moved from `^0.8` to `^1.0.0`.
+- phpcs and php-cs-fixer use the shared Phalcon rules from `phalcon/code-quality`, added to `require-dev`.
 - `stub:publish` without a name skips the `project-*` stubs. Publish them by name; they go to the working directory or `--directory`. [#8](https://github.com/phalcon/crest/issues/8)
 - Rendering a stub fails when a placeholder has no value. The error names the stub. [#8](https://github.com/phalcon/crest/issues/8)
 - The config inference error names the missing psr-4 directories. [#18](https://github.com/phalcon/crest/issues/18)

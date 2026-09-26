@@ -85,12 +85,28 @@ final class ClassNameTest extends TestCase
         ClassName::namespace('Acme\\\\Shop');
     }
 
+    public function testANamespaceWithATrailingNewlineIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'Acme\n' is not a usable namespace");
+
+        ClassName::namespace("Acme\n");
+    }
+
     public function testANameWithASpaceIsRejected(): void
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage("'My Responder' is not a usable class name");
 
         ClassName::suffixed('My Responder', 'Responder');
+    }
+
+    public function testANameWithATrailingNewlineIsRejected(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'Album\n' is not a usable class name");
+
+        ClassName::suffixed("Album\n", 'Responder');
     }
 
     public function testAnEmptyNameIsRejected(): void

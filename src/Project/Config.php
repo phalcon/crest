@@ -104,7 +104,7 @@ final class Config
     {
         return match ($flavor) {
             Flavor::ADR => [
-                'action' => 'src/Action',
+                'action'     => 'src/Action',
                 // Not an ADR artifact: a crest command is the same class in any
                 // flavor. It sits here because ADR is the only populated set,
                 // and moves to a shared one when cli, mvc and micro arrive.
@@ -162,8 +162,6 @@ final class Config
             $namespaces = $declared['namespaces'];
         }
 
-        // crest.php never restates the autoload map; namespaceFor() still needs
-        // it whenever `namespaces` does not answer the question outright.
         $bootstrap = null;
         if (true === isset($declared['bootstrap']) && true === is_string($declared['bootstrap'])) {
             $bootstrap = $declared['bootstrap'];
@@ -175,6 +173,9 @@ final class Config
             $root,
             $paths,
             $namespaces,
+            // crest.php never restates the autoload map; namespaceFor()
+            // still needs it whenever `namespaces` does not answer the
+            // question outright.
             self::psr4Map($root),
             $source,
             $stated,
@@ -279,8 +280,8 @@ final class Config
     }
 
     /**
-     * Whether the config file stated this top-level key, as opposed to it
-     * taking a default. `flavor`, `namespace`, `paths`, `namespaces`.
+     * Whether the config file stated this key, as opposed to it taking a
+     * default. `flavor`, `namespace`, `paths`, or `paths.<name>` for one path.
      */
     public function isDeclared(string $key): bool
     {

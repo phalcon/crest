@@ -31,15 +31,19 @@ final class ShellRunnerTest extends TestCase
 
     private false | string $savedPath = false;
 
+    private false | string $savedPathext = false;
+
     protected function setUp(): void
     {
         $this->makeScratchDirectory('shell-runner', 'bin', 'work');
-        $this->savedPath = getenv('PATH');
+        $this->savedPath    = getenv('PATH');
+        $this->savedPathext = getenv('PATHEXT');
     }
 
     protected function tearDown(): void
     {
         putenv(false === $this->savedPath ? 'PATH' : 'PATH=' . $this->savedPath);
+        putenv(false === $this->savedPathext ? 'PATHEXT' : 'PATHEXT=' . $this->savedPathext);
 
         $this->removeScratchDirectory();
     }
@@ -73,6 +77,28 @@ final class ShellRunnerTest extends TestCase
         (new ShellRunner())->run(['docker', 'compose', 'up', '-d']);
     }
 
+    public function testANameWithItsEndingIsFoundWhenPathextIsSet(): void
+    {
+        // Windows: `docker.exe` is found as it is, not as `docker.exe.exe`.
+        $this->executable('bin/hello.cmd', "#!/bin/sh\nexit 0\n");
+        putenv('PATH=' . $this->root . '/bin');
+        putenv('PATHEXT=.cmd');
+
+        $this->expectFoundProgram();
+
+        (new ShellRunner())->run(['hello.cmd'], $this->root . '/missing');
+    }
+
+    public function testAnEmptyPathEntryIsSkipped(): void
+    {
+        // An empty entry does not name the filesystem root, and it does not
+        // stop the search.
+        $this->executable('bin/hello', "#!/bin/sh\nexit 4\n");
+        putenv('PATH=:' . $this->root . '/bin');
+
+        $this->assertSame(4, (new ShellRunner())->run(['hello']));
+    }
+
     public function testANonExecutableFileIsNotRun(): void
     {
         file_put_contents($this->root . '/bin/plain', "#!/bin/sh\nexit 0\n");
@@ -104,6 +130,19 @@ final class ShellRunnerTest extends TestCase
         (new ShellRunner())->run(['sh']);
     }
 
+    public function testPathextGivesTheEndingsToTry(): void
+    {
+        // Windows finds `docker` as `docker.exe`. The match is the second
+        // entry, so every entry is tried.
+        $this->executable('bin/hello.cmd', "#!/bin/sh\nexit 0\n");
+        putenv('PATH=' . $this->root . '/bin');
+        putenv('PATHEXT=.BAT;.cmd');
+
+        $this->expectFoundProgram();
+
+        (new ShellRunner())->run(['hello'], $this->root . '/missing');
+    }
+
     public function testTheExitStatusIsReturned(): void
     {
         $this->assertSame(3, (new ShellRunner())->run([PHP_BINARY, '-r', 'exit(3);']));
@@ -123,5 +162,15 @@ final class ShellRunnerTest extends TestCase
     {
         file_put_contents($this->root . '/' . $path, $contents);
         chmod($this->root . '/' . $path, 0o755);
+    }
+
+    /**
+     * Linux cannot start `hello` as `hello.cmd`. The directory check comes
+     * after the program check, so its error shows that the program was found.
+     */
+    private function expectFoundProgram(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/missing is not a directory');
     }
 }

@@ -28,6 +28,8 @@ use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
 
+use const PHP_EOL;
+
 final class ActionCommandTest extends TestCase
 {
     use GeneratesInAScratchProject;
@@ -350,10 +352,17 @@ final class ActionCommandTest extends TestCase
         // renderer knows where it lives.
         $this->runCommand(['GET', '/company/all', '--responder=view']);
 
-        $output = $this->readStdout();
+        // Asserted whole: each blank line and each text line is a separate call.
+        $expected = 'Answers GET /company/all' . PHP_EOL
+            . PHP_EOL
+            . 'Nothing renders it yet. The responder asks for this template:' . PHP_EOL
+            . PHP_EOL
+            . '    company/all/index' . PHP_EOL
+            . PHP_EOL
+            . 'Create it wherever your renderer looks. Renderer::render() takes a name, not a path, '
+            . 'so the directory and the extension belong to the renderer rather than to crest.' . PHP_EOL;
 
-        $this->assertStringContainsString('Nothing renders it yet', $output);
-        $this->assertStringContainsString('    company/all/index', $output);
+        $this->assertStringEndsWith($expected, $this->readStdout());
     }
 
     public function testUnknownResponderIsRejected(): void

@@ -15,6 +15,7 @@ namespace Crest\Process;
 
 use Crest\Console\Exceptions\Exception;
 
+use function basename;
 use function explode;
 use function getenv;
 use function is_dir;
@@ -23,7 +24,6 @@ use function is_file;
 use function proc_close;
 use function proc_open;
 use function sprintf;
-use function str_contains;
 
 use const PATH_SEPARATOR;
 
@@ -61,18 +61,32 @@ final class ShellRunner implements Runner
     /**
      * Whether the program can run. A path must name an executable file. A
      * bare name must be an executable file in a directory on the PATH.
+     *
+     * Windows: basename() also reads `\` as a separator, so PHP_BINARY is a
+     * path. PATHEXT gives the endings to try, so `docker` finds `docker.exe`.
+     * Other systems do not set PATHEXT.
+     *
+     * An empty PATH entry is skipped. It does not name the filesystem root.
      */
     private function exists(string $program): bool
     {
-        if (true === str_contains($program, '/')) {
+        if (basename($program) !== $program) {
             return true === is_file($program) && true === is_executable($program);
         }
 
-        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
-            $candidate = $directory . '/' . $program;
+        $endings = ['', ...explode(';', (string) getenv('PATHEXT'))];
 
-            if (true === is_file($candidate) && true === is_executable($candidate)) {
-                return true;
+        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+            if ('' === $directory) {
+                continue;
+            }
+
+            foreach ($endings as $ending) {
+                $candidate = $directory . '/' . $program . $ending;
+
+                if (true === is_file($candidate) && true === is_executable($candidate)) {
+                    return true;
+                }
             }
         }
 

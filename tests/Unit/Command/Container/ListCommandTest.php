@@ -22,12 +22,15 @@ use Crest\Tests\Support\Project\EmptyFront;
 use Crest\Tests\Support\Project\FailingFront;
 use Crest\Tests\Support\Project\NoBootFront;
 use Crest\Tests\Support\Project\NonContainerFront;
+use Crest\Tests\Support\Project\NonEnumerableFront;
 use Crest\Tests\Support\Project\ServicesFront;
 use Crest\Tests\Support\Project\WrongContainerFront;
 use Crest\Tests\Support\ScratchDirectory;
+use Phalcon\Contracts\Container\Service\Collection;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
+use function get_class;
 use function preg_replace;
 use function str_replace;
 
@@ -47,6 +50,8 @@ final class ListCommandTest extends TestCase
 
     protected function tearDown(): void
     {
+        NonEnumerableFront::$container = null;
+
         $this->closeStreams();
         $this->removeScratchDirectory();
     }
@@ -83,6 +88,24 @@ final class ListCommandTest extends TestCase
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
             'the project failed to boot: no database',
+            $this->readStderr()
+        );
+    }
+
+    public function testAContainerThatCannotListItsServicesIsReported(): void
+    {
+        // Enumerable is an optional contract. A container can find services
+        // by name and still be unable to name them.
+        $container = $this->createStub(Collection::class);
+
+        NonEnumerableFront::$container = $container;
+        $this->declareFront(NonEnumerableFront::class);
+
+        $status = $this->runCommand();
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            get_class($container) . ' cannot list its services',
             $this->readStderr()
         );
     }
