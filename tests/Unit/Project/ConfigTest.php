@@ -52,6 +52,18 @@ final class ConfigTest extends TestCase
         );
     }
 
+    public function testComposerJsonWithoutPsr4EntriesThrows(): void
+    {
+        // No psr-4 entry at all, so there is no missing directory to name.
+        // Anchored: the message with a directory list starts the same way.
+        $this->writeComposerJson([]);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches('/^no crest\.php and no usable psr-4 autoload entry found$/');
+
+        Config::discover($this->root);
+    }
+
     public function testCrestPhpMayDeclareTheNamespaceExplicitly(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
@@ -290,6 +302,19 @@ final class ConfigTest extends TestCase
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
 
+    public function testNoUsablePsr4EntryNamesEveryMissingDirectory(): void
+    {
+        $this->writeComposerJson(['Ghost\\' => 'missing/', 'Other\\' => 'lib']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "no crest.php and no usable psr-4 autoload entry found; "
+            . "these psr-4 directories do not exist: 'missing', 'lib'"
+        );
+
+        Config::discover($this->root);
+    }
+
     public function testNoUsablePsr4EntryThrows(): void
     {
         // composer.json exists but every declared directory is missing, so
@@ -297,7 +322,10 @@ final class ConfigTest extends TestCase
         $this->writeComposerJson(['Ghost\\' => 'missing/']);
 
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage('no crest.php and no usable psr-4 autoload entry found');
+        $this->expectExceptionMessage(
+            "no crest.php and no usable psr-4 autoload entry found; "
+            . "these psr-4 directories do not exist: 'missing'"
+        );
 
         Config::discover($this->root);
     }

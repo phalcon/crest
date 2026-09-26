@@ -193,10 +193,14 @@ final class Config
             throw new Exception('no crest.php and no composer.json found');
         }
 
-        $psr4 = self::psr4Map($directory);
+        $psr4    = self::psr4Map($directory);
+        $missing = [];
 
         foreach ($psr4 as $prefix => $target) {
-            if (false === is_dir($directory . '/' . trim($target, '/'))) {
+            $target = trim($target, '/');
+
+            if (false === is_dir($directory . '/' . $target)) {
+                $missing[] = "'" . $target . "'";
                 continue;
             }
 
@@ -210,7 +214,16 @@ final class Config
             );
         }
 
-        throw new Exception('no crest.php and no usable psr-4 autoload entry found');
+        if ([] === $missing) {
+            throw new Exception('no crest.php and no usable psr-4 autoload entry found');
+        }
+
+        throw new Exception(
+            sprintf(
+                'no crest.php and no usable psr-4 autoload entry found; these psr-4 directories do not exist: %s',
+                implode(', ', $missing)
+            )
+        );
     }
 
     /**
