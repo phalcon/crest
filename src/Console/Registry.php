@@ -17,11 +17,13 @@ use Composer\InstalledVersions;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 
+use function array_keys;
 use function class_exists;
 use function is_array;
 use function is_string;
 use function ksort;
 use function sprintf;
+use function str_starts_with;
 
 /**
  * Lazy name-to-class map. Resolution instantiates nothing; the kernel
@@ -48,6 +50,9 @@ final class Registry
     private bool $discovered = false;
 
     private ?string $discoveryKey = null;
+
+    /** @var array<string, string> */
+    private array $providers = [];
 
     /**
      * @param array<string, class-string<Command>> $map
@@ -121,7 +126,7 @@ final class Registry
         $resolved = $this->resolve($name);
 
         return $this->commands[$resolved]
-            ?? throw new Exception(sprintf("unknown command '%s'", $name));
+            ?? throw new Exception(sprintf("unknown command '%s'%s", $name, $this->provider($name)));
     }
 
     public function has(string $name): bool
@@ -140,6 +145,23 @@ final class Registry
     public function withDiscovery(string $key): static
     {
         $this->discoveryKey = $key;
+
+        return $this;
+    }
+
+    /**
+     * Records which package provides the commands with a name prefix, for
+     * example `demo:` => `vendor/demo`. For an unknown name with that prefix,
+     * get() names the package in its message.
+     *
+     * Strings only: the owning tool names the packages, and nothing here
+     * loads their classes.
+     *
+     * @param array<string, string> $providers Name prefix => package name.
+     */
+    public function withProviders(array $providers): static
+    {
+        $this->providers = $providers;
 
         return $this;
     }
@@ -208,6 +230,31 @@ final class Registry
                 $this->addContributed($package['extra'][$key] ?? null);
             }
         }
+    }
+
+    /**
+     * The end of the message for an unknown name: `; provided by <package>`
+     * for the first prefix that the name starts with. Empty when no prefix
+     * matches, or when a registered command has the prefix: then the package
+     * is installed, and only the name is wrong.
+     */
+    private function provider(string $name): string
+    {
+        foreach ($this->providers as $prefix => $package) {
+            if (false === str_starts_with($name, $prefix)) {
+                continue;
+            }
+
+            foreach (array_keys($this->commands) as $command) {
+                if (true === str_starts_with($command, $prefix)) {
+                    return '';
+                }
+            }
+
+            return sprintf('; provided by %s', $package);
+        }
+
+        return '';
     }
 
     /**

@@ -6,63 +6,64 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 ### Added
 
-- Added `route:list`, listing every route the application answers with its method and Action class. Reads the Action classes rather than a route table, since ADR has none. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `config:show`, showing the resolved project configuration and marking each value as declared or inferred. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `container:list`, listing the services registered in the project container with their class and whether they have been resolved. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `event:list`, listing the listeners attached to the project events manager. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `list` (aliases `commands`, `enumerate`), listing the available commands. [#1](https://github.com/phalcon/crest/issues/1)
-- Added the `bootstrap` key to `crest.php`, naming the project front controller so commands that need a running application can boot one: `'bootstrap' => App\Front\AppFront::class`. Requires a `boot()` returning a container. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `Crest\Console\Input::argumentString()`, `optionString()` and `optionStringOrNull()`, narrowing the common string case so commands do not each repeat a type guard.
-- Added `make:command`, generating a crest command for a package that contributes its own. Prints the `extra.crest.commands` block to declare it with, since that is the only way the registry finds a command. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `make:middleware`, generating an ADR middleware and printing the router middleware-map entry that activates it. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `make:provider`, generating a service provider for `Phalcon\Container` and printing the `registerProviders()` override that calls it. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `make:responder`, generating an ADR responder that implements the `Responder` contract directly. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `stub:publish`, copying packaged stubs into `resources/stubs/<flavor>/` so a project can edit them. The override chain already worked; nothing made it discoverable. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `--stub` to `make:action`, rendering any named stub instead of the `--responder` default. Passing both is rejected rather than silently resolved. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `command`, `middleware`, `provider` and `responder` to the default `paths` in `crest.php`, alongside `action`. Each is overridable per project as before. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `Crest\Command\ProjectCommand`, the base for commands that read the project being run against. Contributed commands can extend it for `--directory` and `--config` handling instead of resolving those options themselves. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `Crest\Generator\ClassName::suffixed()`, which appends an artifact suffix idempotently, so `make:middleware Cors` and `make:middleware CorsMiddleware` both produce `CorsMiddleware`. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `--template` to `make:action`, naming the template the view responder renders instead of accepting the derived `<path>/index`. The derivation is crest's own convention, not the framework's - `withTemplate()` accepts any string - so it is now overridable rather than silent. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `Crest\Command\ProjectCommand::writer()`, assembling the stub writer once instead of repeating the same three-argument construction in five `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
-- Added `methodFor()` to `Crest\ADR\ActionResolver`, so the HTTP method an Action answers is asked of the framework rather than derived from the class name. [#1](https://github.com/phalcon/crest/issues/1)
-- Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`, so a bare `crest` and `crest list` render the command listing through one path instead of two copies kept in agreement by hand.
-- Added `new`, creating an ADR project from stubs: front controller, web entry point, `crest.php`, an action for `GET /`, `composer.json` and docker files. It runs nothing - no composer, no docker, no network. `--namespace`, `--php` and `--phalcon` set the root namespace, the PHP version and the Phalcon variant. The project requires `phalcon/crest` as a dev dependency: the commands that work on the project need its autoloader and its Phalcon, so they run as `vendor/bin/crest`, not with the crest that created the project. The generated `crest.php` states `paths.action`, so a later crest default does not move the actions. `new` renders every file before it writes the first one, so a published stub that does not render leaves no files. [#8](https://github.com/phalcon/crest/issues/8)
-- Added `up`, `down` and `install`, running `docker compose up -d`, `docker compose down` and `composer install` in the `app` container of a project that `new` created. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
-- Added `Crest\Process\Runner`, the seam through which commands run external programs, with `ShellRunner` as the default. A missing program or working directory is reported as a crest error. [#8](https://github.com/phalcon/crest/issues/8)
-- Added `Crest\Generator\ClassName::namespace()`, validating a namespace with the same identifier rule as a class name. [#8](https://github.com/phalcon/crest/issues/8)
-- Added `Crest\Command\Make\NamedArtifactCommand`, the base of `make:command`, `make:middleware`, `make:provider` and `make:responder`. The four commands repeated the same `handle()` and `define()`; each now gives only its key, its suffix, its description, an example name and the instructions it prints after the file is written. The base declares the `name` argument and the `--force` option, because `handle()` reads both, so a new generator cannot leave them out.
-- Added `serve` (alias `server`), running PHP's built-in web server in the project root with the router script that `new` writes: `php -S 127.0.0.1:8080 -t public .htrouter.php`, with the same router and document root as the generated container. The port is `--port`, else `APP_PORT` from the environment or the project `.env`, else 8080, the order that docker compose uses. It finds the root from a subdirectory through the nearest `crest.php`, and it does not need the crest in `vendor/`. It stops before PHP starts when `.htrouter.php` or `vendor/autoload.php` is missing. `new` and the generated README now print `crest serve` for the host way. [#10](https://github.com/phalcon/crest/issues/10)
+- Added `route:list`: lists routes with their method and Action class. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `config:show`: shows the resolved configuration, each value marked declared or inferred. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `container:list`: lists container services with their class and resolved state. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `event:list`: lists the events manager listeners. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `list` (aliases `commands`, `enumerate`). [#1](https://github.com/phalcon/crest/issues/1)
+- Added the `bootstrap` key to `crest.php`: the front controller class to boot, e.g. `App\Front\AppFront::class`. Its `boot()` must return a container. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `Crest\Console\Input::argumentString()`, `optionString()` and `optionStringOrNull()`.
+- Added `make:command`: generates a crest command and prints its `extra.crest.commands` entry. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `make:middleware`: generates an ADR middleware and prints its middleware-map entry. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `make:provider`: generates a `Phalcon\Container` service provider and prints the `registerProviders()` override. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `make:responder`: generates an ADR responder that implements `Responder`. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `stub:publish`: copies packaged stubs to `resources/stubs/<flavor>/`. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `make:action --stub`: renders a named stub instead of the `--responder` default. Using both is an error. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `command`, `middleware`, `provider` and `responder` to the default `paths`. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `Crest\Command\ProjectCommand`: base for commands that read a project; resolves `--directory` and `--config`. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `Crest\Generator\ClassName::suffixed()`: appends a suffix once (`Cors` and `CorsMiddleware` both give `CorsMiddleware`). [#5](https://github.com/phalcon/crest/issues/5)
+- Added `make:action --template`: overrides the view template (default `<path>/index`). [#5](https://github.com/phalcon/crest/issues/5)
+- Added `Crest\Command\ProjectCommand::writer()`: builds the stub writer for the `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
+- Added `Crest\ADR\ActionResolver::methodFor()`: gets an Action's HTTP method from the router. [#1](https://github.com/phalcon/crest/issues/1)
+- Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`: one listing for `crest` and `crest list`.
+- Added `new`: creates an ADR project from stubs (front controller, `public/index.php`, `crest.php`, a `GET /` action, `composer.json`, docker files). Runs no composer, docker or network. Options: `--namespace`, `--php`, `--phalcon`. The project requires `phalcon/crest` in `require-dev`; project commands run as `vendor/bin/crest`. Writes nothing if a stub fails to render. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `up`, `down` and `install`: `docker compose up -d`, `docker compose down` and `composer install` in the `app` container. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Process\Runner` and `ShellRunner`: run external programs. A missing program or directory is a crest error. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Generator\ClassName::namespace()`: validates a namespace. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `Crest\Command\Make\NamedArtifactCommand`: base of `make:command`, `make:middleware`, `make:provider` and `make:responder`.
+- Added `serve` (alias `server`): runs `php -S 127.0.0.1:8080 -t public .htrouter.php` in the project root. Port: `--port`, then `APP_PORT` (environment or `.env`), then 8080. Fails if `.htrouter.php` or `vendor/autoload.php` is missing. [#10](https://github.com/phalcon/crest/issues/10)
+- Added a package hint for unknown commands: `unknown command 'migration:run'; provided by phalcon/migrations`. No hint when a command with that prefix is registered. The map is set with `Crest\Console\Registry::withProviders()`. [#19](https://github.com/phalcon/crest/issues/19)
 
 ### Changed
 
-- `make:action` now writes a `params()` declaration for routes with attributes, so they arrive constrained and cast rather than as raw strings.
-- `make:action` now rejects a static segment after a placeholder and suggests the supported spelling: `/album/{id}/edit` is reported as `/album/edit/{id}`. Arguments trail the static path, so the first form has no class name that describes it.
-- Renamed `Crest\Adr` to `Crest\ADR`, and `Flavor::Adr`, `Flavor::Cli` and `Flavor::Mvc` to `Flavor::ADR`, `Flavor::CLI` and `Flavor::MVC`, matching `Phalcon\ADR`. Backed values are unchanged.
-- Renamed `Crest\ADR\CandidateSource` to `ActionResolver` and `PhalconRouterCandidates` to `PhalconRouterResolver`. One path now names exactly one Action, so there are no candidates to choose between.
-- Dependencies now resolve against the PHP 8.1 floor via `config.platform`, so the lock matches the declared minimum.
-- Default `paths` are now per flavor rather than shared. Only `adr` is populated, so a `cli` or `mvc` project is no longer offered directories for artifacts it has no command to generate. [#5](https://github.com/phalcon/crest/issues/5)
-- `crest`, `crest list` and `crest --version` now open with a chevron mark before the name and version. Only the color is dropped from piped output and when `NO_COLOR` is set; the glyph stays. [#5](https://github.com/phalcon/crest/issues/5)
-- `make:action --responder=view` now prints the template the responder asks for. The action named one but nothing created it, and `Renderer::render()` takes a name rather than a path, so where it resolves belongs to the project's renderer. [#5](https://github.com/phalcon/crest/issues/5)
-- `route:list` and `make:action` now accept an `ActionResolver`, defaulted so the kernel still constructs them with no arguments. This is what lets a test prove the routing answers come from the framework rather than from crest. [#5](https://github.com/phalcon/crest/issues/5)
-- `event:list` now reads every listener in a single `getListenerMap()` call instead of one call per event type. [#1](https://github.com/phalcon/crest/issues/1)
-- `phalcon/talon` moved from `^0.8` to `^0.9`.
-- `stub:publish` with no name leaves out the `project-*` stubs that `new` renders. They have an effect only in the directory that `new` puts the project into; publish one by name. A `project-*` name goes where `new` reads it - the working directory, or `--directory` - with the `adr` flavor, and needs no `crest.php`. [#8](https://github.com/phalcon/crest/issues/8)
-- Rendering a stub now fails when a placeholder has no value, and the error names the stub file. A published copy that kept a placeholder crest no longer sends put the raw `{{ name }}` into the generated file. [#8](https://github.com/phalcon/crest/issues/8)
-- With no `crest.php`, the error for a `composer.json` whose psr-4 directories do not exist now names those directories: `no crest.php and no usable psr-4 autoload entry found; these psr-4 directories do not exist: 'src'`. Before, the message did not say that a missing directory was the cause. [#18](https://github.com/phalcon/crest/issues/18)
+- `make:action` writes a `params()` declaration for routes with attributes.
+- `make:action` rejects a static segment after a placeholder: `/album/{id}/edit` must be `/album/edit/{id}`.
+- Renamed `Crest\Adr` to `Crest\ADR`, and the `Flavor` cases to `ADR`, `CLI` and `MVC`. Backed values are unchanged.
+- Renamed `Crest\ADR\CandidateSource` to `ActionResolver`, and `PhalconRouterCandidates` to `PhalconRouterResolver`.
+- Dependencies resolve against PHP 8.1 (`config.platform`).
+- Default `paths` are per flavor. Only `adr` has defaults. [#5](https://github.com/phalcon/crest/issues/5)
+- `crest`, `crest list` and `crest --version` show a chevron before the name. No color when piped or with `NO_COLOR`. [#5](https://github.com/phalcon/crest/issues/5)
+- `make:action --responder=view` prints the template name. [#5](https://github.com/phalcon/crest/issues/5)
+- `route:list` and `make:action` take an optional `ActionResolver`. [#5](https://github.com/phalcon/crest/issues/5)
+- `event:list` reads all listeners with one `getListenerMap()` call. [#1](https://github.com/phalcon/crest/issues/1)
+- `phalcon/talon` moved from `^0.8` to `^1.0.0`.
+- `stub:publish` without a name skips the `project-*` stubs. Publish them by name; they go to the working directory or `--directory`. [#8](https://github.com/phalcon/crest/issues/8)
+- Rendering a stub fails when a placeholder has no value. The error names the stub. [#8](https://github.com/phalcon/crest/issues/8)
+- The config inference error names the missing psr-4 directories. [#18](https://github.com/phalcon/crest/issues/18)
 
 ### Fixed
 
-- `make:middleware`, `make:provider` and `make:responder` no longer generate a class that cannot be parsed when the name given is already the suffix. `make:middleware Middleware` produced `final class Middleware implements Middleware` beside `use ...\Middleware;`. The contract is now imported under an alias. [#5](https://github.com/phalcon/crest/issues/5)
-- Generators now fail instead of reporting a file they did not write. A target that could not be created produced two PHP warnings, `Created <file>` and exit 0; it now reports `could not create <directory>` and exits 1. [#5](https://github.com/phalcon/crest/issues/5)
-- `stub:publish` now rejects a name that is a path. `stub:publish ../../elsewhere/thing` resolved and copied a file from outside the package. [#5](https://github.com/phalcon/crest/issues/5)
-- `ClassName::suffixed()` now accepts non-Latin class names, matching PHP's own rule for an identifier. [#5](https://github.com/phalcon/crest/issues/5)
-- `container:list` and `event:list` no longer reach past Phalcon's published contracts. Both type against `Phalcon\Contracts\Container\Service\Collection` and the new `Enumerable` contracts instead of the concrete `Container` and `Manager`, and `event:list` no longer probes the container with `method_exists()`. The methods they relied on were absent from every published interface, so narrowing the concrete classes would have broken crest without breaking any contract. [#1](https://github.com/phalcon/crest/issues/1)
-- `route:list` no longer derives the HTTP method from the class name. The verb's position in an Action name is part of the framework's naming rule, and reconstructing it here was a second copy of half the convention in a tool nobody would grep when the rule changed. [#1](https://github.com/phalcon/crest/issues/1)
+- `make:middleware`, `make:provider` and `make:responder` generate valid code when the name is the suffix (`make:middleware Middleware`). [#5](https://github.com/phalcon/crest/issues/5)
+- Generators exit 1 with `could not create <directory>` when the target cannot be created. [#5](https://github.com/phalcon/crest/issues/5)
+- `stub:publish` rejects a name that is a path. [#5](https://github.com/phalcon/crest/issues/5)
+- `ClassName::suffixed()` accepts non-Latin class names. [#5](https://github.com/phalcon/crest/issues/5)
+- `container:list` and `event:list` type against Phalcon's published contracts (`Phalcon\Contracts\Container\Service\Collection`, `Enumerable`), not `Container` and `Manager`. [#1](https://github.com/phalcon/crest/issues/1)
+- `route:list` gets the HTTP method from the router, not from the class name. [#1](https://github.com/phalcon/crest/issues/1)
 
 ### Removed
 
-- Removed the shadowed-action warning from `make:action`. One path names exactly one Action, so nothing can be shadowed.
-- Removed the `phalcon/cli-options-parser` requirement. Crest never linked against it: the schema-aware definition layer stays in `Crest\Console\Parsing`, since `Cop\Parser` is schema-less by design.
+- Removed the shadowed-action warning from `make:action`.
+- Removed the `phalcon/cli-options-parser` requirement.
 
 [keep_a_changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic_versioning]: https://semver.org/spec/v2.0.0.html
