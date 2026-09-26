@@ -54,6 +54,13 @@ final class Commands
     public const PACKAGE = 'phalcon/crest';
 
     /**
+     * Command-name prefix => the package that provides those commands. When
+     * the package is not installed, the error for such a command names it.
+     * Strings only, so nothing breaks when a package changes its classes.
+     */
+    private const PROVIDERS = ['migration:' => 'phalcon/migrations'];
+
+    /**
      * The registry the binary runs on: crest's own commands, plus anything
      * installed packages contribute through `extra.crest.commands`.
      */
@@ -77,6 +84,7 @@ final class Commands
             ->add('serve', ServeCommand::class, 'server')
             ->add('stub:publish', StubPublishCommand::class)
             ->add('up', UpCommand::class)
-            ->withDiscovery(self::KEY);
+            ->withDiscovery(self::KEY)
+            ->withProviders(self::PROVIDERS);
     }
 }
