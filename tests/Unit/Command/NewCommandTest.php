@@ -52,6 +52,18 @@ final class NewCommandTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function unusablePhpVersions(): iterable
+    {
+        // Each one passes version_compare(), but no `php:<version>-cli` image
+        // has that tag.
+        yield 'leading zero in the major' => ['08.4'];
+        yield 'leading zero in the minor' => ['8.01'];
+        yield 'trailing newline' => ["8.4\n"];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function variants(): iterable
     {
         yield 'v5' => ['v5'];
@@ -142,6 +154,20 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
+    /**
+     * @dataProvider unusablePhpVersions
+     */
+    public function testAnUnusablePhpVersionIsRejected(string $version): void
+    {
+        $status = $this->runCommand(['my-app', '--php', $version]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            sprintf("'%s' is not a PHP version; expected major.minor, e.g. 8.4", $version),
+            $this->readStderr()
+        );
+    }
+
     public function testAPhpVersionBelowTheFloorIsRejected(): void
     {
         $status = $this->runCommand(['my-app', '--php', '8.0']);
@@ -187,6 +213,14 @@ final class NewCommandTest extends TestCase
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist(dirname($this->root) . '/elsewhere');
+    }
+
+    public function testAProjectNameWithATrailingNewlineIsRejected(): void
+    {
+        $status = $this->runCommand(["my-app\n"]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("'my-app\n' is not a usable project name", $this->readStderr());
     }
 
     public function testAProjectStubFromStubPublishIsUsed(): void
@@ -333,6 +367,19 @@ final class NewCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertSame('mine', $this->read('notes.txt'));
         $this->assertFileExists($this->root . '/my-app/composer.json');
+    }
+
+    public function testHelpDoesNotCallTheDirectoryAProjectRoot(): void
+    {
+        // `new` has no project yet. The option replaces the working directory,
+        // and the project goes into it.
+        $status = $this->runInWorkingDirectory(['--help']);
+
+        $this->assertSame(0, $status);
+        $this->assertMatchesRegularExpression(
+            '/--directory +Directory to use instead of the working directory\R/',
+            $this->readStdout()
+        );
     }
 
     public function testNameArgumentIsRequired(): void

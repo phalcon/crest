@@ -196,6 +196,14 @@ final class PublishCommandTest extends TestCase
         );
     }
 
+    public function testAStubNameWithATrailingNewlineIsRejected(): void
+    {
+        $status = $this->runCommand(["action\n"]);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("'action\n' is not a stub name", $this->readStderr());
+    }
+
     public function testAStubThatIsNotPackagedIsReported(): void
     {
         $status = $this->runCommand(['nope']);

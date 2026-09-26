@@ -63,6 +63,29 @@ final class ListCommandTest extends TestCase
         $this->assertStringNotContainsString('SomeHelper', $output);
     }
 
+    public function testAClassWithAPathButNoMethodIsSkipped(): void
+    {
+        // The framework answers null for both or for neither. A resolver that
+        // answers only the path shows that either null skips the class.
+        $this->writeAction('Health', 'GetHealth', 'App\Action\Health');
+
+        $command = new ListCommand(new StubActionResolver('', '/health'));
+
+        $status = $command->handle(
+            new Input(
+                'route:list',
+                $command->define()->merge(Kernel::globals())->bind(['--directory', $this->root])
+            ),
+            new Output($this->stdout, $this->stderr, false)
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'no actions found in ' . $this->root . '/src/Action' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
     public function testARootLevelActionIsListed(): void
     {
         // No namespace segments at all, so the verb is the entire class name -
