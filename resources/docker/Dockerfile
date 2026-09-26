@@ -12,10 +12,11 @@ ARG USER=crest
 ARG GROUP=crest
 
 # System packages, PHP extensions and an unprivileged user matching the host UID.
+# -o accepts an ID that the image already uses, for example GID 20 on macOS.
 RUN <<EOT
 set -eux
-groupadd -g "${GID}" "${GROUP}"
-useradd -l -m -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
+groupadd -o -g "${GID}" "${GROUP}"
+useradd -l -m -o -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
 apt-get update -y
 apt-get install -yq --no-install-recommends \
     curl git unzip zip libonig-dev libzip-dev locales
