@@ -86,7 +86,7 @@ final class NewCommand extends Command
      * first. It is a directory name, not a path. It is also the docker
      * container prefix, which must start with a letter or digit.
      */
-    private const NAME = '/^[A-Za-z0-9][A-Za-z0-9_-]*$/';
+    private const NAME = '/^[A-Za-z0-9][A-Za-z0-9_-]*\z/';
 
     /**
      * Variant => the composer requirement and its constraint. v5 needs 5.18,
@@ -101,10 +101,11 @@ final class NewCommand extends Command
     ];
 
     /**
-     * major.minor only. The Dockerfile base image `php:<version>-cli` has no
-     * patch tags, and composer.json uses the same value.
+     * major.minor only, with no leading zeros. The Dockerfile base image
+     * `php:<version>-cli` has no patch tags, and composer.json uses the same
+     * value.
      */
-    private const PHP = '/^\d+\.\d+$/';
+    private const PHP = '/^[1-9]\d*\.(?:0|[1-9]\d*)\z/';
 
     /**
      * The oldest PHP that runs the generated code. It uses readonly promoted

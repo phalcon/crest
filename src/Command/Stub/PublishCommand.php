@@ -49,7 +49,7 @@ final class PublishCommand extends ProjectCommand
     /**
      * A packaged stub name. Hyphens are in because `action-view` is one.
      */
-    private const NAME = '/^[A-Za-z0-9_-]+$/';
+    private const NAME = '/^[A-Za-z0-9_-]+\z/';
 
     public function define(): Definition
     {

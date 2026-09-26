@@ -47,7 +47,7 @@ final class ClassName
      * Deliberately byte-oriented and not /u: that is exactly how PHP itself
      * decides what may name a class.
      */
-    private const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/';
+    private const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*\z/';
 
     /**
      * A namespace: one name, or more names that backslashes join. Each name

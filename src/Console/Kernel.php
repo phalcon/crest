@@ -72,7 +72,7 @@ final class Kernel
     {
         return Definition::for('')
             ->option('config=s', 'Path to the project configuration file')
-            ->option('directory=s', 'Project root override')
+            ->option('directory=s', 'Directory to use instead of the working directory')
             ->option('trace', 'Show the full exception trace')
             ->option('help|h', 'Show this help')
             ->option('quiet|q', 'Suppress non-essential output');
