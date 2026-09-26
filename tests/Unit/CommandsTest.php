@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit;
 
 use Crest\Command\ServeCommand;
 use Crest\Commands;
+use Crest\Console\Exceptions\Exception;
 use PHPUnit\Framework\TestCase;
 
 use function array_keys;
@@ -69,6 +70,16 @@ final class CommandsTest extends TestCase
     public function testRegistryIsSeeded(): void
     {
         $this->assertNotSame([], Commands::registry()->all());
+    }
+
+    public function testRegistryNamesThePackageThatProvidesMigrationCommands(): void
+    {
+        // phalcon/migrations is not installed here. Crest cannot require it,
+        // not even for a test, because it needs PHP 8.2.
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown command 'migration:run'; provided by phalcon/migrations");
+
+        Commands::registry()->get('migration:run');
     }
 
     public function testRegistryResolvesTheAboutAliases(): void

@@ -162,6 +162,61 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
     }
 
+    public function testGetGivesNoProviderForANameOutsideEveryPrefix(): void
+    {
+        // Anchored: the message with a provider starts the same way.
+        $registry = (new Registry())->withProviders(['demo:' => 'vendor/demo']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches("/^unknown command 'other'$/");
+
+        $registry->get('other');
+    }
+
+    public function testGetGivesNoProviderWhenACommandHasThePrefix(): void
+    {
+        // A command with the prefix exists, so the package is installed and
+        // only the name is wrong.
+        $registry = (new Registry())
+            ->add('demo:run', FakeCommand::class)
+            ->withProviders(['demo:' => 'vendor/demo']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches("/^unknown command 'demo:rnu'$/");
+
+        $registry->get('demo:rnu');
+    }
+
+    public function testGetGivesNoProviderWhenADiscoveredCommandHasThePrefix(): void
+    {
+        // The same rule for a command that a package contributes: the miss
+        // runs discovery before the message is made.
+        $this->installExtra([self::KEY => ['commands' => ['demo:run' => FakeCommand::class]]]);
+
+        $registry = (new Registry())
+            ->withDiscovery(self::KEY)
+            ->withProviders(['demo:' => 'vendor/demo']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessageMatches("/^unknown command 'demo:rnu'$/");
+
+        $registry->get('demo:rnu');
+    }
+
+    public function testGetNamesTheProviderOfAnUnknownCommand(): void
+    {
+        // The first prefix does not match, so the search must go past it.
+        $registry = (new Registry())->withProviders([
+            'other:' => 'vendor/other',
+            'demo:'  => 'vendor/demo',
+        ]);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown command 'demo:run'; provided by vendor/demo");
+
+        $registry->get('demo:run');
+    }
+
     public function testGetStillThrowsAfterDiscoveryFindsNothing(): void
     {
         // A miss triggers the deferred scan; nothing in the test environment
