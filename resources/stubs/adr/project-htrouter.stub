@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Router for PHP's built-in server: php -S localhost:8080 -t public .htrouter.php
+ * Router for PHP's built-in server. crest serve and the container
+ * (resources/docker/Dockerfile) use it.
  * A request for a real file under public/ gets that file. All other requests
  * go to the front controller.
  */

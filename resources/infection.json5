@@ -31,6 +31,7 @@
                 // cannot return false on any path reaching the cast.
                 "Crest\\Generator\\Stub::render",
                 "Crest\\Project\\Config::psr4Map",
+                "Crest\\Command\\ServeCommand::envValue",
                 // Same guarantee from further off: sources() only ever yields
                 // paths it has confirmed with is_file(), or glob() results.
                 "Crest\\Command\\Stub\\PublishCommand::handle",
@@ -41,6 +42,8 @@
                 // the working directory cannot be read, which the suite
                 // cannot cause.
                 "Crest\\Command\\NewCommand::parent",
+                // The same reason as NewCommand::parent.
+                "Crest\\Command\\ServeCommand::root",
                 // Environment branch. See the note on Identical below.
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
