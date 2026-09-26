@@ -172,11 +172,6 @@
             // array_values() changes nothing at runtime. It stays because
             // table() declares list<list<string>> and PHPStan holds it to that.
             "ignore": ["Crest\\Command\\Route\\ListCommand::handle"]
-        },
-        "UnwrapTrim": {
-            // is_dir() accepts a doubled separator, so trimming the psr-4
-            // target changes nothing about which directory is found.
-            "ignore": ["Crest\\Project\\Config::infer"]
         }
     }
 }
