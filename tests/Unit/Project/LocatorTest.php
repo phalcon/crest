@@ -40,6 +40,28 @@ final class LocatorTest extends TestCase
         $this->assertSame($this->root . '/crest.php', Locator::locate($this->root));
     }
 
+    public function testProjectIsNullWhenNoDirectoryHasAComposerJson(): void
+    {
+        // From the filesystem root: a walk from the scratch directory finds
+        // the composer.json of this repository.
+        $this->assertNull(Locator::project('/'));
+    }
+
+    public function testProjectIsTheNearestDirectoryWithAComposerJson(): void
+    {
+        file_put_contents($this->root . '/composer.json', '{}');
+        file_put_contents($this->root . '/src/composer.json', '{}');
+
+        $this->assertSame($this->root . '/src', Locator::project($this->root . '/src/Action/Deep'));
+    }
+
+    public function testProjectWalksUpToTheComposerJson(): void
+    {
+        file_put_contents($this->root . '/composer.json', '{}');
+
+        $this->assertSame($this->root, Locator::project($this->root . '/src/Action/Deep'));
+    }
+
     public function testReturnsNullOnceTheFilesystemRootIsPassed(): void
     {
         // Nothing is written, so the walk runs all the way to '/' and has to
