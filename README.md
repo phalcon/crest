@@ -36,12 +36,19 @@ directory must be in your `PATH`:
 
 ## Usage
 
-In a project, use the crest in `vendor/`. The commands that work on the project need
-the project autoloader and its Phalcon:
+Run `crest` in a project. The commands that work on the project need the project
+autoloader and its Phalcon, so a global crest passes them to the project's
+`vendor/bin/crest` and returns its exit status:
 
-    vendor/bin/crest                      list available commands
-    vendor/bin/crest about                environment and version report
-    vendor/bin/crest make:action GET /company/all
+    crest                                 list available commands
+    crest about                           environment and version report
+    crest make:action GET /company/all
+
+`new`, `up`, `down`, `install` and `--version` always run in the crest that you type.
+Without a global crest, run `vendor/bin/crest` in the project. crest finds the project
+from a subdirectory, or from `--directory`. If the project requires `phalcon/crest` but
+has no `vendor/bin/crest` yet, crest stops and tells you to run `crest install` or
+`composer install`.
 
 To create a project, use the global crest. The new project requires `phalcon/crest`, so
 after `composer install` it has its own `vendor/bin/crest`:

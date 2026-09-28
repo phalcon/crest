@@ -33,6 +33,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Command\Make\NamedArtifactCommand`: base of `make:command`, `make:middleware`, `make:provider` and `make:responder`.
 - Added `serve` (alias `server`): runs `php -S 127.0.0.1:8080 -t public .htrouter.php` in the project root. Port: `--port`, then `APP_PORT` (environment or `.env`), then 8080. Fails if `.htrouter.php` or `vendor/autoload.php` is missing. [#10](https://github.com/phalcon/crest/issues/10)
 - Added a package hint for unknown commands: `unknown command 'migration:run'; provided by phalcon/migrations`. No hint when a command with that prefix is registered. The map is set with `Crest\Console\Registry::withProviders()`. [#19](https://github.com/phalcon/crest/issues/19)
+- Added the hand-off: in a project, a global crest passes each project command to the project's `vendor/bin/crest` and returns its exit status. `new`, `up`, `down`, `install` and `--version` stay in the global crest. A project that requires `phalcon/crest` without `vendor/bin/crest` gives an error. [#27](https://github.com/phalcon/crest/issues/27)
+- Added `Crest\Project\Locator::project()`: the nearest directory with a `composer.json`. [#27](https://github.com/phalcon/crest/issues/27)
 
 ### Changed
 
