@@ -64,9 +64,9 @@ same router and document root as the container. The port is `--port`, else
 as docker compose does: the last `APP_PORT` line wins, and `export`,
 `APP_PORT: <port>`, quotes and `#` comments are allowed. It does not expand
 `${...}`. Such a value stops `serve` with an error. `serve` finds the root
-from a subdirectory, and it does not need the crest in `vendor/`, so the
-global crest runs it. It stops before PHP starts if `.htrouter.php` or
-`vendor/autoload.php` is missing.
+from a subdirectory. A global crest passes it to the crest in `vendor/`, as
+it does the other project commands. It stops before PHP starts if
+`.htrouter.php` or `vendor/autoload.php` is missing.
 
 The server uses the PHP that runs crest. PHP options on the command line, for
 example `-d extension=phalcon.so`, do not reach it. Put such settings in
@@ -86,10 +86,20 @@ them with a crest outside the project, for example one that you install with
 The generated project requires `phalcon/crest` as a dev dependency. The
 commands that work on the project, for example `make:action` and
 `route:list`, need the autoloader and the Phalcon of the project. After
-`crest install` or `composer install`, run them with the crest in `vendor/`:
+`crest install` or `composer install`, the project has its own crest in
+`vendor/`. A global crest passes these commands to it, with the same
+arguments, and returns its exit status. In the container, there is no global
+crest:
 
-    vendor/bin/crest make:action GET /hello
+    crest make:action GET /hello
     docker compose exec app vendor/bin/crest make:action GET /hello
+
+`new`, `up`, `down`, `install` and `--version` always run in the crest that
+you type. crest finds the project from the working directory, or from
+`--directory`, and goes up to the nearest `composer.json`. If that project
+requires `phalcon/crest` but has no `vendor/bin/crest`, crest stops:
+
+    crest: /path/to/my-app has no vendor/bin/crest; run 'crest install' or 'composer install' first
 
 The files come from the `project-*` stubs. To change them, publish them by
 name in the directory that the project goes into (the working directory, or
@@ -170,8 +180,8 @@ reads the filesystem and keeps working on a project that does not currently run.
 
 `make:action` takes an HTTP method and a route path:
 
-    vendor/bin/crest make:action GET /company/all
-    vendor/bin/crest make:action GET /company/{id}
+    crest make:action GET /company/all
+    crest make:action GET /company/{id}
 
 The class name comes from the framework's routing convention, so the file lands
 where the router will look for it. Placeholders must come last: `/album/{id}/edit`

@@ -32,6 +32,8 @@
                 "Crest\\Generator\\Stub::render",
                 "Crest\\Project\\Config::psr4Map",
                 "Crest\\Command\\ServeCommand::envValue",
+                // Locator::project() found the composer.json first.
+                "Crest\\HandOff::missing",
                 // Same guarantee from further off: sources() only ever yields
                 // paths it has confirmed with is_file(), or glob() results.
                 "Crest\\Command\\Stub\\PublishCommand::handle",

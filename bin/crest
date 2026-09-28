@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 use Crest\Commands;
 use Crest\Console\Kernel;
+use Crest\Console\Output;
+use Crest\HandOff;
 
 // Dev checkout: bin/../vendor; installed dependency: vendor/phalcon/crest/bin -> vendor.
 foreach ([dirname(__DIR__) . '/vendor/autoload.php', dirname(__DIR__, 3) . '/autoload.php'] as $autoload) {
@@ -29,6 +31,16 @@ if (!class_exists(Kernel::class)) {
     exit(1);
 }
 
+$arguments = $_SERVER['argv'] ?? [];
+
+// In a project, a global crest passes the project commands to the crest of
+// the project.
+$status = (new HandOff())->run($arguments, new Output());
+
+if (null !== $status) {
+    exit($status);
+}
+
 $kernel = new Kernel(Commands::NAME, Commands::registry(), Commands::PACKAGE);
 
-exit($kernel->handle($_SERVER['argv'] ?? []));
+exit($kernel->handle($arguments));

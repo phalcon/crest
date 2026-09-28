@@ -27,13 +27,13 @@ Then open http://localhost:8080/.
 
 ## Next steps
 
-Use the crest in `vendor/` for these commands. It uses the autoloader and
-the Phalcon of this project. On the host:
+These commands use the crest in `vendor/`, with the autoloader and the
+Phalcon of this project. On the host, a global crest passes them to it:
 
-    vendor/bin/crest make:action GET /hello
-    vendor/bin/crest route:list
+    crest make:action GET /hello
+    crest route:list
 
-With docker:
+Without a global crest, use `vendor/bin/crest`. With docker:
 
     docker compose exec {{ service }} vendor/bin/crest make:action GET /hello
     docker compose exec {{ service }} vendor/bin/crest route:list
