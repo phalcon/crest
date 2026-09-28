@@ -17,19 +17,40 @@ use function dirname;
 use function is_file;
 
 /**
- * Finds the nearest crest.php by walking up from a starting directory, so
- * crest works from anywhere inside a project.
+ * Finds a file by walking up from a starting directory, so crest works from
+ * anywhere inside a project.
  */
 final class Locator
 {
     public const FILENAME = 'crest.php';
 
+    private const MANIFEST = 'composer.json';
+
+    /**
+     * The nearest crest.php.
+     */
     public static function locate(string $from): ?string
+    {
+        return self::nearest($from, self::FILENAME);
+    }
+
+    /**
+     * The project root: the nearest directory with a composer.json. The
+     * vendor/ directory of the project is next to that file.
+     */
+    public static function project(string $from): ?string
+    {
+        $manifest = self::nearest($from, self::MANIFEST);
+
+        return null === $manifest ? null : dirname($manifest);
+    }
+
+    private static function nearest(string $from, string $name): ?string
     {
         $current = $from;
 
         while (true) {
-            $candidate = $current . '/' . self::FILENAME;
+            $candidate = $current . '/' . $name;
 
             if (true === is_file($candidate)) {
                 return $candidate;

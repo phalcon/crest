@@ -39,6 +39,12 @@ use Crest\Console\Registry;
 final class Commands
 {
     /**
+     * The commands that run before a project exists. A global crest runs
+     * them itself, and passes the other commands to the crest of the project.
+     */
+    public const HOST = ['down', 'install', 'new', 'up'];
+
+    /**
      * Composer `extra` key packages use to contribute commands.
      */
     public const KEY = 'crest';
