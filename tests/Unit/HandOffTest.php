@@ -237,6 +237,21 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn(['route:list', '--directory', '--trace']);
     }
 
+    public function testADirectoryOptionWithAnEqualsSignIsLeftOutInTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['route:list', '--directory=' . $this->root . '/app', '--trace']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     public function testADirectoryOptionWithoutAValueMeansTheWorkingDirectory(): void
     {
         // The project crest reports the missing value.
@@ -384,6 +399,25 @@ final class HandOffTest extends TestCase
             'crest: ' . $this->root . "/app has no vendor/bin/crest; run 'crest install' or 'composer install' first"
             . PHP_EOL,
             $this->readStderr()
+        );
+    }
+
+    public function testARelativeConfigFileReachesTheContainerByName(): void
+    {
+        // Only the value is a path, not the whole token.
+        file_put_contents(
+            $this->root . '/app/crest.local.php',
+            "<?php\n\nreturn ['runtime' => ['type' => 'docker']];\n"
+        );
+
+        $this->handOff(['route:list', '--config=crest.local.php']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                '.',
+            ]],
+            $this->runner->calls
         );
     }
 

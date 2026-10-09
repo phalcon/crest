@@ -155,7 +155,7 @@ final class OutputTest extends TestCase
     {
         $this->answers("DOCKER\n");
 
-        $this->assertSame('docker', $this->interactive()->choice('Runtime', ['host', 'docker'], 'host'));
+        $this->assertSame('Docker', $this->interactive()->choice('Runtime', ['host', 'Docker'], 'host'));
     }
 
     public function testChoiceReturnsTheDefaultForAnEmptyAnswer(): void
