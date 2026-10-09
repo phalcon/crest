@@ -108,6 +108,15 @@ final class HandOffTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function serveCommands(): iterable
+    {
+        yield 'serve' => ['serve'];
+        yield 'the alias' => ['server'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function versionFlags(): iterable
     {
         yield 'long' => ['--version'];
@@ -420,6 +429,20 @@ final class HandOffTest extends TestCase
         chdir($this->root . '/other');
 
         $this->assertStays($this->handOff(['route:list']));
+    }
+
+    /**
+     * @dataProvider serveCommands
+     */
+    public function testServeRunsOnTheHostWithADockerRuntime(string $command): void
+    {
+        // A8: PHP's built-in server must listen on the host, not in the
+        // container.
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff([$command, '--port', '8099']);
+
+        $this->assertPassedOn([$command, '--port', '8099']);
     }
 
     public function testTheConfigOptionFindsTheProject(): void

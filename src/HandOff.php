@@ -64,6 +64,13 @@ final class HandOff
     public const BINARY = 'vendor/bin/crest';
 
     /**
+     * The commands that run on the host also with a docker runtime: `serve`
+     * and its alias start PHP's built-in server, which must listen on the
+     * host (A8).
+     */
+    private const ON_HOST = ['serve', 'server'];
+
+    /**
      * The global options that hold host paths.
      */
     private const PATH_OPTIONS = ['--config', '--directory'];
@@ -227,7 +234,8 @@ final class HandOff
 
     /**
      * Runs the crest of the project: in its compose service for a docker
-     * runtime, else with the PHP of the host.
+     * runtime, else with the PHP of the host. `serve` always runs on the
+     * host (ON_HOST).
      *
      * Only the runtime key is read. The other keys belong to the crest of the
      * project, which can be newer than this crest and accept values that this
@@ -241,7 +249,7 @@ final class HandOff
         $declared = require $file;
         $runtime  = Runtime::fromConfig($declared['runtime'] ?? null);
 
-        if (true === $runtime->isDocker()) {
+        if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', self::ON_HOST, true)) {
             return $this->runner->run($this->inContainer($runtime->service, $tokens), $root);
         }
 

@@ -37,7 +37,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Project\Locator::project()`: the nearest directory with a `composer.json`. [#27](https://github.com/phalcon/crest/issues/27)
 - Added `init`: writes `crest.php` for an existing project. It proposes the values that it finds (namespace, front controller, runtime) and asks for each one. [#28](https://github.com/phalcon/crest/issues/28)
 - Added the global option `--no-interaction` (`-n`): ask no questions and use the default answers. [#28](https://github.com/phalcon/crest/issues/28)
-- Added the `runtime` key to `crest.php`: `host`, or `docker` with a compose service. With docker, a global crest runs project commands with `docker compose exec`. [#28](https://github.com/phalcon/crest/issues/28)
+- Added the `runtime` key to `crest.php`: `host`, or `docker` with a compose service. With docker, a global crest runs project commands with `docker compose exec`, except `serve`, which runs on the host. [#28](https://github.com/phalcon/crest/issues/28)
 - Added questions to `new` for the values that no option gives (namespace, PHP, Phalcon, runtime). [#28](https://github.com/phalcon/crest/issues/28)
 
 ### Changed

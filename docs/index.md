@@ -117,7 +117,8 @@ If the project has no `vendor/bin/crest`, crest stops too:
 With `'runtime' => ['type' => 'docker', 'service' => 'app']` in `crest.php` (what `new`
 writes), a global crest runs the project commands in the container:
 `docker compose exec app vendor/bin/crest ...`. A v5 project then works on a host
-without `ext-phalcon`.
+without `ext-phalcon`. `serve` is the exception: it always runs on the host, because
+PHP's built-in server must listen there. With docker, `crest up` serves the project.
 
 The files come from the `project-*` stubs. To change them, publish them by
 name in the directory that the project goes into (the working directory, or

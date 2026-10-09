@@ -108,7 +108,8 @@ runs the project's `vendor/bin/crest` with the PHP of the host. With
 `docker compose exec app vendor/bin/crest ...` in the project root. Use docker when
 Phalcon is only in the container, for example a v5 project on a host without
 `ext-phalcon`. The containers must be up (`crest up`). `crest install` uses the same
-service.
+service. `crest serve` always runs on the host: PHP's built-in server must listen there.
+With docker, `crest up` serves the project.
 
 Namespaces are resolved from your psr-4 map, so a path must be covered by an autoload rule -
 `src/Action` under `App\ => src/` becomes `App\Action`. If you write to a directory your
