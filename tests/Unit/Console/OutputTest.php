@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Console;
 
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Tests\Support\CapturesOutput;
@@ -32,6 +33,74 @@ final class OutputTest extends TestCase
     protected function tearDown(): void
     {
         $this->closeStreams();
+    }
+
+    public function testAskAgainAfterAnAnswerThatTheCheckRefuses(): void
+    {
+        $this->answers("bad\ngood\n");
+
+        $answer = $this->interactive()->ask(
+            'Name',
+            'x',
+            static fn (string $answer): ?string => 'bad' === $answer ? 'not that one' : null
+        );
+
+        $this->assertSame('good', $answer);
+        $this->assertSame('Name [x]: Name [x]: ', $this->readStdout());
+        $this->assertSame('not that one' . PHP_EOL, $this->readStderr());
+    }
+
+    public function testAskReturnsTheAnswerWithoutTheLineEnd(): void
+    {
+        $this->answers("Shop\n");
+
+        $this->assertSame('Shop', $this->interactive()->ask('Namespace', 'App'));
+        $this->assertSame('Namespace [App]: ', $this->readStdout());
+    }
+
+    public function testAskReturnsTheDefaultForAnEmptyAnswer(): void
+    {
+        $this->answers("\n");
+
+        $this->assertSame('App', $this->interactive()->ask('Namespace', 'App'));
+    }
+
+    public function testAskShowsNoBracketsForAnEmptyDefault(): void
+    {
+        $this->answers("\n");
+
+        $this->assertSame('', $this->interactive()->ask('Front', ''));
+        $this->assertSame('Front: ', $this->readStdout());
+    }
+
+    public function testAskStopsWhenTheInputEnds(): void
+    {
+        // Ctrl+D. Nothing is typed, so there is no answer.
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('no answer; input ended');
+
+        $this->interactive()->ask('Namespace', 'App');
+    }
+
+    public function testAskWithoutInteractionReturnsTheDefaultAndWritesNothing(): void
+    {
+        $this->answers("Shop\n");
+
+        $output = new Output($this->stdout, $this->stderr, false, $this->stdin, false);
+
+        $this->assertSame('App', $output->ask('Namespace', 'App'));
+        $this->assertSame('', $this->readStdout());
+    }
+
+    public function testAskWithoutInteractionStopsWhenTheDefaultFailsTheCheck(): void
+    {
+        // Without interaction, crest cannot ask again.
+        $output = new Output($this->stdout, $this->stderr, false, $this->stdin, false);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('bad default');
+
+        $output->ask('Name', 'x', static fn (string $answer): string => 'bad default');
     }
 
     public function testBannerColorsOnlyTheMarkWhenDecorated(): void
@@ -58,6 +127,33 @@ final class OutputTest extends TestCase
         $this->assertSame(Output::MARK . ' demo 1.2.3' . PHP_EOL, $this->readStdout());
     }
 
+    public function testChoiceAsksAgainForAnotherAnswer(): void
+    {
+        $this->answers("podman\ndocker\n");
+
+        $this->assertSame('docker', $this->interactive()->choice('Runtime', ['host', 'docker'], 'host'));
+        $this->assertSame('Runtime (host, docker) [host]: Runtime (host, docker) [host]: ', $this->readStdout());
+        $this->assertSame("'podman' is not one of: host, docker" . PHP_EOL, $this->readStderr());
+    }
+
+    public function testChoiceReturnsTheDefaultForAnEmptyAnswer(): void
+    {
+        $this->answers("\n");
+
+        $this->assertSame('host', $this->interactive()->choice('Runtime', ['host', 'docker'], 'host'));
+    }
+
+    public function testDisableInteractionStopsTheQuestions(): void
+    {
+        $this->answers("Shop\n");
+
+        $output = $this->interactive();
+        $output->disableInteraction();
+
+        $this->assertSame('App', $output->ask('Namespace', 'App'));
+        $this->assertSame('', $this->readStdout());
+    }
+
     public function testErrorGoesToStderrNotStdout(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);
@@ -75,6 +171,18 @@ final class OutputTest extends TestCase
         $output->error('it broke');
 
         $this->assertSame("\033[31mit broke\033[0m" . PHP_EOL, $this->readStderr());
+    }
+
+    public function testInteractionFollowsTheTerminalByDefault(): void
+    {
+        // php://memory is never a terminal: a pipe or CI asks no questions,
+        // and nothing waits for input.
+        $this->answers("Shop\n");
+
+        $output = new Output($this->stdout, $this->stderr, false, $this->stdin);
+
+        $this->assertSame('App', $output->ask('Namespace', 'App'));
+        $this->assertSame('', $this->readStdout());
     }
 
     public function testLineWithNoArgumentWritesOnlyANewline(): void
@@ -279,5 +387,10 @@ final class OutputTest extends TestCase
         $output->write('partial');
 
         $this->assertSame('partial', $this->readStdout());
+    }
+
+    private function interactive(): Output
+    {
+        return new Output($this->stdout, $this->stderr, false, $this->stdin, true);
     }
 }

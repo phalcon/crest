@@ -22,9 +22,9 @@ use function getcwd;
  * A throwaway project a generator can be pointed at, plus the kernel to run one
  * command against it.
  *
- * Every generator test needed the same four things - scratch directory, a psr-4
- * composer.json, captured streams, and the working directory moved inside the
- * scratch project - and each was carrying its own copy.
+ * Every generator test needed the same five things - scratch directory, a psr-4
+ * composer.json, a crest.php, captured streams, and the working directory moved
+ * inside the scratch project - and each was carrying its own copy.
  *
  * @mixin \PHPUnit\Framework\TestCase
  */
@@ -47,15 +47,16 @@ trait GeneratesInAScratchProject
      * @param class-string<Command> $class
      * @param list<string>          $arguments
      */
-    protected function runProjectCommand(string $name, string $class, array $arguments): int
+    protected function runProjectCommand(string $name, string $class, array $arguments, bool $interactive = false): int
     {
-        return $this->runThroughKernel($name, $class, [...$arguments, '--directory', $this->root]);
+        return $this->runThroughKernel($name, $class, [...$arguments, '--directory', $this->root], $interactive);
     }
 
     protected function startScratchProject(string $prefix, string ...$subdirectories): void
     {
         $this->makeScratchDirectory($prefix, ...$subdirectories);
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
         $this->captureStreams();
 
         // Config::discover() falls back to the working directory when

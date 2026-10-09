@@ -32,13 +32,13 @@ trait RunsACommandDirectly
     /**
      * @param list<string> $tokens
      */
-    protected function handleDirectly(Command $command, array $tokens): int
+    protected function handleDirectly(Command $command, array $tokens, bool $interactive = false): int
     {
         $definition = $command->define();
 
         return $command->handle(
             new Input($definition->getName(), $definition->merge(Kernel::globals())->bind($tokens)),
-            new Output($this->stdout, $this->stderr, false)
+            new Output($this->stdout, $this->stderr, false, $this->stdin, $interactive)
         );
     }
 }

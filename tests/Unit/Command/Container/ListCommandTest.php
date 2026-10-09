@@ -45,6 +45,7 @@ final class ListCommandTest extends TestCase
     {
         $this->makeScratchDirectory('container-list', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
         $this->captureStreams();
     }
 

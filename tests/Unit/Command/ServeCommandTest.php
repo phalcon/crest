@@ -16,7 +16,6 @@ namespace Crest\Tests\Unit\Command;
 use Crest\Command\NewCommand;
 use Crest\Command\ServeCommand;
 use Crest\Console\Exceptions\Exception;
-use Crest\Project\Locator;
 use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\RunsACommandDirectly;
 use Crest\Tests\Support\ScratchDirectory;
@@ -52,6 +51,7 @@ final class ServeCommandTest extends TestCase
         // once with "Directory public does not exist". Thus no test can hang.
         $this->makeScratchDirectory('serve', 'src');
         $this->project($this->root);
+        $this->writeCrestPhp();
 
         // An APP_PORT from outside the suite must not change the port.
         putenv('APP_PORT');
@@ -123,7 +123,9 @@ final class ServeCommandTest extends TestCase
 
     public function testAMissingAutoloaderStopsBeforePhpStarts(): void
     {
-        // composer install has not run.
+        // composer install has not run. src/ is a second project with its own
+        // crest.php.
+        file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
         file_put_contents($this->root . '/src/' . ServeCommand::ROUTER, "<?php\n");
 
         $this->assertSame(
@@ -134,7 +136,9 @@ final class ServeCommandTest extends TestCase
 
     public function testAMissingRouterStopsBeforePhpStarts(): void
     {
-        // A project that `new` did not make, or a wrong --directory.
+        // A project that `new` did not make.
+        file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
+
         $this->assertSame(
             $this->root . '/src/.htrouter.php was not found; serve uses the router script that crest new writes',
             $this->refusal(['--directory', $this->root . '/src'])
@@ -159,9 +163,6 @@ final class ServeCommandTest extends TestCase
         // `--directory="$DIR"` with an unset variable. As for `new` and `up`,
         // empty reads as absent.
         chdir($this->root);
-
-        // The test needs no crest.php here or above.
-        $this->assertNull(Locator::locate($this->root));
 
         $runner = new FakeRunner();
 
@@ -281,6 +282,18 @@ final class ServeCommandTest extends TestCase
         );
     }
 
+    public function testTheConfigOptionNamesTheRoot(): void
+    {
+        file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
+        $this->project($this->root . '/src');
+
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new ServeCommand($runner), ['--config', $this->root . '/src/crest.php']);
+
+        $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root . '/src']], $runner->calls);
+    }
+
     public function testTheDefaultPortIs8080(): void
     {
         $runner = new FakeRunner();
@@ -291,11 +304,11 @@ final class ServeCommandTest extends TestCase
         $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root]], $runner->calls);
     }
 
-    public function testTheDirectoryOptionWinsOverCrestPhp(): void
+    public function testTheDirectoryOptionFindsItsOwnProject(): void
     {
-        // Run from a project root that has crest.php. --directory names
-        // another project, and serve runs there.
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
+        // Run from a project root. --directory names another project, with
+        // its own crest.php, and serve runs there.
+        file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
         $this->project($this->root . '/src');
         chdir($this->root);
 
@@ -304,6 +317,16 @@ final class ServeCommandTest extends TestCase
         $this->handleDirectly(new ServeCommand($runner), ['--directory', $this->root . '/src']);
 
         $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root . '/src']], $runner->calls);
+    }
+
+    public function testTheDirectoryOptionWalksUpToCrestPhp(): void
+    {
+        // src/ has no crest.php: the root is the folder above it.
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new ServeCommand($runner), ['--directory', $this->root . '/src']);
+
+        $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root]], $runner->calls);
     }
 
     /**
@@ -359,7 +382,6 @@ final class ServeCommandTest extends TestCase
     public function testTheRootIsTheNearestCrestPhpAbove(): void
     {
         // Run from src/. `up` also works from a subdirectory.
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn [];\n");
         chdir($this->root . '/src');
 
         $runner = new FakeRunner();
@@ -369,19 +391,14 @@ final class ServeCommandTest extends TestCase
         $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root]], $runner->calls);
     }
 
-    public function testWithoutCrestPhpTheWorkingDirectoryIsTheRoot(): void
+    public function testWithoutCrestPhpServeStopsWithTheInitHint(): void
     {
         // No crest.php here or above: this repository has no crest.php above
         // tests/_output.
+        unlink($this->root . '/crest.php');
         chdir($this->root);
 
-        $this->assertNull(Locator::locate($this->root));
-
-        $runner = new FakeRunner();
-
-        $this->handleDirectly(new ServeCommand($runner), []);
-
-        $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root]], $runner->calls);
+        $this->assertSame("no crest.php found; run 'crest init'", $this->refusal([]));
     }
 
     /**

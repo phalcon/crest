@@ -64,4 +64,13 @@ trait ScratchDirectory
             (string) json_encode(['autoload' => ['psr-4' => $psr4]], JSON_PRETTY_PRINT)
         );
     }
+
+    /**
+     * A crest.php at the scratch root. The default body states nothing, so
+     * each key takes its default.
+     */
+    protected function writeCrestPhp(string $body = '[]'): void
+    {
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn " . $body . ";\n");
+    }
 }
