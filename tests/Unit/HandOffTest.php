@@ -162,6 +162,27 @@ final class HandOffTest extends TestCase
         $this->assertStays($this->handOff(['route:list', '--config=' . $this->root . '/missing.php']));
     }
 
+    public function testAConfigFileWithAnotherNameReachesTheContainerByName(): void
+    {
+        // The container works in the root, the folder of the file. Without
+        // its name, the crest there reads crest.php.
+        file_put_contents(
+            $this->root . '/app/crest.local.php',
+            "<?php\n\nreturn ['runtime' => ['type' => 'docker']];\n"
+        );
+        chdir($this->root . '/other');
+
+        $this->handOff(['route:list', '--config', $this->root . '/app/crest.local.php']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     public function testACrestPhpWithASyntaxErrorIsReported(): void
     {
         // One crest line, not a PHP trace.
@@ -205,6 +226,15 @@ final class HandOffTest extends TestCase
         chdir($this->root . '/other');
 
         $this->assertStays($this->handOff(['route:list', '--', '--directory=' . $this->root . '/app']));
+    }
+
+    public function testADirectoryOptionBeforeAnotherOptionHasNoValue(): void
+    {
+        // As in the parser: a token that starts with '-' is not a value. The
+        // project crest reports the missing value.
+        $this->handOff(['route:list', '--directory', '--trace']);
+
+        $this->assertPassedOn(['route:list', '--directory', '--trace']);
     }
 
     public function testADirectoryOptionWithoutAValueMeansTheWorkingDirectory(): void
@@ -404,6 +434,7 @@ final class HandOffTest extends TestCase
     public function testHostPathsDoNotReachTheContainer(): void
     {
         // --directory and --config are host paths. The root is already found.
+        // The container gets only the name of the config file.
         $this->runtime("['type' => 'docker']");
         chdir($this->root . '/other');
 
@@ -417,7 +448,7 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.php', '--trace'],
                 $this->root . '/app',
             ]],
             $this->runner->calls

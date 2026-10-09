@@ -48,7 +48,8 @@ final class KernelTest extends TestCase
 
         $this->asking(['crest', 'ask']);
 
-        $this->assertSame('Name [default]: answer: typed' . PHP_EOL, $this->readStdout());
+        $this->assertSame('answer: typed' . PHP_EOL, $this->readStdout());
+        $this->assertSame('Name [default]: ', $this->readStderr());
     }
 
     public function testBindingErrorIsAOneLineStderrMessage(): void

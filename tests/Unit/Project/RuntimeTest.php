@@ -15,10 +15,23 @@ namespace Crest\Tests\Unit\Project;
 
 use Crest\Console\Exceptions\Exception;
 use Crest\Project\Runtime;
+use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
 final class RuntimeTest extends TestCase
 {
+    use ScratchDirectory;
+
+    protected function setUp(): void
+    {
+        $this->makeScratchDirectory('runtime');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeScratchDirectory();
+    }
+
     public function testADockerRuntimeNamesItsService(): void
     {
         $runtime = Runtime::fromConfig(['type' => 'docker', 'service' => 'web']);
@@ -36,7 +49,7 @@ final class RuntimeTest extends TestCase
     public function testAMissingTypeIsRefused(): void
     {
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage("unknown runtime ''; expected host or docker");
+        $this->expectExceptionMessage("'runtime' needs a 'type': host or docker");
 
         Runtime::fromConfig(['service' => 'web']);
     }
@@ -65,6 +78,24 @@ final class RuntimeTest extends TestCase
     public function testDockerRendersItsService(): void
     {
         $this->assertSame("['type' => 'docker', 'service' => 'web']", Runtime::docker('web')->render());
+    }
+
+    public function testFromFileReadsOnlyTheRuntimeKey(): void
+    {
+        // A newer crest can write a flavor that this crest does not know.
+        $this->writeCrestPhp("['flavor' => 'future', 'runtime' => ['type' => 'docker', 'service' => 'web']]");
+
+        $runtime = Runtime::fromFile($this->root . '/crest.php');
+
+        $this->assertTrue($runtime->isDocker());
+        $this->assertSame('web', $runtime->service);
+    }
+
+    public function testFromFileWithoutTheKeyIsTheHost(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->assertFalse(Runtime::fromFile($this->root . '/crest.php')->isDocker());
     }
 
     public function testHostRendersOnlyItsType(): void

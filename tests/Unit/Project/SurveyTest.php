@@ -176,7 +176,10 @@ final class SurveyTest extends TestCase
     public function testNoComposerJsonStops(): void
     {
         $this->expectException(Exception::class);
-        $this->expectExceptionMessageMatches('/^no usable psr-4 autoload entry found in composer\.json$/');
+        $this->expectExceptionMessage(
+            'no usable psr-4 autoload entry found in composer.json; add one, e.g. "App\\\\": "app/", '
+            . "run 'composer dump-autoload', then run 'crest init'"
+        );
 
         Survey::settings($this->root . '/src');
     }

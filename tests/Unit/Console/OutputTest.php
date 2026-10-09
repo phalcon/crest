@@ -46,8 +46,8 @@ final class OutputTest extends TestCase
         );
 
         $this->assertSame('good', $answer);
-        $this->assertSame('Name [x]: Name [x]: ', $this->readStdout());
-        $this->assertSame('not that one' . PHP_EOL, $this->readStderr());
+        $this->assertSame('', $this->readStdout());
+        $this->assertSame('Name [x]: not that one' . PHP_EOL . 'Name [x]: ', $this->readStderr());
     }
 
     public function testAskReturnsTheAnswerWithoutTheLineEnd(): void
@@ -55,7 +55,6 @@ final class OutputTest extends TestCase
         $this->answers("Shop\n");
 
         $this->assertSame('Shop', $this->interactive()->ask('Namespace', 'App'));
-        $this->assertSame('Namespace [App]: ', $this->readStdout());
     }
 
     public function testAskReturnsTheDefaultForAnEmptyAnswer(): void
@@ -70,7 +69,7 @@ final class OutputTest extends TestCase
         $this->answers("\n");
 
         $this->assertSame('', $this->interactive()->ask('Front', ''));
-        $this->assertSame('Front: ', $this->readStdout());
+        $this->assertSame('Front: ', $this->readStderr());
     }
 
     public function testAskStopsWhenTheInputEnds(): void
@@ -90,6 +89,7 @@ final class OutputTest extends TestCase
 
         $this->assertSame('App', $output->ask('Namespace', 'App'));
         $this->assertSame('', $this->readStdout());
+        $this->assertSame('', $this->readStderr());
     }
 
     public function testAskWithoutInteractionStopsWhenTheDefaultFailsTheCheck(): void
@@ -101,6 +101,18 @@ final class OutputTest extends TestCase
         $this->expectExceptionMessage('bad default');
 
         $output->ask('Name', 'x', static fn (string $answer): string => 'bad default');
+    }
+
+    public function testAskWritesTheQuestionToStderr(): void
+    {
+        // A redirect of stdout keeps the prompt on the terminal, and out of
+        // the file.
+        $this->answers("Shop\n");
+
+        $this->interactive()->ask('Namespace', 'App');
+
+        $this->assertSame('', $this->readStdout());
+        $this->assertSame('Namespace [App]: ', $this->readStderr());
     }
 
     public function testBannerColorsOnlyTheMarkWhenDecorated(): void
@@ -132,8 +144,18 @@ final class OutputTest extends TestCase
         $this->answers("podman\ndocker\n");
 
         $this->assertSame('docker', $this->interactive()->choice('Runtime', ['host', 'docker'], 'host'));
-        $this->assertSame('Runtime (host, docker) [host]: Runtime (host, docker) [host]: ', $this->readStdout());
-        $this->assertSame("'podman' is not one of: host, docker" . PHP_EOL, $this->readStderr());
+        $this->assertSame(
+            "Runtime (host, docker) [host]: 'podman' is not one of: host, docker" . PHP_EOL
+            . 'Runtime (host, docker) [host]: ',
+            $this->readStderr()
+        );
+    }
+
+    public function testChoiceIgnoresTheCaseAndGivesTheSpellingOfTheList(): void
+    {
+        $this->answers("DOCKER\n");
+
+        $this->assertSame('docker', $this->interactive()->choice('Runtime', ['host', 'docker'], 'host'));
     }
 
     public function testChoiceReturnsTheDefaultForAnEmptyAnswer(): void
@@ -152,6 +174,7 @@ final class OutputTest extends TestCase
 
         $this->assertSame('App', $output->ask('Namespace', 'App'));
         $this->assertSame('', $this->readStdout());
+        $this->assertSame('', $this->readStderr());
     }
 
     public function testErrorGoesToStderrNotStdout(): void

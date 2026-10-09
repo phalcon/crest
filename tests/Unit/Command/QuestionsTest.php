@@ -11,11 +11,11 @@
 
 declare(strict_types=1);
 
-namespace Crest\Tests\Unit\Project;
+namespace Crest\Tests\Unit\Command;
 
+use Crest\Command\Questions;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
-use Crest\Project\Questions;
 use Crest\Project\Runtime;
 use Crest\Tests\Support\CapturesOutput;
 use PHPUnit\Framework\TestCase;
@@ -47,7 +47,7 @@ final class QuestionsTest extends TestCase
         $this->answers("\n");
 
         $this->assertNull(Questions::bootstrap($this->interactive(), null));
-        $this->assertSame('Front controller class (empty for none): ', $this->readStdout());
+        $this->assertSame('Front controller class (empty for none): ', $this->readStderr());
     }
 
     public function testBootstrapTakesTheDefault(): void
@@ -78,7 +78,7 @@ final class QuestionsTest extends TestCase
         $this->answers("\n");
 
         $this->assertSame('App', Questions::namespace($this->interactive(), 'App'));
-        $this->assertSame('Root namespace [App]: ', $this->readStdout());
+        $this->assertSame('Root namespace [App]: ', $this->readStderr());
     }
 
     public function testNamespaceAsksAgainForAnUnusableAnswer(): void
@@ -94,6 +94,43 @@ final class QuestionsTest extends TestCase
         $this->answers("\\Shop\\\n");
 
         $this->assertSame('Shop', Questions::namespace($this->interactive(), 'App'));
+    }
+
+    public function testRuntimeAGivenServiceAsksOnlyTheType(): void
+    {
+        $this->answers("docker\n");
+
+        $this->assertSame('web', Questions::runtime($this->interactive(), Runtime::docker(), null, 'web')->service);
+        $this->assertSame('Runtime (host, docker) [docker]: ', $this->readStderr());
+    }
+
+    public function testRuntimeAGivenServiceIsChecked(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'bad!' is not a usable service name");
+
+        Questions::runtime($this->interactive(), Runtime::docker(), 'docker', 'bad!');
+    }
+
+    public function testRuntimeAGivenTypeAsksOnlyTheService(): void
+    {
+        $this->answers("web\n");
+
+        $this->assertSame('web', Questions::runtime($this->interactive(), Runtime::docker(), 'docker')->service);
+        $this->assertSame('Docker compose service [app]: ', $this->readStderr());
+    }
+
+    public function testRuntimeAGivenTypeIgnoresTheCase(): void
+    {
+        $this->assertFalse(Questions::runtime($this->interactive(), Runtime::docker(), 'HOST')->isDocker());
+    }
+
+    public function testRuntimeAnUnknownGivenTypeIsRefused(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown runtime 'podman'; expected host or docker");
+
+        Questions::runtime($this->interactive(), Runtime::docker(), 'podman');
     }
 
     public function testRuntimeAsksAgainForAnUnusableService(): void
@@ -114,7 +151,7 @@ final class QuestionsTest extends TestCase
         $this->assertSame('web', $runtime->service);
         $this->assertSame(
             'Runtime (host, docker) [docker]: Docker compose service [web]: ',
-            $this->readStdout()
+            $this->readStderr()
         );
     }
 
@@ -133,7 +170,7 @@ final class QuestionsTest extends TestCase
         $this->answers("host\n");
 
         $this->assertFalse(Questions::runtime($this->interactive(), Runtime::docker())->isDocker());
-        $this->assertSame('Runtime (host, docker) [docker]: ', $this->readStdout());
+        $this->assertSame('Runtime (host, docker) [docker]: ', $this->readStderr());
     }
 
     public function testWithoutInteractionTheProposalsAreTheAnswers(): void
@@ -144,6 +181,7 @@ final class QuestionsTest extends TestCase
         $this->assertSame('Shop\\AppFront', Questions::bootstrap($output, 'Shop\\AppFront'));
         $this->assertSame('web', Questions::runtime($output, Runtime::docker('web'))->service);
         $this->assertSame('', $this->readStdout());
+        $this->assertSame('', $this->readStderr());
     }
 
     private function interactive(): Output

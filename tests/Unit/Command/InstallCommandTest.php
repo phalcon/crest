@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command;
 
 use Crest\Command\InstallCommand;
+use Crest\Console\Exceptions\Exception;
 use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\RunsACommandDirectly;
 use Crest\Tests\Support\ScratchDirectory;
@@ -35,6 +36,22 @@ final class InstallCommandTest extends TestCase
     {
         $this->closeStreams();
         $this->removeScratchDirectory();
+    }
+
+    public function testAnUnknownFlavorIsLeftToTheProjectCrest(): void
+    {
+        // install reads only the runtime key. A newer crest can write a
+        // flavor that this crest does not know.
+        $this->writeCrestPhp("['flavor' => 'future', 'runtime' => ['type' => 'docker', 'service' => 'web']]");
+
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+
+        $this->assertSame(
+            [[['docker', 'compose', 'exec', 'web', 'composer', 'install'], $this->root]],
+            $runner->calls
+        );
     }
 
     public function testComposerInstallRunsInTheAppService(): void
@@ -67,5 +84,22 @@ final class InstallCommandTest extends TestCase
             [[['docker', 'compose', 'exec', 'web', 'composer', 'install'], $this->root]],
             $runner->calls
         );
+    }
+
+    public function testWithoutCrestPhpInstallStops(): void
+    {
+        $this->removeScratchDirectory();
+        $this->makeScratchDirectory('install');
+
+        $runner = new FakeRunner();
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("no crest.php found; run 'crest init'");
+
+        try {
+            $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+        } finally {
+            $this->assertSame([], $runner->calls);
+        }
     }
 }
