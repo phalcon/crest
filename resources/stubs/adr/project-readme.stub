@@ -28,7 +28,9 @@ Then open http://localhost:8080/.
 ## Next steps
 
 These commands use the crest in `vendor/`, with the autoloader and the
-Phalcon of this project. On the host, a global crest passes them to it:
+Phalcon of this project. On the host, a global crest passes them to it. With
+the docker runtime in `crest.php` (the default of `crest new`), it runs them
+in the `{{ service }}` container:
 
     crest make:action GET /hello
     crest route:list
