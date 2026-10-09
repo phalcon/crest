@@ -39,6 +39,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the global option `--no-interaction` (`-n`): ask no questions and use the default answers. [#28](https://github.com/phalcon/crest/issues/28)
 - Added the `runtime` key to `crest.php`: `host`, or `docker` with a compose service. With docker, a global crest runs project commands with `docker compose exec`, except `serve`, which runs on the host. [#28](https://github.com/phalcon/crest/issues/28)
 - Added questions to `new` for the values that no option gives (namespace, PHP, Phalcon, runtime). [#28](https://github.com/phalcon/crest/issues/28)
+- Added the options `--runtime=host|docker` and `--service` to `new`: they answer the runtime questions. [#28](https://github.com/phalcon/crest/issues/28)
 
 ### Changed
 
@@ -62,6 +63,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the hand-off: a project with `crest.php` that does not require crest gets the `composer require --dev phalcon/crest` hint. [#28](https://github.com/phalcon/crest/issues/28)
 - Changed `new`: `crest.php` states every path and the runtime. [#28](https://github.com/phalcon/crest/issues/28)
 - Changed `install`: it uses the service of the `runtime` key. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed the `project-config` stub: its placeholders are `namespace`, `bootstrap`, `paths` and `runtime`. `bootstrap` and `paths` give whole lines. A copy that was published before this change stops `new` and `init`; publish it again. [#28](https://github.com/phalcon/crest/issues/28)
+- Reserved the global option `--no-interaction` (`-n`). A contributed command that declares either one fails when it runs. [#28](https://github.com/phalcon/crest/issues/28)
 
 ### Fixed
 

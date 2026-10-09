@@ -44,6 +44,8 @@ Only the `adr` flavor has generators. A `cli` or `mvc` project can still run
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
+| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
+| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 In a terminal, `new` asks for each value that no option gives: the namespace, the PHP
@@ -120,6 +122,13 @@ writes), a global crest runs the project commands in the container:
 without `ext-phalcon`. `serve` is the exception: it always runs on the host, because
 PHP's built-in server must listen there. With docker, `crest up` serves the project.
 
+The docker runtime has two conditions. The service must mount the project folder, with
+`vendor/` in it: crest looks for `vendor/bin/crest` on the host first. And the
+`working_dir` of the service must be the project root: `vendor/bin/crest` runs there. The
+compose file of `new` does both. `install` runs composer in the service of the docker
+runtime. With the host runtime, it uses the service `app`; run `composer install` on the
+host instead.
+
 The files come from the `project-*` stubs. To change them, publish them by
 name in the directory that the project goes into (the working directory, or
 `--directory`), then edit the copies:
@@ -153,6 +162,10 @@ and the runtime: docker when the project has `compose.yaml`, `compose.yml`,
 service. Press Enter to accept a proposal. `--no-interaction` accepts all of them.
 `--force` overwrites an existing `crest.php`. If the project does not require crest,
 `init` prints the `composer require` line.
+
+`init` needs a psr-4 entry in `composer.json`, because the generators get their
+namespaces from it. Without one, `init` stops and tells you to add one, for example
+`"App\\": "app/"`, and to run `composer dump-autoload`.
 
 ## Commands that boot the project
 

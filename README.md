@@ -58,6 +58,18 @@ after `composer install` it has its own `vendor/bin/crest`:
 
     crest new my-app                      create an ADR project
 
+In a terminal, `new` asks for each value that no option gives. `--no-interaction` takes
+the defaults:
+
+| Option | Purpose |
+|---|---|
+| `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
+| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
+| `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
+| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
+| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
+| `--force` | write into a directory that is not empty, and overwrite files with the same names |
+
 For an existing project, `crest init` writes `crest.php`:
 
     crest init                            write crest.php for this project
@@ -79,7 +91,7 @@ For an existing project, `crest init` writes `crest.php`:
 Each project has a `crest.php` at its root. `crest new` writes it. For an existing
 project, `crest init` writes it. `init` proposes the values that it finds in the project:
 the namespace and the folder of the first psr-4 entry whose folder exists, the front
-controller `<namespace>\AppFront` when `src/AppFront.php` is there, and the docker
+controller `<namespace>\AppFront` when `AppFront.php` is in that folder, and the docker
 runtime when the project has a compose file. It asks you to confirm each one.
 `--no-interaction` accepts the proposals. `--force` overwrites an existing `crest.php`.
 
@@ -107,9 +119,12 @@ runs the project's `vendor/bin/crest` with the PHP of the host. With
 `['type' => 'docker', 'service' => 'app']`, it runs
 `docker compose exec app vendor/bin/crest ...` in the project root. Use docker when
 Phalcon is only in the container, for example a v5 project on a host without
-`ext-phalcon`. The containers must be up (`crest up`). `crest install` uses the same
-service. `crest serve` always runs on the host: PHP's built-in server must listen there.
-With docker, `crest up` serves the project.
+`ext-phalcon`. The containers must be up (`crest up`). The service must mount the project
+folder, with `vendor/` in it, and its `working_dir` must be the project root. The compose
+file of `crest new` does this. `crest install` runs composer in the same service. With the
+host runtime, it uses the service `app`; run `composer install` on the host instead.
+`crest serve` always runs on the host: PHP's built-in server must listen there. With
+docker, `crest up` serves the project.
 
 Namespaces are resolved from your psr-4 map, so a path must be covered by an autoload rule -
 `src/Action` under `App\ => src/` becomes `App\Action`. If you write to a directory your
