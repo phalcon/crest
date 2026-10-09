@@ -40,8 +40,9 @@ use Crest\Console\Registry;
 final class Commands
 {
     /**
-     * The commands that run before a project exists, or before it has
-     * crest.php. A global crest runs them itself, and passes the other
+     * The commands that need no vendor/ of the project: `new` and `init`
+     * write crest.php, and `up`, `down` and `install` run before composer
+     * install. A global crest runs them itself, and passes the other
      * commands to the crest of the project.
      */
     public const HOST = ['down', 'init', 'install', 'new', 'up'];

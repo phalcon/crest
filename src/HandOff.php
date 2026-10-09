@@ -23,6 +23,7 @@ use Crest\Project\Runtime;
 use Throwable;
 
 use function array_slice;
+use function basename;
 use function count;
 use function dirname;
 use function in_array;
@@ -237,17 +238,13 @@ final class HandOff
      * runtime, else with the PHP of the host. `serve` always runs on the
      * host (ON_HOST).
      *
-     * Only the runtime key is read. The other keys belong to the crest of the
-     * project, which can be newer than this crest and accept values that this
-     * crest does not know.
+     * Only the runtime key is read (Runtime::fromFile()).
      *
      * @param list<string> $tokens
      */
     private function pass(string $file, string $root, string $binary, array $tokens): int
     {
-        /** @var array<string, mixed> $declared */
-        $declared = require $file;
-        $runtime  = Runtime::fromConfig($declared['runtime'] ?? null);
+        $runtime = Runtime::fromFile($file);
 
         if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', self::ON_HOST, true)) {
             return $this->runner->run($this->inContainer($runtime->service, $tokens), $root);
@@ -258,8 +255,9 @@ final class HandOff
 
     /**
      * The value of a global path option: `--name=value` or `--name value`.
-     * The last value wins, as in the parser. After `--`, tokens are values,
-     * not options. Empty when the option is absent.
+     * The last value wins, and a next token that starts with `-` is not a
+     * value, as in the parser. After `--`, tokens are values, not options.
+     * Empty when the option is absent.
      *
      * @param list<string> $tokens
      */
@@ -278,7 +276,8 @@ final class HandOff
             }
 
             if ($option === $token) {
-                $value = $tokens[$index + 1] ?? '';
+                $next  = $tokens[$index + 1] ?? '';
+                $value = true === str_starts_with($next, '-') ? '' : $next;
             }
         }
 
@@ -286,10 +285,12 @@ final class HandOff
     }
 
     /**
-     * The tokens without --directory and --config and their values. They are
-     * host paths, and the root is already found. A value is the next token
-     * when it does not start with `-`, as in the parser. After `--`, tokens
-     * are values and stay.
+     * The tokens without --directory and its value, and with only the file
+     * name of --config. They are host paths, and the root is already found.
+     * The container works in the root, the folder of the config file, so the
+     * name finds the file there. A value is the next token when it does not
+     * start with `-`, as in the parser. After `--`, tokens are values and
+     * stay.
      *
      * @param list<string> $tokens
      *
@@ -308,17 +309,26 @@ final class HandOff
             }
 
             if (true === in_array($token, self::PATH_OPTIONS, true)) {
-                if (false === str_starts_with($tokens[$index + 1] ?? '-', '-')) {
+                $next = $tokens[$index + 1] ?? '-';
+
+                if (false === str_starts_with($next, '-')) {
                     $index++;
+
+                    if ('--config' === $token) {
+                        $kept[] = '--config=' . basename($next);
+                    }
                 }
 
                 continue;
             }
 
-            if (
-                true === str_starts_with($token, '--config=')
-                || true === str_starts_with($token, '--directory=')
-            ) {
+            if (true === str_starts_with($token, '--config=')) {
+                $kept[] = '--config=' . basename(substr($token, strlen('--config=')));
+
+                continue;
+            }
+
+            if (true === str_starts_with($token, '--directory=')) {
                 continue;
             }
 

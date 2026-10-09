@@ -72,10 +72,24 @@ final class Runtime
         return match ($type) {
             self::DOCKER => self::docker($service),
             self::HOST   => self::host(),
+            null         => throw new Exception("'runtime' needs a 'type': host or docker"),
             default      => throw new Exception(
                 sprintf("unknown runtime '%s'; expected host or docker", true === is_string($type) ? $type : '')
             ),
         };
+    }
+
+    /**
+     * The `runtime` key of a crest.php, and no other key. The other keys
+     * belong to the crest of the project, which can be newer than this crest
+     * and accept values that this crest does not know.
+     */
+    public static function fromFile(string $file): self
+    {
+        /** @var array<string, mixed> $declared */
+        $declared = require $file;
+
+        return self::fromConfig($declared['runtime'] ?? null);
     }
 
     public static function host(): self

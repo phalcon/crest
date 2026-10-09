@@ -25,7 +25,6 @@ use Crest\Paths;
 use Crest\Project\Flavor;
 use Crest\Project\Locator;
 use Crest\Project\Manifest;
-use Crest\Project\Questions;
 use Crest\Project\Settings;
 use Crest\Project\Survey;
 

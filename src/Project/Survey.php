@@ -83,7 +83,10 @@ final class Survey
         }
 
         if ([] === $missing) {
-            throw new Exception('no usable psr-4 autoload entry found in composer.json');
+            throw new Exception(
+                'no usable psr-4 autoload entry found in composer.json; add one, e.g. "App\\\\": "app/", '
+                . "run 'composer dump-autoload', then run 'crest init'"
+            );
         }
 
         throw new Exception(

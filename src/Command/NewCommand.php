@@ -24,7 +24,6 @@ use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
-use Crest\Project\Questions;
 use Crest\Project\Runtime;
 use Crest\Project\Settings;
 use FilesystemIterator;
@@ -156,6 +155,8 @@ final class NewCommand extends Command
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
             ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
+            ->option('runtime=s', 'Where the project commands run: host or docker. Default: docker')
+            ->option('service=s', 'The docker compose service, for docker. Default: app')
             ->option('force', 'Write into a directory that is not empty, and overwrite files with the same names');
     }
 
@@ -194,7 +195,12 @@ final class NewCommand extends Command
 
         [$package, $constraint] = self::PHALCON[$variant];
 
-        $runtime = Questions::runtime($output, Runtime::docker());
+        $runtime = Questions::runtime(
+            $output,
+            Runtime::docker(),
+            $input->optionStringOrNull('runtime'),
+            $input->optionStringOrNull('service')
+        );
 
         // Overrides come from the directory that the project goes into. A
         // team that publishes the project stubs there gets its own
@@ -234,7 +240,13 @@ final class NewCommand extends Command
         $files = [];
 
         foreach (self::FILES as $stubName => $path) {
-            $files[$path] = $stub->render($flavor, $stubName, $replacements);
+            // crest.php gets only the values of Settings, as for `crest init`.
+            // Thus an old published copy stops here, and does not drop a key.
+            $files[$path] = $stub->render(
+                $flavor,
+                $stubName,
+                Stub::PROJECT_PREFIX . 'config' === $stubName ? $settings->replacements() : $replacements
+            );
         }
 
         // The seed action uses the usual action stub. Convention cannot name

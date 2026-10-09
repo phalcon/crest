@@ -11,15 +11,18 @@
 
 declare(strict_types=1);
 
-namespace Crest\Project;
+namespace Crest\Command;
 
 use Closure;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Generator\ClassName;
+use Crest\Project\Runtime;
 
+use function in_array;
 use function preg_match;
 use function sprintf;
+use function strtolower;
 
 /**
  * The questions that `crest init` and `crest new` share (D07). Each one shows
@@ -28,6 +31,11 @@ use function sprintf;
  */
 final class Questions
 {
+    /**
+     * The runtime types, in the order of the question.
+     */
+    private const RUNTIMES = [Runtime::HOST, Runtime::DOCKER];
+
     /**
      * A docker compose service name.
      */
@@ -78,14 +86,28 @@ final class Questions
     }
 
     /**
-     * The runtime, and the service when it is docker.
+     * The runtime, and the service when it is docker. A given type or service
+     * (an option of `crest new`) answers its question. It gets the same check
+     * as an answer.
      */
-    public static function runtime(Output $output, Runtime $default): Runtime
-    {
-        $type = $output->choice('Runtime', [Runtime::HOST, Runtime::DOCKER], $default->type);
+    public static function runtime(
+        Output $output,
+        Runtime $default,
+        ?string $type = null,
+        ?string $service = null,
+    ): Runtime {
+        $type = null === $type
+            ? $output->choice('Runtime', self::RUNTIMES, $default->type)
+            : self::type($type);
 
         if (Runtime::HOST === $type) {
             return Runtime::host();
+        }
+
+        if (null !== $service) {
+            self::service($service);
+
+            return Runtime::docker($service);
         }
 
         return Runtime::docker(
@@ -98,5 +120,19 @@ final class Questions
         if (0 === preg_match(self::SERVICE, $service)) {
             throw new Exception(sprintf("'%s' is not a usable service name", $service));
         }
+    }
+
+    /**
+     * A given runtime type, in any case, as the list spells it.
+     */
+    private static function type(string $type): string
+    {
+        $lower = strtolower($type);
+
+        if (false === in_array($lower, self::RUNTIMES, true)) {
+            throw new Exception(sprintf("unknown runtime '%s'; expected host or docker", $type));
+        }
+
+        return $lower;
     }
 }

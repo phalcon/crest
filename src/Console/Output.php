@@ -16,17 +16,19 @@ namespace Crest\Console;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Parsing\Definition;
 
+use function array_combine;
+use function array_map;
 use function fgets;
 use function fwrite;
 use function getenv;
 use function implode;
-use function in_array;
 use function max;
 use function mb_strlen;
 use function rtrim;
 use function sprintf;
 use function str_pad;
 use function stream_isatty;
+use function strtolower;
 use function trim;
 
 use const PHP_EOL;
@@ -94,7 +96,8 @@ final class Output
     /**
      * Asks for a value and returns the answer. An empty answer gives the
      * default. When the run is not interactive, nothing is asked and the
-     * default is the answer.
+     * default is the answer. The question goes to stderr, as the errors do:
+     * a redirect of stdout keeps it on the terminal, and out of the file.
      *
      * The check returns null for a good answer, or the error text. An
      * interactive run shows the error and asks again. A run that is not
@@ -108,7 +111,7 @@ final class Output
             $answer = $default;
 
             if (true === $this->interactive) {
-                $this->write('' === $default ? $question . ': ' : $question . ' [' . $default . ']: ');
+                fwrite($this->stderr, '' === $default ? $question . ': ' : $question . ' [' . $default . ']: ');
                 $answer = $this->answer($default);
             }
 
@@ -140,21 +143,26 @@ final class Output
     }
 
     /**
-     * Asks for one of the options. Another answer is an error.
+     * Asks for one of the options. The case of the answer does not matter:
+     * the result is the option as the list spells it. Another answer is an
+     * error.
      *
      * @param list<string> $options
      */
     public function choice(string $question, array $options, string $default): string
     {
-        $list = implode(', ', $options);
+        $list    = implode(', ', $options);
+        $byLower = array_combine(array_map(strtolower(...), $options), $options);
 
-        return $this->ask(
+        $answer = $this->ask(
             $question . ' (' . $list . ')',
             $default,
-            static fn (string $answer): ?string => true === in_array($answer, $options, true)
+            static fn (string $answer): ?string => true === isset($byLower[strtolower($answer)])
                 ? null
                 : sprintf("'%s' is not one of: %s", $answer, $list)
         );
+
+        return $byLower[strtolower($answer)];
     }
 
     /**

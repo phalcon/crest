@@ -13,16 +13,18 @@ declare(strict_types=1);
 
 namespace Crest\Command;
 
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Config;
+use Crest\Project\Runtime;
 
 /**
  * Runs composer install in the project container. On the host, use
  * `composer install` directly. This command exists because crest knows the
  * container: the service of the `runtime` key in crest.php, `app` when the
- * key does not name one.
+ * key does not name one. As the hand-off, it reads only that key.
  */
 final class InstallCommand extends ComposeCommand
 {
@@ -33,11 +35,9 @@ final class InstallCommand extends ComposeCommand
 
     public function handle(Input $input, Output $output): int
     {
-        $service = Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        )->runtime()->service;
+        $file = Config::file($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'))
+            ?? throw new Exception(Config::MISSING);
 
-        return $this->compose($input, ['exec', $service, 'composer', 'install']);
+        return $this->compose($input, ['exec', Runtime::fromFile($file)->service, 'composer', 'install']);
     }
 }
