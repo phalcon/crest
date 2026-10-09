@@ -30,22 +30,20 @@
                 // Guarded by is_file() immediately above, so file_get_contents()
                 // cannot return false on any path reaching the cast.
                 "Crest\\Generator\\Stub::render",
-                "Crest\\Project\\Config::psr4Map",
+                "Crest\\Project\\Manifest::read",
                 "Crest\\Command\\ServeCommand::envValue",
-                // Locator::project() found the composer.json first.
-                "Crest\\HandOff::missing",
+                // Guarded by is_file() in Survey::runtime().
+                "Crest\\Project\\Survey::services",
                 // Same guarantee from further off: sources() only ever yields
                 // paths it has confirmed with is_file(), or glob() results.
                 "Crest\\Command\\Stub\\PublishCommand::handle",
                 // getcwd() returns false only when the working directory is
                 // unreadable, which the suite cannot produce.
-                "Crest\\Project\\Config::discover",
-                // Same as Config::discover: getcwd() returns false only when
+                "Crest\\Project\\Locator::start",
+                // Same as Locator::start: getcwd() returns false only when
                 // the working directory cannot be read, which the suite
                 // cannot cause.
                 "Crest\\Command\\NewCommand::parent",
-                // The same reason as NewCommand::parent.
-                "Crest\\Command\\ServeCommand::root",
                 // Environment branch. See the note on Identical below.
                 "Crest\\Command\\AboutCommand::phalcon"
             ]
@@ -104,7 +102,11 @@
                 "Crest\\Generator\\ArtifactWriter::write",
                 // The max() seed only has to be <= the shortest cell; any
                 // non-positive seed gives the same width.
-                "Crest\\Console\\Output::table"
+                "Crest\\Console\\Output::table",
+                // The max() seed only stops max() from failing on no paths.
+                // With no paths, the loop does not use the width. With paths,
+                // each key is longer than the seed.
+                "Crest\\Project\\Settings::pathLines"
             ]
         },
         "FalseValue": {
@@ -139,7 +141,9 @@
                 // which is never '--trace', '--help' or '-h'.
                 "Crest\\Console\\Kernel::beforeLiteral",
                 // The guard that the suite cannot reach. See Throw_.
-                "Crest\\Process\\ShellRunner::start"
+                "Crest\\Process\\ShellRunner::start",
+                // The same reason as for DecrementInteger.
+                "Crest\\Project\\Settings::pathLines"
             ]
         },
         "NotIdentical": {

@@ -25,6 +25,7 @@ use function in_array;
 use function str_starts_with;
 
 use const STDERR;
+use const STDIN;
 use const STDOUT;
 
 /**
@@ -45,11 +46,14 @@ final class Kernel
     private Registry $registry;
 
     /**
-     * @param string   $name     Tool name used in errors, banner and usage.
-     * @param Registry $registry Seeded by the owning tool; never defaulted.
-     * @param string   $package  Composer package name, for --version.
-     * @param resource $stdout
-     * @param resource $stderr
+     * @param string    $name        Tool name used in errors, banner and usage.
+     * @param Registry  $registry    Seeded by the owning tool; never defaulted.
+     * @param string    $package     Composer package name, for --version.
+     * @param resource  $stdout
+     * @param resource  $stderr
+     * @param resource  $stdin
+     * @param bool|null $interactive Null asks questions only when stdin is a
+     *                               terminal.
      */
     public function __construct(
         string $name,
@@ -58,11 +62,13 @@ final class Kernel
         $stdout = STDOUT,
         $stderr = STDERR,
         ?bool $decorated = null,
+        $stdin = STDIN,
+        ?bool $interactive = null,
     ) {
         $this->name     = $name;
         $this->registry = $registry;
         $this->package  = $package;
-        $this->output   = new Output($stdout, $stderr, $decorated);
+        $this->output   = new Output($stdout, $stderr, $decorated, $stdin, $interactive);
     }
 
     /**
@@ -75,7 +81,8 @@ final class Kernel
             ->option('directory=s', 'Directory to use instead of the working directory')
             ->option('trace', 'Show the full exception trace')
             ->option('help|h', 'Show this help')
-            ->option('quiet|q', 'Suppress non-essential output');
+            ->option('quiet|q', 'Suppress non-essential output')
+            ->option('no-interaction|n', 'Ask no questions; use the default answers');
     }
 
     /**
@@ -165,7 +172,13 @@ final class Kernel
             return 0;
         }
 
-        return $command->handle(new Input($name, $definition->bind($tokens)), $this->output);
+        $bound = $definition->bind($tokens);
+
+        if (true === $bound->option('no-interaction')) {
+            $this->output->disableInteraction();
+        }
+
+        return $command->handle(new Input($name, $bound), $this->output);
     }
 
     private function version(): string

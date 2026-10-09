@@ -41,6 +41,7 @@ final class ListCommandTest extends TestCase
     {
         $this->makeScratchDirectory('event-list', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
         $this->captureStreams();
     }
 

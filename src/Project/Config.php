@@ -18,16 +18,11 @@ use Crest\Console\Exceptions\Exception;
 use function array_keys;
 use function dirname;
 use function explode;
-use function file_get_contents;
-use function getcwd;
 use function implode;
 use function in_array;
 use function is_array;
-use function is_dir;
 use function is_file;
 use function is_string;
-use function json_decode;
-use function rtrim;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -39,12 +34,16 @@ use function trim;
  * including the one mapping nothing else may re-derive: which namespace a
  * configured directory belongs to.
  *
- * crest.php is optional: with none present the namespace and paths are
- * inferred from composer.json's psr-4 map, so generators work immediately
- * after composer create-project with no setup.
+ * crest.php marks a crest project, and it is required (D07). The project root
+ * is the folder of the crest.php that the root rule finds (see file()).
  */
 final class Config
 {
+    /**
+     * The error when the root rule finds no crest.php.
+     */
+    public const MISSING = "no crest.php found; run 'crest init'";
+
     /**
      * @param array<string, string> $paths
      * @param array<string, string> $namespaces
@@ -60,30 +59,11 @@ final class Config
         private readonly array $paths,
         private readonly array $namespaces,
         private readonly array $psr4,
-        private readonly ?string $source = null,
+        private readonly string $source,
+        private readonly Runtime $runtime,
         private readonly array $declared = [],
         private readonly ?string $bootstrap = null,
     ) {
-    }
-
-    /**
-     * @param string|null $directory  Project root; defaults to the cwd.
-     * @param string|null $configFile Explicit crest.php, bypassing the walk-up.
-     */
-    public static function discover(?string $directory = null, ?string $configFile = null): self
-    {
-        $directory = rtrim($directory ?? (string) getcwd(), '/');
-
-        $file = $configFile ?? Locator::locate($directory);
-
-        if (null !== $file && true === is_file($file)) {
-            /** @var array<string, mixed> $declared */
-            $declared = require $file;
-
-            return self::fromArray($declared, dirname($file), $file);
-        }
-
-        return self::infer($directory);
     }
 
     /**
@@ -100,7 +80,7 @@ final class Config
      *
      * @return array<string, string>
      */
-    private static function defaultPaths(Flavor $flavor): array
+    public static function defaultPaths(Flavor $flavor): array
     {
         return match ($flavor) {
             Flavor::ADR => [
@@ -115,6 +95,50 @@ final class Config
             ],
             Flavor::CLI, Flavor::MVC => [],
         };
+    }
+
+    /**
+     * @param string|null $directory  Where the walk up starts. Null or empty
+     *                                for the working directory.
+     * @param string|null $configFile An explicit crest.php, instead of the
+     *                                walk up. Null or empty for none.
+     */
+    public static function discover(?string $directory = null, ?string $configFile = null): self
+    {
+        $file = self::required($directory, $configFile);
+
+        /** @var array<string, mixed> $declared */
+        $declared = require $file;
+
+        return self::fromArray($declared, dirname($file), $file);
+    }
+
+    /**
+     * The root rule: the explicit config file, else the nearest crest.php on
+     * the walk up from the directory, or from the working directory. Null
+     * when there is none. An empty value reads as absent. The walk starts
+     * at Locator::start(), so a relative or missing directory cannot lead
+     * to another project.
+     */
+    public static function file(?string $directory = null, ?string $configFile = null): ?string
+    {
+        if (null !== $configFile && '' !== $configFile) {
+            if (false === is_file($configFile)) {
+                throw new Exception(sprintf('%s was not found', $configFile));
+            }
+
+            return $configFile;
+        }
+
+        return Locator::locate(Locator::start($directory));
+    }
+
+    /**
+     * The project root: the folder of the crest.php that file() finds.
+     */
+    public static function rootFor(?string $directory = null, ?string $configFile = null): string
+    {
+        return dirname(self::required($directory, $configFile));
     }
 
     /**
@@ -176,87 +200,21 @@ final class Config
             // crest.php never restates the autoload map; namespaceFor()
             // still needs it whenever `namespaces` does not answer the
             // question outright.
-            self::psr4Map($root),
+            Manifest::psr4($root),
             $source,
+            Runtime::fromConfig($declared['runtime'] ?? null),
             $stated,
             $bootstrap
         );
     }
 
     /**
-     * No crest.php: take the first psr-4 entry whose directory actually
-     * exists and build defaults around it. The whole map is retained, not just
-     * the winning prefix, because namespaceFor() needs it.
+     * The crest.php that file() finds. No crest.php stops the command with the
+     * crest init hint.
      */
-    private static function infer(string $directory): self
+    private static function required(?string $directory, ?string $configFile): string
     {
-        if (false === is_file($directory . '/composer.json')) {
-            throw new Exception('no crest.php and no composer.json found');
-        }
-
-        $psr4    = self::psr4Map($directory);
-        $missing = [];
-
-        foreach ($psr4 as $prefix => $target) {
-            $target = trim($target, '/');
-
-            if (false === is_dir($directory . '/' . $target)) {
-                $missing[] = "'" . $target . "'";
-                continue;
-            }
-
-            return new self(
-                Flavor::ADR,
-                trim($prefix, '\\'),
-                $directory,
-                self::defaultPaths(Flavor::ADR),
-                [],
-                $psr4
-            );
-        }
-
-        if ([] === $missing) {
-            throw new Exception('no crest.php and no usable psr-4 autoload entry found');
-        }
-
-        throw new Exception(
-            sprintf(
-                'no crest.php and no usable psr-4 autoload entry found; these psr-4 directories do not exist: %s',
-                implode(', ', $missing)
-            )
-        );
-    }
-
-    /**
-     * composer.json's psr-4 map, flattened so each prefix has exactly one
-     * directory. Returns an empty map when composer.json is missing or has no
-     * psr-4 section.
-     *
-     * @return array<string, string>
-     */
-    private static function psr4Map(string $root): array
-    {
-        $composer = $root . '/composer.json';
-
-        if (false === is_file($composer)) {
-            return [];
-        }
-
-        /** @var array{autoload?: array{psr-4?: array<string, string|list<string>>}} $decoded */
-        $decoded = json_decode((string) file_get_contents($composer), true) ?: [];
-
-        $map = [];
-        foreach ($decoded['autoload']['psr-4'] ?? [] as $prefix => $target) {
-            $target = is_array($target) ? ($target[0] ?? '') : $target;
-
-            if ('' === $target) {
-                continue;
-            }
-
-            $map[$prefix] = $target;
-        }
-
-        return $map;
+        return self::file($directory, $configFile) ?? throw new Exception(self::MISSING);
     }
 
     /**
@@ -387,10 +345,17 @@ final class Config
     }
 
     /**
-     * The config file this was read from, or null when everything was inferred
-     * from composer.json.
+     * Where the project commands run (the `runtime` key).
      */
-    public function source(): ?string
+    public function runtime(): Runtime
+    {
+        return $this->runtime;
+    }
+
+    /**
+     * The crest.php this was read from.
+     */
+    public function source(): string
     {
         return $this->source;
     }

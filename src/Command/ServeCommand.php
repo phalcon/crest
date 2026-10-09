@@ -20,17 +20,14 @@ use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
-use Crest\Project\Locator;
+use Crest\Project\Config;
 
 use function count;
-use function dirname;
 use function file_get_contents;
-use function getcwd;
 use function getenv;
 use function is_file;
 use function preg_match;
 use function preg_match_all;
-use function rtrim;
 use function sprintf;
 
 use const PHP_BINARY;
@@ -42,7 +39,8 @@ use const PHP_BINARY;
  * same application.
  *
  * It extends the console Command, not ProjectCommand. It does not read
- * crest.php, and it does not load the project's vendor/: the server runs
+ * crest.php, it only finds it for the root, and it does not load the
+ * project's vendor/: the server runs
  * the project in a child process, where public/index.php loads the project
  * autoloader. Thus a global crest can run it.
  */
@@ -210,22 +208,15 @@ final class ServeCommand extends Command
     }
 
     /**
-     * --directory, if the user gave one. An empty value reads as absent, as
-     * it does for `new` and `up`. If not, the directory of the nearest
-     * crest.php above the working directory, so that serve works from a
-     * subdirectory. If there is no crest.php, the working directory.
+     * The project root, by the root rule of all commands: the folder of the
+     * --config file, or of the nearest crest.php above --directory or the
+     * working directory. So serve works from a subdirectory.
      */
     private function root(Input $input): string
     {
-        $directory = $input->optionString('directory');
-
-        if ('' !== $directory) {
-            return rtrim($directory, '/');
-        }
-
-        $cwd  = (string) getcwd();
-        $file = Locator::locate($cwd);
-
-        return null === $file ? $cwd : dirname($file);
+        return Config::rootFor(
+            $input->optionStringOrNull('directory'),
+            $input->optionStringOrNull('config')
+        );
     }
 }

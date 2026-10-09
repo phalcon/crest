@@ -18,6 +18,7 @@ use Crest\Command\Config\ShowCommand as ConfigShowCommand;
 use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\DownCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
+use Crest\Command\InitCommand;
 use Crest\Command\InstallCommand;
 use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
@@ -39,10 +40,12 @@ use Crest\Console\Registry;
 final class Commands
 {
     /**
-     * The commands that run before a project exists. A global crest runs
-     * them itself, and passes the other commands to the crest of the project.
+     * The commands that need no vendor/ of the project: `new` and `init`
+     * write crest.php, and `up`, `down` and `install` run before composer
+     * install. A global crest runs them itself, and passes the other
+     * commands to the crest of the project.
      */
-    public const HOST = ['down', 'install', 'new', 'up'];
+    public const HOST = ['down', 'init', 'install', 'new', 'up'];
 
     /**
      * Composer `extra` key packages use to contribute commands.
@@ -78,6 +81,7 @@ final class Commands
             ->add('container:list', ContainerListCommand::class)
             ->add('down', DownCommand::class)
             ->add('event:list', EventListCommand::class)
+            ->add('init', InitCommand::class)
             ->add('install', InstallCommand::class)
             ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)

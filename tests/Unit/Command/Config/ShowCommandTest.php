@@ -23,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
 use function preg_replace;
+use function unlink;
 
 use const PHP_EOL;
 
@@ -35,6 +36,7 @@ final class ShowCommandTest extends TestCase
     {
         $this->makeScratchDirectory('config-show', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
         $this->captureStreams();
     }
 
@@ -59,18 +61,18 @@ final class ShowCommandTest extends TestCase
         // asserting the padding here would pin something this test is not about.
         $output = $this->normalized();
 
-        $this->assertStringContainsString('action ' . $this->root . '/src/Action inferred', $output);
+        $this->assertStringContainsString('action ' . $this->root . '/src/Action default', $output);
         $this->assertStringContainsString('views ' . $this->root . '/templates declared', $output);
     }
 
-    public function testAnInferredProjectSaysSoAndShowsWhatWasInferred(): void
+    public function testAnEmptyCrestPhpShowsTheDefaults(): void
     {
         $status = $this->runCommand();
 
         $output = $this->readStdout();
 
         $this->assertSame(0, $status);
-        $this->assertStringContainsString('inferred from composer.json', $output);
+        $this->assertStringContainsString('Source: ' . $this->root . '/crest.php', $output);
         $this->assertStringContainsString('adr', $output);
         $this->assertStringContainsString('App', $output);
         $this->assertStringContainsString($this->root, $output);
@@ -93,13 +95,13 @@ final class ShowCommandTest extends TestCase
         $this->assertStringContainsString($this->root . '/src/Action', $output);
     }
 
-    public function testDeclaredValuesAreDistinguishedFromInferredOnes(): void
+    public function testDeclaredValuesAreDistinguishedFromDefaults(): void
     {
-        // flavor and namespace are declared; paths is not, so it keeps the
-        // default and must still read as inferred.
+        // namespace is declared; flavor and the paths are not, so they keep
+        // their defaults and must read as default.
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['flavor' => 'mvc', 'namespace' => 'Shop'];\n"
+            "<?php\n\nreturn ['namespace' => 'Shop'];\n"
         );
 
         $this->runCommand();
@@ -107,7 +109,7 @@ final class ShowCommandTest extends TestCase
         $output = $this->readStdout();
 
         $this->assertStringContainsString('declared', $output);
-        $this->assertStringContainsString('inferred', $output);
+        $this->assertStringContainsString('default', $output);
     }
 
     public function testDefinitionNamesItselfConfigShow(): void
@@ -115,13 +117,13 @@ final class ShowCommandTest extends TestCase
         $this->assertSame('config:show', (new ShowCommand())->define()->getName());
     }
 
-    public function testEveryValueIsMarkedInferredWhenThereIsNoConfigFile(): void
+    public function testEveryValueIsMarkedDefaultWhenCrestPhpStatesNothing(): void
     {
         $this->runCommand();
 
         $output = $this->readStdout();
 
-        $this->assertStringContainsString('inferred', $output);
+        $this->assertStringContainsString('default', $output);
         $this->assertStringNotContainsString('declared', $output);
     }
 
@@ -152,7 +154,7 @@ final class ShowCommandTest extends TestCase
         $expected = 'Source: ' . $this->root . '/crest.php' . PHP_EOL
             . PHP_EOL
             . 'ITEM VALUE ORIGIN' . PHP_EOL
-            . 'root ' . $this->root . ' inferred' . PHP_EOL
+            . 'root ' . $this->root . ' crest.php' . PHP_EOL
             . 'flavor mvc declared' . PHP_EOL
             . 'namespace Shop declared' . PHP_EOL
             . PHP_EOL
@@ -163,25 +165,33 @@ final class ShowCommandTest extends TestCase
         $this->assertSame($expected, $this->normalized());
     }
 
-    public function testTheWholeReportIsRenderedForAnInferredProject(): void
+    public function testTheWholeReportIsRenderedForAnEmptyCrestPhp(): void
     {
         $this->runCommand();
 
-        $expected = 'Source: inferred from composer.json' . PHP_EOL
+        $expected = 'Source: ' . $this->root . '/crest.php' . PHP_EOL
             . PHP_EOL
             . 'ITEM VALUE ORIGIN' . PHP_EOL
-            . 'root ' . $this->root . ' inferred' . PHP_EOL
-            . 'flavor adr inferred' . PHP_EOL
-            . 'namespace App inferred' . PHP_EOL
+            . 'root ' . $this->root . ' crest.php' . PHP_EOL
+            . 'flavor adr default' . PHP_EOL
+            . 'namespace App default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
-            . 'action ' . $this->root . '/src/Action inferred' . PHP_EOL
-            . 'command ' . $this->root . '/src/Command inferred' . PHP_EOL
-            . 'middleware ' . $this->root . '/src/Middleware inferred' . PHP_EOL
-            . 'provider ' . $this->root . '/src/Provider inferred' . PHP_EOL
-            . 'responder ' . $this->root . '/src/Responder inferred' . PHP_EOL;
+            . 'action ' . $this->root . '/src/Action default' . PHP_EOL
+            . 'command ' . $this->root . '/src/Command default' . PHP_EOL
+            . 'middleware ' . $this->root . '/src/Middleware default' . PHP_EOL
+            . 'provider ' . $this->root . '/src/Provider default' . PHP_EOL
+            . 'responder ' . $this->root . '/src/Responder default' . PHP_EOL;
 
         $this->assertSame($expected, $this->normalized());
+    }
+
+    public function testWithoutCrestPhpItStopsWithTheInitHint(): void
+    {
+        unlink($this->root . '/crest.php');
+
+        $this->assertSame(1, $this->runCommand());
+        $this->assertSame("crest: no crest.php found; run 'crest init'" . PHP_EOL, $this->readStderr());
     }
 
     /**

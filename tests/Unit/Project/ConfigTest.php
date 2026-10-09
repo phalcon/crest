@@ -19,26 +19,41 @@ use Crest\Project\Flavor;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function chdir;
 use function file_put_contents;
+use function getcwd;
 use function mkdir;
 
 final class ConfigTest extends TestCase
 {
     use ScratchDirectory;
 
+    private string $previousCwd = '';
+
     protected function setUp(): void
     {
         $this->makeScratchDirectory('project', 'src/Action');
+        $this->previousCwd = (string) getcwd();
     }
 
     protected function tearDown(): void
     {
+        chdir($this->previousCwd);
         $this->removeScratchDirectory();
+    }
+
+    public function testADirectoryThatDoesNotExistIsReported(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/missing is not a directory');
+
+        Config::rootFor($this->root . '/missing');
     }
 
     public function testAdrGetsADefaultPathForEveryGeneratedArtifact(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
 
         $this->assertSame(
             [
@@ -52,16 +67,40 @@ final class ConfigTest extends TestCase
         );
     }
 
-    public function testComposerJsonWithoutPsr4EntriesThrows(): void
+    public function testAMissingExplicitConfigFileIsReported(): void
     {
-        // No psr-4 entry at all, so there is no missing directory to name.
-        // Anchored: the message with a directory list starts the same way.
-        $this->writeComposerJson([]);
-
         $this->expectException(Exception::class);
-        $this->expectExceptionMessageMatches('/^no crest\.php and no usable psr-4 autoload entry found$/');
+        $this->expectExceptionMessage($this->root . '/missing.php was not found');
 
-        Config::discover($this->root);
+        Config::discover($this->root, $this->root . '/missing.php');
+    }
+
+    public function testAnEmptyConfigFileMeansTheWalkUp(): void
+    {
+        $this->writeCrestPhp("['namespace' => 'Walked']");
+
+        $this->assertSame('Walked', Config::discover($this->root . '/src/Action', '')->namespace());
+    }
+
+    public function testAnEmptyDirectoryMeansTheWorkingDirectory(): void
+    {
+        // `--directory="$DIR"` with an unset variable reads as absent.
+        $this->writeCrestPhp();
+        chdir($this->root . '/src');
+
+        $this->assertSame($this->root, Config::discover('')->root());
+    }
+
+    public function testARelativeDirectoryIsWalkedFromWhereItPoints(): void
+    {
+        // From project a/, `../b` names b/, which has no crest.php. The walk
+        // must not come back to a/.
+        mkdir($this->root . '/a');
+        mkdir($this->root . '/b');
+        file_put_contents($this->root . '/a/crest.php', "<?php\n\nreturn [];\n");
+        chdir($this->root . '/a');
+
+        $this->assertNull(Config::file('../b'));
     }
 
     public function testCrestPhpMayDeclareTheNamespaceExplicitly(): void
@@ -150,6 +189,20 @@ final class ConfigTest extends TestCase
         $this->assertSame($this->root . '/src/Action', $config->path('action'));
     }
 
+    public function testDefaultsApplyWhenCrestPhpStatesNothing(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame(Flavor::ADR, $config->flavor());
+        $this->assertSame('App', $config->namespace());
+        $this->assertSame($this->root . '/src/Action', $config->path('action'));
+        $this->assertSame($this->root, $config->root());
+        $this->assertNull($config->bootstrap());
+    }
+
     public function testExplicitConfigFileBeatsADiscoveredOne(): void
     {
         // Both exist, so this pins the precedence rather than relying on the
@@ -176,6 +229,19 @@ final class ConfigTest extends TestCase
         $this->assertSame('Other', $config->namespace());
     }
 
+    public function testFileIsNullWithoutCrestPhp(): void
+    {
+        // This repository has no crest.php above tests/_output.
+        $this->assertNull(Config::file($this->root));
+    }
+
+    public function testFileIsTheNearestCrestPhpAbove(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->assertSame($this->root . '/crest.php', Config::file($this->root . '/src/Action'));
+    }
+
     public function testFirstDeclarationWinsWhenTwoPsr4DirectoriesTie(): void
     {
         // Equal-length matches: the earlier declaration keeps the win, so the
@@ -184,6 +250,7 @@ final class ConfigTest extends TestCase
             $this->root . '/composer.json',
             '{"autoload":{"psr-4":{"First\\\\":"src/Action/","Second\\\\":"src/Action/"}}}'
         );
+        $this->writeCrestPhp();
 
         $this->assertSame('First', Config::discover($this->root)->namespaceFor('action'));
     }
@@ -204,29 +271,10 @@ final class ConfigTest extends TestCase
         $this->assertSame([], $config->paths());
     }
 
-    public function testInfersNamespaceAndActionPathFromComposerJson(): void
-    {
-        $this->writeComposerJson(['App\\' => 'src/']);
-
-        $config = Config::discover($this->root);
-
-        $this->assertSame(Flavor::ADR, $config->flavor());
-        $this->assertSame('App', $config->namespace());
-        $this->assertSame($this->root . '/src/Action', $config->path('action'));
-        $this->assertSame($this->root, $config->root());
-    }
-
-    public function testMissingComposerJsonThrows(): void
-    {
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage('no crest.php and no composer.json found');
-
-        Config::discover($this->root);
-    }
-
     public function testNamespaceForDerivesFromThePsr4Pairing(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
 
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
@@ -298,46 +346,9 @@ final class ConfigTest extends TestCase
             $this->root . '/composer.json',
             '{"autoload":{"psr-4":{"Long\\\\":"averylongdirectory/","App\\\\":"src/"}}}'
         );
+        $this->writeCrestPhp();
 
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
-    }
-
-    public function testNoUsablePsr4EntryNamesEveryMissingDirectory(): void
-    {
-        $this->writeComposerJson(['Ghost\\' => 'missing/', 'Other\\' => 'lib']);
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage(
-            "no crest.php and no usable psr-4 autoload entry found; "
-            . "these psr-4 directories do not exist: 'missing', 'lib'"
-        );
-
-        Config::discover($this->root);
-    }
-
-    public function testNoUsablePsr4EntryThrows(): void
-    {
-        // composer.json exists but every declared directory is missing, so
-        // there is nothing to infer a root namespace from.
-        $this->writeComposerJson(['Ghost\\' => 'missing/']);
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage(
-            "no crest.php and no usable psr-4 autoload entry found; "
-            . "these psr-4 directories do not exist: 'missing'"
-        );
-
-        Config::discover($this->root);
-    }
-
-    public function testPsr4DirectoryIsFoundDespiteSurroundingSlashes(): void
-    {
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"App\\\\":"/src/"}}}'
-        );
-
-        $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
     public function testPsr4DirectoryMatchOnlyCountsWholeSegments(): void
@@ -357,25 +368,19 @@ final class ConfigTest extends TestCase
         Config::discover($this->root)->namespaceFor('action');
     }
 
-    public function testPsr4EntryWithAnEmptyTargetIsSkipped(): void
+    public function testRootIsTheFolderOfTheNearestCrestPhp(): void
     {
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"Empty\\\\":"","App\\\\":"src/"}}}'
-        );
+        $this->writeCrestPhp();
 
-        $this->assertSame('App', Config::discover($this->root)->namespace());
+        $this->assertSame($this->root, Config::rootFor($this->root . '/src/Action'));
     }
 
-    public function testPsr4TargetMayBeDeclaredAsAList(): void
+    public function testRootWithoutCrestPhpStopsWithTheInitHint(): void
     {
-        // composer allows "App\\": ["src/", "lib/"]; the first entry wins.
-        file_put_contents(
-            $this->root . '/composer.json',
-            '{"autoload":{"psr-4":{"App\\\\":["src/","lib/"]}}}'
-        );
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("no crest.php found; run 'crest init'");
 
-        $this->assertSame('App', Config::discover($this->root)->namespace());
+        Config::rootFor($this->root);
     }
 
     public function testScanKeepsLookingAfterRejectingAShorterMatch(): void
@@ -396,21 +401,44 @@ final class ConfigTest extends TestCase
         $this->assertSame('Deepest', Config::discover($this->root)->namespaceFor('action'));
     }
 
-    public function testSkipsPsr4EntriesWhoseDirectoryIsAbsent(): void
+    public function testTheConfigFileNamesTheRoot(): void
     {
-        $this->writeComposerJson(['Ghost\\' => 'missing/', 'App\\' => 'src/']);
+        mkdir($this->root . '/elsewhere');
+        file_put_contents($this->root . '/elsewhere/crest.php', "<?php\n\nreturn [];\n");
 
-        $this->assertSame('App', Config::discover($this->root)->namespace());
+        $this->assertSame(
+            $this->root . '/elsewhere',
+            Config::rootFor($this->root, $this->root . '/elsewhere/crest.php')
+        );
+    }
+
+    public function testTheRuntimeComesFromCrestPhp(): void
+    {
+        $this->writeCrestPhp("['runtime' => ['type' => 'docker', 'service' => 'web']]");
+
+        $runtime = Config::discover($this->root)->runtime();
+
+        $this->assertTrue($runtime->isDocker());
+        $this->assertSame('web', $runtime->service);
+    }
+
+    public function testTheSourceIsTheCrestPhp(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->assertSame($this->root . '/crest.php', Config::discover($this->root)->source());
     }
 
     public function testTrailingSlashOnTheDirectoryIsIgnored(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
 
         $config = Config::discover($this->root . '/');
 
         $this->assertSame($this->root, $config->root());
         $this->assertSame($this->root . '/src/Action', $config->path('action'));
+        $this->assertSame($this->root . '/crest.php', $config->source());
     }
 
     public function testUnknownFlavorThrows(): void
@@ -430,10 +458,29 @@ final class ConfigTest extends TestCase
     public function testUnknownPathKeyThrows(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
 
         $this->expectException(Exception::class);
         $this->expectExceptionMessage("unknown path 'views'");
 
         Config::discover($this->root)->path('views');
+    }
+
+    public function testWithoutARuntimeKeyTheProjectRunsOnTheHost(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->assertFalse(Config::discover($this->root)->runtime()->isDocker());
+    }
+
+    public function testWithoutCrestPhpItStopsWithTheInitHint(): void
+    {
+        // composer.json alone does not make a crest project.
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("no crest.php found; run 'crest init'");
+
+        Config::discover($this->root);
     }
 }

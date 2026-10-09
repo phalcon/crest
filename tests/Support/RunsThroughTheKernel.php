@@ -32,9 +32,10 @@ trait RunsThroughTheKernel
 
     /**
      * @param class-string<Command> $class
-     * @param list<string>          $tokens The arguments and options, as a user types them
+     * @param list<string>          $tokens      The arguments and options, as a user types them
+     * @param bool                  $interactive True to read answers from the input stream
      */
-    protected function runThroughKernel(string $name, string $class, array $tokens): int
+    protected function runThroughKernel(string $name, string $class, array $tokens, bool $interactive = false): int
     {
         $kernel = new Kernel(
             Commands::NAME,
@@ -42,7 +43,9 @@ trait RunsThroughTheKernel
             Commands::PACKAGE,
             $this->stdout,
             $this->stderr,
-            false
+            false,
+            $this->stdin,
+            $interactive
         );
 
         return $kernel->handle(['crest', $name, ...$tokens]);

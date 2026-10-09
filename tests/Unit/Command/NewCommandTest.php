@@ -115,6 +115,26 @@ final class NewCommandTest extends TestCase
         $this->assertFileExists($this->root . '/my-app/composer.json');
     }
 
+    public function testAnOldPublishedConfigStubStopsBeforeAnyWrite(): void
+    {
+        // A copy from before the runtime key. Without the stop, crest.php
+        // has no runtime, and the runtime answer is lost.
+        $override = Stub::overridePath($this->root, 'adr', 'project-config');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents(
+            $override,
+            "<?php\n\nreturn [\n    'namespace' => '{{ namespace }}',\n"
+            . "    'paths'     => ['action' => '{{ actionPath }}'],\n];\n"
+        );
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString($override . ' has no value for {{ actionPath }}', $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
     public function testANonEmptyDirectoryIsRefused(): void
     {
         mkdir($this->root . '/my-app');
@@ -130,6 +150,22 @@ final class NewCommandTest extends TestCase
         $this->assertFileDoesNotExist($this->root . '/my-app/composer.json');
     }
 
+    public function testAnOptionSkipsItsQuestion(): void
+    {
+        // No runtime option is given, so only the runtime questions are asked.
+        $this->answers("docker\nweb\n");
+
+        $status = $this->runCommand(['my-app', '--namespace', 'Acme', '--php', '8.2', '--phalcon', 'v6'], true);
+
+        $this->assertSame(0, $status);
+        $this->assertStringNotContainsString('Root namespace', $this->readStderr());
+        $this->assertStringContainsString(
+            "'runtime'   => ['type' => 'docker', 'service' => 'web'],",
+            $this->read('crest.php')
+        );
+        $this->assertStringContainsString("\n  web:\n", $this->read('docker-compose.yml'));
+    }
+
     public function testAnUnknownPhalconVersionIsRejected(): void
     {
         $status = $this->runCommand(['my-app', '--phalcon', 'v7']);
@@ -140,6 +176,24 @@ final class NewCommandTest extends TestCase
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
+    public function testAnUnknownRuntimeIsRejected(): void
+    {
+        $status = $this->runCommand(['my-app', '--runtime', 'podman']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("unknown runtime 'podman'; expected host or docker", $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
+    public function testAnUnusableAnswerIsAskedAgain(): void
+    {
+        $this->answers("1bad\nShop\n\n\n\n\n");
+
+        $this->assertSame(0, $this->runCommand(['my-app'], true));
+        $this->assertStringContainsString("'1bad' is not a usable namespace", $this->readStderr());
+        $this->assertStringContainsString("'namespace' => 'Shop',", $this->read('crest.php'));
     }
 
     public function testAnUnusableNamespaceIsRejected(): void
@@ -166,6 +220,15 @@ final class NewCommandTest extends TestCase
             sprintf("'%s' is not a PHP version; expected major.minor, e.g. 8.4", $version),
             $this->readStderr()
         );
+    }
+
+    public function testAnUnusableServiceIsRejected(): void
+    {
+        $status = $this->runCommand(['my-app', '--service', 'bad!']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("'bad!' is not a usable service name", $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
     public function testAPhpVersionBelowTheFloorIsRejected(): void
@@ -538,6 +601,14 @@ final class NewCommandTest extends TestCase
         $this->assertStringStartsWith("# my-app\n", $this->read('README.md'));
     }
 
+    public function testTheEndOfInputWritesNothing(): void
+    {
+        // Ctrl+D at the first question.
+        $this->assertSame(1, $this->runCommand(['my-app'], true));
+        $this->assertStringEndsWith('crest: no answer; input ended' . PHP_EOL, $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
     public function testTheFrontControllerIsRendered(): void
     {
         // Asserted whole: this is generated code nobody reviews.
@@ -575,7 +646,7 @@ final class NewCommandTest extends TestCase
         );
     }
 
-    public function testTheGeneratedConfigNamesTheFrontController(): void
+    public function testTheGeneratedConfigStatesEveryKey(): void
     {
         $this->runCommand(['my-app']);
 
@@ -585,8 +656,8 @@ final class NewCommandTest extends TestCase
             "<?php\n"
             . "\n"
             . "/**\n"
-            . " * Crest configuration. Paths that are not listed here take the ADR defaults;\n"
-            . " * run `crest config:show` to see every value and where it came from.\n"
+            . " * Crest configuration. Run `crest config:show` to see every value and where\n"
+            . " * it came from.\n"
             . " */\n"
             . "\n"
             . "declare(strict_types=1);\n"
@@ -595,7 +666,14 @@ final class NewCommandTest extends TestCase
             . "    'flavor'    => 'adr',\n"
             . "    'namespace' => 'App',\n"
             . "    'bootstrap' => App\\AppFront::class,\n"
-            . "    'paths'     => ['action' => 'src/Action'],\n"
+            . "    'paths'     => [\n"
+            . "        'action'     => 'src/Action',\n"
+            . "        'command'    => 'src/Command',\n"
+            . "        'middleware' => 'src/Middleware',\n"
+            . "        'provider'   => 'src/Provider',\n"
+            . "        'responder'  => 'src/Responder',\n"
+            . "    ],\n"
+            . "    'runtime'   => ['type' => 'docker', 'service' => 'app'],\n"
             . "];\n",
             $this->read('crest.php')
         );
@@ -636,6 +714,21 @@ final class NewCommandTest extends TestCase
         );
     }
 
+    public function testTheQuestionsFillTheValuesThatNoOptionGives(): void
+    {
+        // Namespace, PHP version, Phalcon version, runtime.
+        $this->answers("Shop\n8.3\nv6\nhost\n");
+
+        $this->assertSame(0, $this->runCommand(['my-app'], true));
+        $this->assertStringContainsString(
+            'Root namespace [App]: PHP version [8.4]: Phalcon version (v5, v6) [v5]: Runtime (host, docker) [docker]: ',
+            $this->readStderr()
+        );
+        $this->assertSame(['php' => '>=8.3', 'phalcon/phalcon' => '^6.0@RC'], $this->composer()['require']);
+        $this->assertStringContainsString("'namespace' => 'Shop',", $this->read('crest.php'));
+        $this->assertStringContainsString("'runtime'   => ['type' => 'host'],", $this->read('crest.php'));
+    }
+
     public function testTheRouterScriptIsRendered(): void
     {
         $this->runCommand(['my-app']);
@@ -661,6 +754,35 @@ final class NewCommandTest extends TestCase
             . "require_once __DIR__ . '/public/index.php';\n",
             $this->read('.htrouter.php')
         );
+    }
+
+    public function testTheRuntimeOptionsSkipTheirQuestions(): void
+    {
+        // Each value has an option, so a run in a terminal asks nothing.
+        $status = $this->runCommand(
+            [
+                'my-app',
+                '--namespace',
+                'Acme',
+                '--php',
+                '8.2',
+                '--phalcon',
+                'v6',
+                '--runtime',
+                'docker',
+                '--service',
+                'web',
+            ],
+            true
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertSame('', $this->readStderr());
+        $this->assertStringContainsString(
+            "'runtime'   => ['type' => 'docker', 'service' => 'web'],",
+            $this->read('crest.php')
+        );
+        $this->assertStringContainsString("\n  web:\n", $this->read('docker-compose.yml'));
     }
 
     public function testTheSeedActionIsTheRootAction(): void
@@ -734,9 +856,9 @@ final class NewCommandTest extends TestCase
     /**
      * @param list<string> $arguments
      */
-    private function runCommand(array $arguments): int
+    private function runCommand(array $arguments, bool $interactive = false): int
     {
-        return $this->runProjectCommand('new', NewCommand::class, $arguments);
+        return $this->runProjectCommand('new', NewCommand::class, $arguments, $interactive);
     }
 
     /**

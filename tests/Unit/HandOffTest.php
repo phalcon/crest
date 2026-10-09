@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit;
 
 use Crest\Console\Output;
 use Crest\HandOff;
+use Crest\Process\ShellRunner;
 use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\ScratchDirectory;
@@ -23,20 +24,21 @@ use PHPUnit\Framework\TestCase;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
+use function getenv;
 use function json_encode;
 use function mkdir;
+use function putenv;
 use function unlink;
 
 use const PHP_BINARY;
 use const PHP_EOL;
 
 /**
- * The scratch root has three directories: app/ is a project that requires
- * crest and has vendor/bin/crest, other/ is not a project, and self/ is the
- * running crest.
+ * The scratch root has three directories: app/ is a project with crest.php
+ * that requires crest and has vendor/bin/crest, other/ is not a project, and
+ * self/ is the running crest.
  *
- * A walk up from other/ finds the composer.json of this repository. It has no
- * vendor/bin/crest, and it does not require phalcon/crest, so the call stays.
+ * A walk up from other/ finds no crest.php: this repository has none.
  */
 final class HandOffTest extends TestCase
 {
@@ -52,6 +54,8 @@ final class HandOffTest extends TestCase
         $this->makeScratchDirectory('hand-off', 'app/src/Action', 'app/vendor/bin', 'other', 'self');
         $this->captureStreams();
         $this->requiring('require-dev');
+
+        file_put_contents($this->root . '/app/crest.php', "<?php\n\nreturn [];\n");
 
         file_put_contents($this->root . '/app/vendor/bin/crest', "<?php\n");
 
@@ -77,6 +81,7 @@ final class HandOffTest extends TestCase
     public static function hostCommands(): iterable
     {
         yield 'down' => ['down'];
+        yield 'init' => ['init'];
         yield 'install' => ['install'];
         yield 'new' => ['new'];
         yield 'up' => ['up'];
@@ -103,10 +108,32 @@ final class HandOffTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function serveCommands(): iterable
+    {
+        yield 'serve' => ['serve'];
+        yield 'the alias' => ['server'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function versionFlags(): iterable
     {
         yield 'long' => ['--version'];
         yield 'short' => ['-V'];
+    }
+
+    public function testABrokenCrestPhpIsReported(): void
+    {
+        // One crest line, not a PHP trace.
+        $this->runtime("['type' => 'podman']");
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame([], $this->runner->calls);
+        $this->assertSame(
+            "crest: unknown runtime 'podman'; expected host or docker" . PHP_EOL,
+            $this->readStderr()
+        );
     }
 
     public function testACallFromASubdirectoryIsPassedOn(): void
@@ -118,11 +145,111 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn(['route:list']);
     }
 
+    public function testAComposerProjectWithoutCrestPhpRunsTheCallHere(): void
+    {
+        // composer.json and vendor/bin/crest, but no crest.php: not a crest
+        // project. This crest runs the call and gives the crest init hint.
+        unlink($this->root . '/app/crest.php');
+
+        $this->assertStays($this->handOff(['route:list']));
+    }
+
+    public function testAConfigFileThatDoesNotExistRunsTheCallHere(): void
+    {
+        // This crest reports the file.
+        chdir($this->root . '/other');
+
+        $this->assertStays($this->handOff(['route:list', '--config=' . $this->root . '/missing.php']));
+    }
+
+    public function testAConfigFileWithAnotherNameReachesTheContainerByName(): void
+    {
+        // The container works in the root, the folder of the file. Without
+        // its name, the crest there reads crest.php.
+        file_put_contents(
+            $this->root . '/app/crest.local.php',
+            "<?php\n\nreturn ['runtime' => ['type' => 'docker']];\n"
+        );
+        chdir($this->root . '/other');
+
+        $this->handOff(['route:list', '--config', $this->root . '/app/crest.local.php']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testACrestPhpWithASyntaxErrorIsReported(): void
+    {
+        // One crest line, not a PHP trace.
+        file_put_contents($this->root . '/app/crest.php', "<?php\n\nreturn [\n");
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame([], $this->runner->calls);
+
+        $stderr = $this->readStderr();
+
+        $this->assertStringStartsWith("crest: Unclosed '['", $stderr);
+        $this->assertStringNotContainsString('#0', $stderr);
+    }
+
+    public function testACrestPhpWithoutAComposerJsonIsReported(): void
+    {
+        unlink($this->root . '/app/composer.json');
+        unlink($this->root . '/app/vendor/bin/crest');
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame(
+            'crest: ' . $this->root . "/app does not require phalcon/crest; run 'composer require --dev phalcon/crest'"
+            . PHP_EOL,
+            $this->readStderr()
+        );
+    }
+
+    public function testACrestPhpWithoutAReturnIsPassedOn(): void
+    {
+        // require gives 1, so there is no runtime key. The crest of the
+        // project reads the file and reports it.
+        file_put_contents($this->root . '/app/crest.php', "<?php\n");
+
+        $this->handOff(['route:list']);
+
+        $this->assertPassedOn(['route:list']);
+    }
+
     public function testADirectoryOptionAfterTheDoubleDashIsAValue(): void
     {
         chdir($this->root . '/other');
 
         $this->assertStays($this->handOff(['route:list', '--', '--directory=' . $this->root . '/app']));
+    }
+
+    public function testADirectoryOptionBeforeAnotherOptionHasNoValue(): void
+    {
+        // As in the parser: a token that starts with '-' is not a value. The
+        // project crest reports the missing value.
+        $this->handOff(['route:list', '--directory', '--trace']);
+
+        $this->assertPassedOn(['route:list', '--directory', '--trace']);
+    }
+
+    public function testADirectoryOptionWithAnEqualsSignIsLeftOutInTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['route:list', '--directory=' . $this->root . '/app', '--trace']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
     }
 
     public function testADirectoryOptionWithoutAValueMeansTheWorkingDirectory(): void
@@ -139,11 +266,93 @@ final class HandOffTest extends TestCase
         $this->assertStays($this->handOff(['route:list', '--directory=' . $this->root . '/missing']));
     }
 
+    public function testADockerRuntimeRunsTheProjectCrestInItsService(): void
+    {
+        $this->runtime("['type' => 'docker', 'service' => 'web']");
+
+        $status = $this->handOff(['route:list', '--trace'], 4);
+
+        $this->assertSame(4, $status);
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'web', 'vendor/bin/crest', 'route:list', '--trace'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testAHostRuntimeRunsTheProjectCrestOnTheHost(): void
+    {
+        $this->runtime("['type' => 'host']");
+
+        $this->handOff(['route:list']);
+
+        $this->assertPassedOn(['route:list']);
+    }
+
+    public function testAMissingDockerIsReported(): void
+    {
+        // The real runner, with no docker on the PATH: one crest line.
+        $this->runtime("['type' => 'docker']");
+        $path = getenv('PATH');
+        putenv('PATH=' . $this->root . '/other');
+
+        try {
+            $status = (new HandOff(new ShellRunner(), $this->root . '/self', true))->run(
+                ['crest', 'route:list'],
+                new Output($this->stdout, $this->stderr, false)
+            );
+        } finally {
+            putenv(false === $path ? 'PATH' : 'PATH=' . $path);
+        }
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: 'docker' was not found; install it or add it to the PATH" . PHP_EOL,
+            $this->readStderr()
+        );
+    }
+
     public function testAnEmptyDirectoryOptionMeansTheWorkingDirectory(): void
     {
         $this->handOff(['route:list', '--directory=']);
 
         $this->assertPassedOn(['route:list', '--directory=']);
+    }
+
+    public function testAnOptionThatOnlyStartsLikeConfigIsNotConfig(): void
+    {
+        // --configure is not --config. The project crest reports it.
+        $this->handOff(['route:list', '--configure=x']);
+
+        $this->assertPassedOn(['route:list', '--configure=x']);
+    }
+
+    public function testAnUnknownFlavorIsLeftToTheProjectCrest(): void
+    {
+        // A newer project crest can know a flavor that this crest does not.
+        // This crest reads only the runtime key.
+        file_put_contents($this->root . '/app/crest.php', "<?php\n\nreturn ['flavor' => 'micro'];\n");
+
+        $this->handOff(['route:list']);
+
+        $this->assertPassedOn(['route:list']);
+    }
+
+    public function testAPathValueAfterAnotherOptionIsLeftOutInTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['route:list', '--trace', '--directory', $this->root . '/app']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
     }
 
     public function testAProjectCommandIsPassedOn(): void
@@ -154,13 +363,22 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn(['route:list', '--trace']);
     }
 
-    public function testAProjectThatDoesNotRequireCrestRunsTheCallHere(): void
+    public function testAProjectThatDoesNotRequireCrestIsReported(): void
     {
-        // Not a crest project: this crest runs the call, as before.
+        // This crest does not have the autoloader and the Phalcon of the
+        // project, so it does not run the call.
         file_put_contents($this->root . '/app/composer.json', '{"require": {"php": "^8.1"}}');
         unlink($this->root . '/app/vendor/bin/crest');
 
-        $this->assertStays($this->handOff(['route:list']));
+        $status = $this->handOff(['route:list']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame([], $this->runner->calls);
+        $this->assertSame(
+            'crest: ' . $this->root . "/app does not require phalcon/crest; run 'composer require --dev phalcon/crest'"
+            . PHP_EOL,
+            $this->readStderr()
+        );
     }
 
     /**
@@ -184,6 +402,25 @@ final class HandOffTest extends TestCase
         );
     }
 
+    public function testARelativeConfigFileReachesTheContainerByName(): void
+    {
+        // Only the value is a path, not the whole token.
+        file_put_contents(
+            $this->root . '/app/crest.local.php',
+            "<?php\n\nreturn ['runtime' => ['type' => 'docker']];\n"
+        );
+
+        $this->handOff(['route:list', '--config=crest.local.php']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                '.',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     public function testARelativeDirectoryOptionStartsInTheWorkingDirectory(): void
     {
         // The project crest reads the same path from the same working
@@ -204,6 +441,22 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn($tokens);
     }
 
+    public function testDockerGetsNoTerminalWhenStdinIsNotOne(): void
+    {
+        // CI or a pipe: docker compose exec must not ask for a TTY.
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['route:list'], 0, null, false);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     /**
      * @dataProvider hostCommands
      */
@@ -212,11 +465,71 @@ final class HandOffTest extends TestCase
         $this->assertStays($this->handOff([$command, 'my-app']));
     }
 
+    public function testHostPathsDoNotReachTheContainer(): void
+    {
+        // --directory and --config are host paths. The root is already found.
+        // The container gets only the name of the config file.
+        $this->runtime("['type' => 'docker']");
+        chdir($this->root . '/other');
+
+        $this->handOff([
+            'route:list',
+            '--directory',
+            $this->root . '/app',
+            '--config=' . $this->root . '/app/crest.php',
+            '--trace',
+        ]);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.php', '--trace'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     public function testOutsideAProjectTheCallRunsHere(): void
     {
         chdir($this->root . '/other');
 
         $this->assertStays($this->handOff(['route:list']));
+    }
+
+    /**
+     * @dataProvider serveCommands
+     */
+    public function testServeRunsOnTheHostWithADockerRuntime(string $command): void
+    {
+        // A8: PHP's built-in server must listen on the host, not in the
+        // container.
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff([$command, '--port', '8099']);
+
+        $this->assertPassedOn([$command, '--port', '8099']);
+    }
+
+    public function testTheConfigOptionFindsTheProject(): void
+    {
+        chdir($this->root . '/other');
+
+        $tokens = ['route:list', '--config', $this->root . '/app/crest.php'];
+
+        $this->handOff($tokens);
+
+        $this->assertPassedOn($tokens);
+    }
+
+    public function testTheConfigOptionWithAnEqualsSignFindsTheProject(): void
+    {
+        chdir($this->root . '/other');
+
+        $tokens = ['route:list', '--config=' . $this->root . '/app/crest.php'];
+
+        $this->handOff($tokens);
+
+        $this->assertPassedOn($tokens);
     }
 
     public function testTheCrestOfTheProjectRunsTheCallItself(): void
@@ -283,6 +596,33 @@ final class HandOffTest extends TestCase
         $this->assertStays($this->handOff([$flag]));
     }
 
+    public function testValuesAfterTheDoubleDashReachTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['make:action', 'GET', '/x', '--', '--directory', 'y']);
+
+        $this->assertSame(
+            [[
+                [
+                    'docker',
+                    'compose',
+                    'exec',
+                    'app',
+                    'vendor/bin/crest',
+                    'make:action',
+                    'GET',
+                    '/x',
+                    '--',
+                    '--directory',
+                    'y',
+                ],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
     /**
      * @param list<string> $tokens
      */
@@ -301,14 +641,15 @@ final class HandOffTest extends TestCase
     }
 
     /**
-     * @param list<string> $tokens The arguments after `crest`.
-     * @param string|null  $self   The root of the running crest.
+     * @param list<string> $tokens   The arguments after `crest`.
+     * @param string|null  $self     The root of the running crest.
+     * @param bool         $terminal Whether stdin is a terminal.
      */
-    private function handOff(array $tokens, int $status = 0, ?string $self = null): ?int
+    private function handOff(array $tokens, int $status = 0, ?string $self = null, bool $terminal = true): ?int
     {
         $this->runner = new FakeRunner($status);
 
-        return (new HandOff($this->runner, $self ?? $this->root . '/self'))->run(
+        return (new HandOff($this->runner, $self ?? $this->root . '/self', $terminal))->run(
             ['crest', ...$tokens],
             new Output($this->stdout, $this->stderr, false)
         );
@@ -320,5 +661,10 @@ final class HandOffTest extends TestCase
             $this->root . '/app/composer.json',
             (string) json_encode([$section => ['phalcon/crest' => 'dev-master']])
         );
+    }
+
+    private function runtime(string $runtime): void
+    {
+        file_put_contents($this->root . '/app/crest.php', "<?php\n\nreturn ['runtime' => " . $runtime . "];\n");
     }
 }

@@ -18,6 +18,7 @@ use Crest\Console\Output;
 use Crest\Console\PackageVersion;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
+use Crest\Tests\Support\Console\AskingCommand;
 use Crest\Tests\Support\Console\FakeCommand;
 use Crest\Tests\Support\Console\ThrowingCommand;
 use PHPUnit\Framework\TestCase;
@@ -39,6 +40,16 @@ final class KernelTest extends TestCase
     protected function tearDown(): void
     {
         $this->closeStreams();
+    }
+
+    public function testAnInteractiveRunAsksTheQuestion(): void
+    {
+        $this->answers("typed\n");
+
+        $this->asking(['crest', 'ask']);
+
+        $this->assertSame('answer: typed' . PHP_EOL, $this->readStdout());
+        $this->assertSame('Name [default]: ', $this->readStderr());
     }
 
     public function testBindingErrorIsAOneLineStderrMessage(): void
@@ -89,6 +100,7 @@ final class KernelTest extends TestCase
         $this->assertNotNull($globals->findOption('trace'));
         $this->assertSame('help', $globals->findOption('h')?->name);
         $this->assertSame('quiet', $globals->findOption('q')?->name);
+        $this->assertSame('no-interaction', $globals->findOption('n')?->name);
     }
 
     public function testHelpForACommandRendersItsUsage(): void
@@ -150,6 +162,15 @@ final class KernelTest extends TestCase
         $this->assertStringContainsString('fake', $this->readStdout());
     }
 
+    public function testNoInteractionAsksNoQuestion(): void
+    {
+        $this->answers("typed\n");
+
+        $this->asking(['crest', 'ask', '--no-interaction']);
+
+        $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
+    }
+
     public function testShortHelpFlagAlsoRendersUsage(): void
     {
         $status = $this->kernel()->handle(['demo', 'fake', '-h']);
@@ -164,6 +185,15 @@ final class KernelTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertStringStartsWith(Output::MARK . ' demo ', $this->readStdout());
+    }
+
+    public function testTheShortNoInteractionFlagAsksNoQuestion(): void
+    {
+        $this->answers("typed\n");
+
+        $this->asking(['crest', 'ask', '-n']);
+
+        $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
     }
 
     public function testToolNameIsNeverHardcoded(): void
@@ -228,6 +258,25 @@ final class KernelTest extends TestCase
             '/^' . preg_quote(Output::MARK, '/') . ' demo \S+/',
             $this->readStdout()
         );
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    private function asking(array $argv): void
+    {
+        $kernel = new Kernel(
+            'tool',
+            (new Registry())->add('ask', AskingCommand::class),
+            'vendor/package',
+            $this->stdout,
+            $this->stderr,
+            false,
+            $this->stdin,
+            true
+        );
+
+        $kernel->handle($argv);
     }
 
     private function kernel(): Kernel

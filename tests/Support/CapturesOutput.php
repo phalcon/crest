@@ -17,12 +17,13 @@ use RuntimeException;
 
 use function fclose;
 use function fopen;
+use function fwrite;
 use function rewind;
 use function stream_get_contents;
 
 /**
- * Captures a component's two output streams in memory so tests can assert on
- * what was written.
+ * Captures a component's input stream and its two output streams in memory so
+ * tests can give answers and assert on what was written.
  *
  * The setup and teardown are explicit methods rather than setUp()/tearDown()
  * so this composes with ScratchDirectory in the tests that need both; two
@@ -36,25 +37,40 @@ trait CapturesOutput
     protected $stderr;
 
     /** @var resource */
+    protected $stdin;
+
+    /** @var resource */
     protected $stdout;
+
+    /**
+     * The lines that a user types, for a run that asks questions.
+     */
+    protected function answers(string $lines): void
+    {
+        fwrite($this->stdin, $lines);
+        rewind($this->stdin);
+    }
 
     protected function captureStreams(): void
     {
+        $stdin  = fopen('php://memory', 'rw');
         $stdout = fopen('php://memory', 'rw');
         $stderr = fopen('php://memory', 'rw');
 
         // fopen() is resource|false; the properties are resource. Narrowing
         // here keeps every consumer free of the false case.
-        if (false === $stdout || false === $stderr) {
+        if (false === $stdin || false === $stdout || false === $stderr) {
             throw new RuntimeException('could not open an in-memory stream');
         }
 
+        $this->stdin  = $stdin;
         $this->stdout = $stdout;
         $this->stderr = $stderr;
     }
 
     protected function closeStreams(): void
     {
+        fclose($this->stdin);
         fclose($this->stdout);
         fclose($this->stderr);
     }

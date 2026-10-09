@@ -13,23 +13,30 @@ declare(strict_types=1);
 
 namespace Crest;
 
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
-use Crest\Project\Locator;
+use Crest\Project\Config;
+use Crest\Project\Manifest;
+use Crest\Project\Runtime;
+use Throwable;
 
 use function array_slice;
-use function file_get_contents;
+use function basename;
+use function count;
+use function dirname;
 use function in_array;
 use function is_file;
-use function json_decode;
 use function realpath;
 use function sprintf;
 use function str_starts_with;
+use function stream_isatty;
 use function strlen;
 use function substr;
 
 use const PHP_BINARY;
+use const STDIN;
 
 /**
  * Passes a project command from a global crest to the crest of the project.
@@ -38,6 +45,14 @@ use const PHP_BINARY;
  * autoloader, the Phalcon and the crest version of the project. Thus, in a
  * project, a global crest runs vendor/bin/crest of the project with the same
  * arguments, and returns its exit status.
+ *
+ * The project is the folder of crest.php, by the root rule of all commands
+ * (Config::file()): the file that --config names, or the nearest crest.php
+ * above --directory or the working directory.
+ *
+ * With a docker runtime in crest.php, the crest of the project runs in its
+ * compose service: `docker compose exec <service> vendor/bin/crest`. Thus a
+ * v5 project works on a host without ext-phalcon.
  *
  * The host commands (Commands::HOST) and --version stay in the crest that the
  * user typed.
@@ -49,18 +64,35 @@ final class HandOff
      */
     public const BINARY = 'vendor/bin/crest';
 
+    /**
+     * The commands that run on the host also with a docker runtime: `serve`
+     * and its alias start PHP's built-in server, which must listen on the
+     * host (A8).
+     */
+    private const ON_HOST = ['serve', 'server'];
+
+    /**
+     * The global options that hold host paths.
+     */
+    private const PATH_OPTIONS = ['--config', '--directory'];
+
     private readonly Runner $runner;
 
     private readonly string $self;
 
+    private readonly bool $terminal;
+
     /**
-     * @param string|null $self The root of the running crest package. Null
-     *                          for this package. A test gives another root.
+     * @param string|null $self     The root of the running crest package. Null
+     *                              for this package. A test gives another root.
+     * @param bool|null   $terminal Whether stdin is a terminal. Null asks the
+     *                              stream.
      */
-    public function __construct(?Runner $runner = null, ?string $self = null)
+    public function __construct(?Runner $runner = null, ?string $self = null, ?bool $terminal = null)
     {
-        $this->runner = $runner ?? new ShellRunner();
-        $this->self   = $self ?? Paths::root();
+        $this->runner   = $runner ?? new ShellRunner();
+        $this->self     = $self ?? Paths::root();
+        $this->terminal = $terminal ?? stream_isatty(STDIN);
     }
 
     /**
@@ -77,52 +109,77 @@ final class HandOff
             return null;
         }
 
-        $start = realpath($this->directory($tokens));
-        $root  = false === $start ? null : Locator::project($start);
+        $file = $this->file($tokens);
 
-        if (null === $root) {
+        if (null === $file) {
             return null;
         }
 
+        $root   = dirname($file);
         $binary = $root . '/' . self::BINARY;
 
         if (false === is_file($binary)) {
-            return $this->missing($root, $output);
+            $output->error(Commands::NAME . ': ' . $this->missing($root));
+
+            return 1;
         }
 
         if (true === $this->isSelf($root)) {
             return null;
         }
 
-        return $this->runner->run([PHP_BINARY, $binary, ...$tokens]);
+        try {
+            return $this->pass($file, $root, $binary, $tokens);
+        } catch (Throwable $throwable) {
+            // As the kernel does: one crest line, not a PHP trace. A broken
+            // crest.php or a missing docker comes here.
+            $output->error(Commands::NAME . ': ' . $throwable->getMessage());
+
+            return 1;
+        }
     }
 
     /**
-     * Where the walk up starts: the --directory value, or the working
-     * directory. The last value wins, as in the parser. After `--`, tokens
-     * are values, not options. An empty value reads as absent.
+     * The crest.php of the project, by the root rule. Null when there is
+     * none. Null also when the path in an option does not exist: this crest
+     * then runs the call and reports the path.
      *
      * @param list<string> $tokens
      */
-    private function directory(array $tokens): string
+    private function file(array $tokens): ?string
     {
-        $directory = '';
+        $directory = $this->value($tokens, 'directory');
+        $start     = realpath('' === $directory ? '.' : $directory);
 
-        foreach ($tokens as $index => $token) {
-            if ('--' === $token) {
-                break;
-            }
-
-            if (true === str_starts_with($token, '--directory=')) {
-                $directory = substr($token, strlen('--directory='));
-            }
-
-            if ('--directory' === $token) {
-                $directory = $tokens[$index + 1] ?? '';
-            }
+        if (false === $start) {
+            return null;
         }
 
-        return '' === $directory ? '.' : $directory;
+        try {
+            return Config::file($start, $this->value($tokens, 'config'));
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * `docker compose exec` runs the crest of the project in its service.
+     * The working folder of the service is the project root (A7). -T when
+     * stdin is not a terminal, for CI and pipes.
+     *
+     * @param list<string> $tokens
+     *
+     * @return non-empty-list<string>
+     */
+    private function inContainer(string $service, array $tokens): array
+    {
+        $command = ['docker', 'compose', 'exec'];
+
+        if (false === $this->terminal) {
+            $command[] = '-T';
+        }
+
+        return [...$command, $service, self::BINARY, ...$this->withoutPaths($tokens)];
     }
 
     /**
@@ -153,31 +210,131 @@ final class HandOff
     }
 
     /**
-     * No vendor/bin/crest. A project that requires crest has no vendor/ yet:
-     * no crest can run a project command there, so this is an error. Other
-     * projects do not use crest: this crest runs the call, as before.
+     * The project has crest.php but no vendor/bin/crest, so no crest can run
+     * a project command there. A project that requires crest has no vendor/
+     * yet. Another project must require crest first: this crest does not have
+     * the autoloader and the Phalcon of the project.
      */
-    private function missing(string $root, Output $output): ?int
+    private function missing(string $root): string
     {
-        /** @var array{require?: array<string, string>, require-dev?: array<string, string>}|null $composer */
-        $composer = json_decode((string) file_get_contents($root . '/composer.json'), true);
-
-        if (
-            false === isset($composer['require'][Commands::PACKAGE])
-            && false === isset($composer['require-dev'][Commands::PACKAGE])
-        ) {
-            return null;
-        }
-
-        $output->error(
-            sprintf(
-                "%s: %s has no %s; run 'crest install' or 'composer install' first",
-                Commands::NAME,
+        if (true === Manifest::requires($root, Commands::PACKAGE)) {
+            return sprintf(
+                "%s has no %s; run 'crest install' or 'composer install' first",
                 $root,
                 self::BINARY
-            )
-        );
+            );
+        }
 
-        return 1;
+        return sprintf(
+            "%s does not require %s; run 'composer require --dev %s'",
+            $root,
+            Commands::PACKAGE,
+            Commands::PACKAGE
+        );
+    }
+
+    /**
+     * Runs the crest of the project: in its compose service for a docker
+     * runtime, else with the PHP of the host. `serve` always runs on the
+     * host (ON_HOST).
+     *
+     * Only the runtime key is read (Runtime::fromFile()).
+     *
+     * @param list<string> $tokens
+     */
+    private function pass(string $file, string $root, string $binary, array $tokens): int
+    {
+        $runtime = Runtime::fromFile($file);
+
+        if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', self::ON_HOST, true)) {
+            return $this->runner->run($this->inContainer($runtime->service, $tokens), $root);
+        }
+
+        return $this->runner->run([PHP_BINARY, $binary, ...$tokens]);
+    }
+
+    /**
+     * The value of a global path option: `--name=value` or `--name value`.
+     * The last value wins, and a next token that starts with `-` is not a
+     * value, as in the parser. After `--`, tokens are values, not options.
+     * Empty when the option is absent.
+     *
+     * @param list<string> $tokens
+     */
+    private function value(array $tokens, string $name): string
+    {
+        $option = '--' . $name;
+        $value  = '';
+
+        foreach ($tokens as $index => $token) {
+            if ('--' === $token) {
+                break;
+            }
+
+            if (true === str_starts_with($token, $option . '=')) {
+                $value = substr($token, strlen($option) + 1);
+            }
+
+            if ($option === $token) {
+                $next  = $tokens[$index + 1] ?? '';
+                $value = true === str_starts_with($next, '-') ? '' : $next;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * The tokens without --directory and its value, and with only the file
+     * name of --config. They are host paths, and the root is already found.
+     * The container works in the root, the folder of the config file, so the
+     * name finds the file there. A value is the next token when it does not
+     * start with `-`, as in the parser. After `--`, tokens are values and
+     * stay.
+     *
+     * @param list<string> $tokens
+     *
+     * @return list<string>
+     */
+    private function withoutPaths(array $tokens): array
+    {
+        $kept  = [];
+        $count = count($tokens);
+
+        for ($index = 0; $index < $count; $index++) {
+            $token = $tokens[$index];
+
+            if ('--' === $token) {
+                return [...$kept, ...array_slice($tokens, $index)];
+            }
+
+            if (true === in_array($token, self::PATH_OPTIONS, true)) {
+                $next = $tokens[$index + 1] ?? '-';
+
+                if (false === str_starts_with($next, '-')) {
+                    $index++;
+
+                    if ('--config' === $token) {
+                        $kept[] = '--config=' . basename($next);
+                    }
+                }
+
+                continue;
+            }
+
+            if (true === str_starts_with($token, '--config=')) {
+                $kept[] = '--config=' . basename(substr($token, strlen('--config=')));
+
+                continue;
+            }
+
+            if (true === str_starts_with($token, '--directory=')) {
+                continue;
+            }
+
+            $kept[] = $token;
+        }
+
+        return $kept;
     }
 }

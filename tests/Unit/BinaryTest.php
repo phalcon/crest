@@ -30,8 +30,8 @@ use const PHP_EOL;
 
 /**
  * Runs bin/crest as a child process, as a user does. The scratch root is a
- * project with a fake vendor/bin/crest that prints its arguments and exits
- * with status 7.
+ * project with crest.php and a fake vendor/bin/crest that prints its
+ * arguments and exits with status 7.
  */
 final class BinaryTest extends TestCase
 {
@@ -40,6 +40,7 @@ final class BinaryTest extends TestCase
     protected function setUp(): void
     {
         $this->makeScratchDirectory('binary', 'vendor/bin');
+        $this->writeCrestPhp();
 
         file_put_contents(
             $this->root . '/composer.json',

@@ -16,6 +16,7 @@ for the same listing from the tool itself.
 | `container:list` | services registered in the project container |
 | `down` | stop and remove the project containers |
 | `event:list` | listeners attached to the project events manager |
+| `init` | write `crest.php` for an existing project |
 | `install` | install composer dependencies in the project container |
 | `list` (`commands`, `enumerate`) | the available commands |
 | `make:action` | create an ADR action for a route |
@@ -43,7 +44,14 @@ Only the `adr` flavor has generators. A `cli` or `mvc` project can still run
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
+| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
+| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
+
+In a terminal, `new` asks for each value that no option gives: the namespace, the PHP
+version, the Phalcon version, and the runtime (`docker` with the service `app`, or
+`host`). An empty answer takes the default. `--no-interaction`, or a run without a
+terminal (CI, a pipe), asks nothing and takes the defaults. The options stay, for CI.
 
 The project goes into the working directory, or into `--directory` if you give
 one. `new` runs nothing: no composer, no docker, no network. It prints the
@@ -88,18 +96,38 @@ commands that work on the project, for example `make:action` and
 `route:list`, need the autoloader and the Phalcon of the project. After
 `crest install` or `composer install`, the project has its own crest in
 `vendor/`. A global crest passes these commands to it, with the same
-arguments, and returns its exit status. In the container, there is no global
-crest:
+arguments, and returns its exit status:
 
     crest make:action GET /hello
+
+In the container, there is no global crest. Run the crest of the project:
+
     docker compose exec app vendor/bin/crest make:action GET /hello
 
-`new`, `up`, `down`, `install` and `--version` always run in the crest that
-you type. crest finds the project from the working directory, or from
-`--directory`, and goes up to the nearest `composer.json`. If that project
-requires `phalcon/crest` but has no `vendor/bin/crest`, crest stops:
+`new`, `init`, `up`, `down`, `install` and `--version` always run in the crest that you
+type. crest finds the project by its `crest.php`: the file that `--config` names, or the
+nearest `crest.php` above the working directory or `--directory`. `up`, `down` and
+`install` run docker compose in that folder. Without `crest.php`, crest stops:
+
+    crest: no crest.php found; run 'crest init'
+
+If the project has no `vendor/bin/crest`, crest stops too:
 
     crest: /path/to/my-app has no vendor/bin/crest; run 'crest install' or 'composer install' first
+    crest: /path/to/my-app does not require phalcon/crest; run 'composer require --dev phalcon/crest'
+
+With `'runtime' => ['type' => 'docker', 'service' => 'app']` in `crest.php` (what `new`
+writes), a global crest runs the project commands in the container:
+`docker compose exec app vendor/bin/crest ...`. A v5 project then works on a host
+without `ext-phalcon`. `serve` is the exception: it always runs on the host, because
+PHP's built-in server must listen there. With docker, `crest up` serves the project.
+
+The docker runtime has two conditions. The service must mount the project folder, with
+`vendor/` in it: crest looks for `vendor/bin/crest` on the host first. And the
+`working_dir` of the service must be the project root: `vendor/bin/crest` runs there. The
+compose file of `new` does both. `install` runs composer in the service of the docker
+runtime. With the host runtime, it uses the service `app`; run `composer install` on the
+host instead.
 
 The files come from the `project-*` stubs. To change them, publish them by
 name in the directory that the project goes into (the working directory, or
@@ -120,6 +148,24 @@ the name of the front controller class `AppFront` or the paths of the
 generated files, because `new` does not read them from the stubs. A published
 copy must use only the placeholders of the packaged copy. If a placeholder has
 no value, `new` stops before it writes a file.
+
+## Adding crest to an existing project
+
+    composer require --dev phalcon/crest
+    crest init
+
+`init` writes `crest.php` in the nearest folder with a `composer.json`. It proposes the
+namespace and the folder of the first psr-4 entry whose folder exists, the front
+controller `<namespace>\AppFront` when that file is there, the ADR paths in that folder,
+and the runtime: docker when the project has `compose.yaml`, `compose.yml`,
+`docker-compose.yaml` or `docker-compose.yml`, with the service `app`, or the first
+service. Press Enter to accept a proposal. `--no-interaction` accepts all of them.
+`--force` overwrites an existing `crest.php`. If the project does not require crest,
+`init` prints the `composer require` line.
+
+`init` needs a psr-4 entry in `composer.json`, because the generators get their
+namespaces from it. Without one, `init` stops and tells you to add one, for example
+`"App\\": "app/"`, and to run `composer dump-autoload`.
 
 ## Commands that boot the project
 

@@ -13,23 +13,30 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Project;
 
+use Crest\Console\Exceptions\Exception;
 use Crest\Project\Locator;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function chdir;
 use function file_put_contents;
+use function getcwd;
 
 final class LocatorTest extends TestCase
 {
     use ScratchDirectory;
 
+    private string $previousCwd = '';
+
     protected function setUp(): void
     {
         $this->makeScratchDirectory('locator', 'src/Action/Deep');
+        $this->previousCwd = (string) getcwd();
     }
 
     protected function tearDown(): void
     {
+        chdir($this->previousCwd);
         $this->removeScratchDirectory();
     }
 
@@ -67,6 +74,46 @@ final class LocatorTest extends TestCase
         // Nothing is written, so the walk runs all the way to '/' and has to
         // stop there rather than looping forever.
         $this->assertNull(Locator::locate($this->root . '/src/Action/Deep'));
+    }
+
+    public function testStartIsTheWorkingDirectoryWhenEmpty(): void
+    {
+        chdir($this->root . '/src');
+
+        $this->assertSame($this->root . '/src', Locator::start(''));
+    }
+
+    public function testStartIsTheWorkingDirectoryWhenNull(): void
+    {
+        chdir($this->root . '/src');
+
+        $this->assertSame($this->root . '/src', Locator::start(null));
+    }
+
+    public function testStartRefusesAFile(): void
+    {
+        file_put_contents($this->root . '/file', '');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/file is not a directory');
+
+        Locator::start($this->root . '/file');
+    }
+
+    public function testStartRefusesAMissingDirectory(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('missing-folder is not a directory');
+
+        Locator::start('missing-folder');
+    }
+
+    public function testStartResolvesARelativeDirectory(): void
+    {
+        // A walk from `..` as a string reaches `.`, the working directory.
+        chdir($this->root . '/src/Action');
+
+        $this->assertSame($this->root . '/src', Locator::start('..'));
     }
 
     public function testWalksUpUntilItFindsTheFile(): void

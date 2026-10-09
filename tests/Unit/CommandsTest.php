@@ -32,6 +32,7 @@ final class CommandsTest extends TestCase
                 'container:list',
                 'down',
                 'event:list',
+                'init',
                 'install',
                 'list',
                 'make:action',

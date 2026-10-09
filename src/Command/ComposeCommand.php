@@ -17,17 +17,16 @@ use Crest\Console\Command\Command;
 use Crest\Console\Input;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
+use Crest\Project\Config;
 
 /**
  * The base for the commands that control the project containers.
  *
  * They are thin, but they are not aliases. crest wrote docker-compose.yml, so
- * crest owns the `app` service name. docker compose finds the file when it
- * goes up from the working directory, as crest finds crest.php. Thus no path
- * is recorded.
- *
- * They read no project configuration, because they run before the project
- * has a vendor/ directory.
+ * crest knows the service of the project. They run docker compose in the
+ * project root, which the root rule of all commands finds: the folder of the
+ * nearest crest.php. They do not need vendor/, because they run before
+ * composer install.
  */
 abstract class ComposeCommand extends Command
 {
@@ -43,8 +42,7 @@ abstract class ComposeCommand extends Command
     }
 
     /**
-     * Runs `docker compose` with the arguments, in --directory if the user
-     * gave one. An empty value reads as absent, as it does for `new`.
+     * Runs `docker compose` with the arguments in the project root.
      *
      * @param list<string> $arguments
      */
@@ -52,7 +50,7 @@ abstract class ComposeCommand extends Command
     {
         return $this->runner->run(
             ['docker', 'compose', ...$arguments],
-            $input->optionStringOrNull('directory') ?: null
+            Config::rootFor($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'))
         );
     }
 }
