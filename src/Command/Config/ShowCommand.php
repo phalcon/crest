@@ -18,22 +18,22 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Config;
+use Crest\Project\Locator;
 
 use function ksort;
 
 /**
  * The configuration crest resolved for this project.
  *
- * crest.php is optional, so most projects run entirely on values crest worked
- * out from composer.json. Printing the values without saying where each came
- * from would answer the easy half of the question: the useful part is knowing
- * which of them the project actually asked for.
+ * Printing the values without saying where each came from would answer the
+ * easy half of the question: the useful part is knowing which of them the
+ * project actually asked for, and which took a default.
  */
 final class ShowCommand extends ProjectCommand
 {
     private const DECLARED = 'declared';
 
-    private const INFERRED = 'inferred';
+    private const DEFAULTED = 'default';
 
     public function define(): Definition
     {
@@ -43,15 +43,14 @@ final class ShowCommand extends ProjectCommand
     public function handle(Input $input, Output $output): int
     {
         $config = $this->config($input);
-        $source = $config->source();
 
-        $output->line('Source: ' . ($source ?? 'inferred from composer.json'));
+        $output->line('Source: ' . $config->source());
         $output->line();
 
         $output->table(
             ['ITEM', 'VALUE', 'ORIGIN'],
             [
-                ['root', $config->root(), self::INFERRED],
+                ['root', $config->root(), Locator::FILENAME],
                 ['flavor', $config->flavor()->value, $this->origin($config, 'flavor')],
                 ['namespace', $config->namespace(), $this->origin($config, 'namespace')],
             ]
@@ -73,6 +72,6 @@ final class ShowCommand extends ProjectCommand
 
     private function origin(Config $config, string $key): string
     {
-        return true === $config->isDeclared($key) ? self::DECLARED : self::INFERRED;
+        return true === $config->isDeclared($key) ? self::DECLARED : self::DEFAULTED;
     }
 }

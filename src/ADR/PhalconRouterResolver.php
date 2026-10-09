@@ -14,9 +14,11 @@ declare(strict_types=1);
 namespace Crest\ADR;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Paths;
 use Phalcon\ADR\Router\Router;
 
 use function class_exists;
+use function sprintf;
 
 /**
  * Delegates to the framework's published contract,
@@ -34,6 +36,14 @@ use function class_exists;
  */
 final class PhalconRouterResolver implements ActionResolver
 {
+    /**
+     * The error when the running crest has no Phalcon. %s is the folder of the
+     * running crest.
+     */
+    private const NO_PHALCON = <<<'TEXT'
+        %s has no Phalcon: install phalcon/phalcon or enable ext-phalcon, or set 'runtime' to docker in crest.php
+        TEXT;
+
     public function classFor(string $baseNamespace, string $method, string $path): string
     {
         return $this->router($baseNamespace)->classFor($method, $path);
@@ -52,10 +62,10 @@ final class PhalconRouterResolver implements ActionResolver
     private function router(string $baseNamespace): Router
     {
         if (false === class_exists(Router::class)) {
-            throw new Exception(
-                'this command needs Phalcon to resolve routes; install phalcon/phalcon '
-                . 'or enable ext-phalcon in this project'
-            );
+            // The running crest has no Phalcon. A project crest on a host
+            // without ext-phalcon is the usual case: the docker runtime runs
+            // it in the container, where Phalcon is.
+            throw new Exception(sprintf(self::NO_PHALCON, Paths::root()));
         }
 
         $router = new Router();

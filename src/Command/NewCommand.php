@@ -22,9 +22,14 @@ use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Project\Config;
 use Crest\Project\Flavor;
+use Crest\Project\Questions;
+use Crest\Project\Runtime;
+use Crest\Project\Settings;
 use FilesystemIterator;
 
+use function array_keys;
 use function escapeshellarg;
 use function file_exists;
 use function getcwd;
@@ -42,7 +47,9 @@ use function version_compare;
  *
  * This command runs where no project exists yet: no crest.php, no
  * composer.json, no vendor/. Thus it extends the console Command, not
- * ProjectCommand. It gets all values from its arguments, and it writes
+ * ProjectCommand. It gets its values from its arguments. When an option is
+ * not given, it asks the question, through the code that `crest init` uses.
+ * A run without interaction takes the default of the option. It writes
  * crest.php. It does not read it.
  *
  * It runs nothing: no composer, no docker, no network. It checks all its
@@ -154,10 +161,30 @@ final class NewCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $name      = $this->name($input->argumentString('name'));
-        $namespace = ClassName::namespace($input->optionString('namespace'));
-        $php       = $this->php($input->optionString('php'));
-        $variant   = strtolower($input->optionString('phalcon'));
+        $name   = $this->name($input->argumentString('name'));
+        $parent = self::parent($input);
+        $target = $parent . '/' . $name;
+
+        // Before the questions: a refused target asks nothing.
+        $this->guard($target, true === $input->option('force'));
+
+        // An option answers its question. Each question shows the default of
+        // its option. Without interaction, the default is the answer.
+        $namespace = true === $input->hasOption('namespace')
+            ? ClassName::namespace($input->optionString('namespace'))
+            : Questions::namespace($output, $input->optionString('namespace'));
+
+        $php = $this->php(
+            true === $input->hasOption('php')
+                ? $input->optionString('php')
+                : $output->ask('PHP version', $input->optionString('php'), Questions::checkWith($this->php(...)))
+        );
+
+        $variant = strtolower(
+            true === $input->hasOption('phalcon')
+                ? $input->optionString('phalcon')
+                : $output->choice('Phalcon version', array_keys(self::PHALCON), $input->optionString('phalcon'))
+        );
 
         if (false === isset(self::PHALCON[$variant])) {
             throw new Exception(
@@ -167,11 +194,7 @@ final class NewCommand extends Command
 
         [$package, $constraint] = self::PHALCON[$variant];
 
-        $parent = self::parent($input);
-        $target = $parent . '/' . $name;
-        $force  = true === $input->option('force');
-
-        $this->guard($target, $force);
+        $runtime = Questions::runtime($output, Runtime::docker());
 
         // Overrides come from the directory that the project goes into. A
         // team that publishes the project stubs there gets its own
@@ -179,19 +202,28 @@ final class NewCommand extends Command
         $stub   = new Stub(Paths::stubs(), $parent);
         $flavor = Flavor::ADR->value;
 
+        // crest.php holds the decisions of the user. `crest init` writes it
+        // through the same stub and the same Settings.
+        $settings = new Settings(
+            $namespace,
+            $namespace . '\\' . Settings::FRONT,
+            Config::defaultPaths(Flavor::ADR),
+            $runtime
+        );
+
         $replacements = [
+            ...$settings->replacements(),
             'actionNamespace'   => $namespace . '\\Action',
             'actionPath'        => self::ACTION_PATH,
             'crestConstraint'   => self::CREST,
             'jsonNamespace'     => str_replace('\\', '\\\\', $namespace),
-            'namespace'         => $namespace,
             'phalconConstraint' => $constraint,
             'phalconPackage'    => $package,
             'phalconVariant'    => $variant,
             'phpVersion'        => $php,
             'project'           => $name,
             'seed'              => self::SEED,
-            'service'           => InstallCommand::SERVICE,
+            'service'           => $settings->runtime->service,
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',

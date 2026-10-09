@@ -16,21 +16,16 @@ namespace Crest\Command;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Project\Config;
 
 /**
  * Runs composer install in the project container. On the host, use
  * `composer install` directly. This command exists because crest knows the
- * container.
+ * container: the service of the `runtime` key in crest.php, `app` when the
+ * key does not name one.
  */
 final class InstallCommand extends ComposeCommand
 {
-    /**
-     * The service in docker-compose.yml. crest wrote that file
-     * (project-compose.stub), so the name belongs to crest. NewCommand writes
-     * this value into the stub.
-     */
-    public const SERVICE = 'app';
-
     public function define(): Definition
     {
         return Definition::for('install', 'Install composer dependencies in the project container');
@@ -38,6 +33,11 @@ final class InstallCommand extends ComposeCommand
 
     public function handle(Input $input, Output $output): int
     {
-        return $this->compose($input, ['exec', self::SERVICE, 'composer', 'install']);
+        $service = Config::discover(
+            $input->optionStringOrNull('directory'),
+            $input->optionStringOrNull('config')
+        )->runtime()->service;
+
+        return $this->compose($input, ['exec', $service, 'composer', 'install']);
     }
 }
