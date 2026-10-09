@@ -35,6 +35,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added a package hint for unknown commands: `unknown command 'migration:run'; provided by phalcon/migrations`. No hint when a command with that prefix is registered. The map is set with `Crest\Console\Registry::withProviders()`. [#19](https://github.com/phalcon/crest/issues/19)
 - Added the hand-off: in a project, a global crest passes each project command to the project's `vendor/bin/crest` and returns its exit status. `new`, `up`, `down`, `install` and `--version` stay in the global crest. A project that requires `phalcon/crest` without `vendor/bin/crest` gives an error. [#27](https://github.com/phalcon/crest/issues/27)
 - Added `Crest\Project\Locator::project()`: the nearest directory with a `composer.json`. [#27](https://github.com/phalcon/crest/issues/27)
+- Added `init`: writes `crest.php` for an existing project. It proposes the values that it finds (namespace, front controller, runtime) and asks for each one. [#28](https://github.com/phalcon/crest/issues/28)
+- Added the global option `--no-interaction` (`-n`): ask no questions and use the default answers. [#28](https://github.com/phalcon/crest/issues/28)
+- Added the `runtime` key to `crest.php`: `host`, or `docker` with a compose service. With docker, a global crest runs project commands with `docker compose exec`. [#28](https://github.com/phalcon/crest/issues/28)
+- Added questions to `new` for the values that no option gives (namespace, PHP, Phalcon, runtime). [#28](https://github.com/phalcon/crest/issues/28)
 
 ### Changed
 
@@ -53,6 +57,11 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `stub:publish` without a name skips the `project-*` stubs. Publish them by name; they go to the working directory or `--directory`. [#8](https://github.com/phalcon/crest/issues/8)
 - Rendering a stub fails when a placeholder has no value. The error names the stub. [#8](https://github.com/phalcon/crest/issues/8)
 - The config inference error names the missing psr-4 directories. [#18](https://github.com/phalcon/crest/issues/18)
+- Changed `crest.php` to required. The project root is the folder of the `--config` file, or of the nearest `crest.php`, for all commands, the hand-off, `serve`, `up`, `down` and `install`. Without it, crest says `run 'crest init'`. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed `config:show`: a value that `crest.php` does not state has the origin `default`. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed the hand-off: a project with `crest.php` that does not require crest gets the `composer require --dev phalcon/crest` hint. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed `new`: `crest.php` states every path and the runtime. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed `install`: it uses the service of the `runtime` key. [#28](https://github.com/phalcon/crest/issues/28)
 
 ### Fixed
 
@@ -67,6 +76,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 
 - Removed the shadowed-action warning from `make:action`.
 - Removed the `phalcon/cli-options-parser` requirement.
+- Removed the inference of the namespace and paths from `composer.json` when there is no `crest.php`. [#28](https://github.com/phalcon/crest/issues/28)
 
 [keep_a_changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic_versioning]: https://semver.org/spec/v2.0.0.html

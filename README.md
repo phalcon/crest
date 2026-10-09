@@ -44,40 +44,71 @@ autoloader and its Phalcon, so a global crest passes them to the project's
     crest about                           environment and version report
     crest make:action GET /company/all
 
-`new`, `up`, `down`, `install` and `--version` always run in the crest that you type.
-Without a global crest, run `vendor/bin/crest` in the project. crest finds the project
-from a subdirectory, or from `--directory`. If the project requires `phalcon/crest` but
-has no `vendor/bin/crest` yet, crest stops and tells you to run `crest install` or
-`composer install`.
+`new`, `init`, `up`, `down`, `install` and `--version` always run in the crest that you
+type. Without a global crest, run `vendor/bin/crest` in the project.
+
+crest finds the project by its `crest.php`: the file that `--config` names, or the
+nearest `crest.php` above the working directory or `--directory`. Without `crest.php`,
+crest stops and tells you to run `crest init`. If the project has no `vendor/bin/crest`
+yet, crest stops and tells you to run `crest install` or `composer install`, or
+`composer require --dev phalcon/crest` when the project does not require crest.
 
 To create a project, use the global crest. The new project requires `phalcon/crest`, so
 after `composer install` it has its own `vendor/bin/crest`:
 
     crest new my-app                      create an ADR project
 
+For an existing project, `crest init` writes `crest.php`:
+
+    crest init                            write crest.php for this project
+
 ## Global options
 
 | Option | Purpose |
 |---|---|
 | `--config=<file>` | explicit path to `crest.php` |
-| `--directory=<dir>` | project root override; for `new`, the directory the project is created in |
+| `--directory=<dir>` | where crest starts to look for `crest.php`; for `new` and `init`, the directory to use |
 | `--trace` | full exception trace |
 | `--help`, `-h` | usage for the current command |
 | `--quiet`, `-q` | suppress non-essential output |
+| `--no-interaction`, `-n` | ask no questions; use the default answers |
 | `--version` | crest version |
 
 ## Configuration
 
-`crest.php` at the project root is optional. Without it, crest reads `composer.json`'s
-psr-4 map and defaults `paths.action` to `src/Action`.
+Each project has a `crest.php` at its root. `crest new` writes it. For an existing
+project, `crest init` writes it. `init` proposes the values that it finds in the project:
+the namespace and the folder of the first psr-4 entry whose folder exists, the front
+controller `<namespace>\AppFront` when `src/AppFront.php` is there, and the docker
+runtime when the project has a compose file. It asks you to confirm each one.
+`--no-interaction` accepts the proposals. `--force` overwrites an existing `crest.php`.
 
 ```php
 return [
     'flavor'    => 'adr',
     'namespace' => 'App',
-    'paths'     => ['action' => 'src/Action'],
+    'bootstrap' => App\AppFront::class,
+    'paths'     => [
+        'action'     => 'src/Action',
+        'command'    => 'src/Command',
+        'middleware' => 'src/Middleware',
+        'provider'   => 'src/Provider',
+        'responder'  => 'src/Responder',
+    ],
+    'runtime'   => ['type' => 'docker', 'service' => 'app'],
 ];
 ```
+
+A key that is not in the file takes its default: `flavor` `adr`, `namespace` `App`, the
+ADR paths above, and the host runtime.
+
+`runtime` says where the project commands run. With `['type' => 'host']`, a global crest
+runs the project's `vendor/bin/crest` with the PHP of the host. With
+`['type' => 'docker', 'service' => 'app']`, it runs
+`docker compose exec app vendor/bin/crest ...` in the project root. Use docker when
+Phalcon is only in the container, for example a v5 project on a host without
+`ext-phalcon`. The containers must be up (`crest up`). `crest install` uses the same
+service.
 
 Namespaces are resolved from your psr-4 map, so a path must be covered by an autoload rule -
 `src/Action` under `App\ => src/` becomes `App\Action`. If you write to a directory your
