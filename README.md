@@ -45,7 +45,8 @@ autoloader and its Phalcon, so a global crest passes them to the project's
     crest make:action GET /company/all
 
 `new`, `init`, `up`, `down`, `install` and `--version` always run in the crest that you
-type. Without a global crest, run `vendor/bin/crest` in the project.
+type. Without a global crest, run `vendor/bin/crest` in the project, or `./crest` on a
+host with docker and no PHP.
 
 crest finds the project by its `crest.php`: the file that `--config` names, or the
 nearest `crest.php` above the working directory or `--directory`. Without `crest.php`,
@@ -69,6 +70,12 @@ the defaults:
 | `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
+
+`new` also writes `./crest`, a launcher for a host with docker and no PHP. `./crest up`,
+`./crest down` and `./crest install` run docker compose on the host: they start the
+containers, stop them, and install the dependencies. All other commands run
+`vendor/bin/crest` in the service of the project. Before `./crest install`, they stop
+with a hint. On Windows, run it in WSL2.
 
 For an existing project, `crest init` writes `crest.php`:
 
