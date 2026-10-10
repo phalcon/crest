@@ -78,21 +78,21 @@ final class HandOff
 
     private readonly Runner $runner;
 
-    private readonly string $self;
-
     private readonly bool $terminal;
 
+    private readonly string $vendor;
+
     /**
-     * @param string|null $self     The root of the running crest package. Null
-     *                              for this package. A test gives another root.
-     * @param bool|null   $terminal Whether stdin is a terminal. Null asks the
-     *                              stream.
+     * @param string    $vendor   The vendor folder of the autoloader that the
+     *                            running crest loaded.
+     * @param bool|null $terminal Whether stdin is a terminal. Null asks the
+     *                            stream.
      */
-    public function __construct(?Runner $runner = null, ?string $self = null, ?bool $terminal = null)
+    public function __construct(string $vendor, ?Runner $runner = null, ?bool $terminal = null)
     {
         $this->runner   = $runner ?? new ShellRunner();
-        $this->self     = $self ?? Paths::root();
         $this->terminal = $terminal ?? stream_isatty(STDIN);
+        $this->vendor   = $vendor;
     }
 
     /**
@@ -201,12 +201,15 @@ final class HandOff
     }
 
     /**
-     * The crest of the project is this package. Without this check, the
-     * crest of the project passes the call to itself for ever.
+     * The crest of the project is this crest: it runs with the autoloader in
+     * <root>/vendor. Without this check, the crest of the project passes the
+     * call to itself for ever. The package folder cannot tell: with a
+     * symlinked path repository, a global crest and the crest of the project
+     * have the same package folder.
      */
     private function isSelf(string $root): bool
     {
-        return realpath($root . '/vendor/' . Commands::PACKAGE) === realpath($this->self);
+        return realpath($root . '/vendor') === realpath($this->vendor);
     }
 
     /**
