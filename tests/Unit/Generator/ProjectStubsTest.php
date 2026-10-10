@@ -179,6 +179,7 @@ final class ProjectStubsTest extends TestCase
                 'project-gitignore',
                 'project-htrouter',
                 'project-index',
+                'project-launcher',
                 'project-readme',
             ],
             self::packagedNames()
