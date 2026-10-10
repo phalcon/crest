@@ -24,6 +24,7 @@ use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
+use Crest\Project\Layout;
 use Crest\Project\Runtime;
 use Crest\Project\Settings;
 use FilesystemIterator;
@@ -59,12 +60,6 @@ use function version_compare;
 final class NewCommand extends Command
 {
     /**
-     * Where the actions go, relative to the project root. The seed action and
-     * the front controller use it.
-     */
-    private const ACTION_PATH = 'src/Action';
-
-    /**
      * The crest that the new project requires. This crest creates the project,
      * and the project crest (vendor/bin/crest) runs the project commands,
      * because they need the project autoloader and its Phalcon.
@@ -78,15 +73,15 @@ final class NewCommand extends Command
     private const FILES = [
         Stub::PROJECT_PREFIX . 'composer'   => 'composer.json',
         Stub::PROJECT_PREFIX . 'config'     => 'crest.php',
-        Stub::PROJECT_PREFIX . 'env'        => '.env',
+        Stub::PROJECT_PREFIX . 'env'        => Layout::ENV_FILE,
         Stub::PROJECT_PREFIX . 'gitignore'  => '.gitignore',
-        Stub::PROJECT_PREFIX . 'htrouter'   => ServeCommand::ROUTER,
+        Stub::PROJECT_PREFIX . 'htrouter'   => Layout::ROUTER,
         Stub::PROJECT_PREFIX . 'readme'     => 'README.md',
         Stub::PROJECT_PREFIX . 'launcher'   => self::LAUNCHER,
         Stub::PROJECT_PREFIX . 'compose'    => 'docker-compose.yml',
         Stub::PROJECT_PREFIX . 'dockerfile' => 'resources/docker/Dockerfile',
-        Stub::PROJECT_PREFIX . 'index'      => 'public/index.php',
-        Stub::PROJECT_PREFIX . 'front'      => 'src/AppFront.php',
+        Stub::PROJECT_PREFIX . 'index'      => Layout::DOCUMENT_ROOT . '/index.php',
+        Stub::PROJECT_PREFIX . 'front'      => Layout::SOURCE . '/' . Layout::FRONT . '.php',
     ];
 
     /**
@@ -216,11 +211,15 @@ final class NewCommand extends Command
         $stub   = new Stub(Paths::stubs(), $parent);
         $flavor = Flavor::ADR->value;
 
+        // Where the actions go, relative to the project root. The seed action
+        // and the front controller use it.
+        $actionPath = Config::defaultPaths(Flavor::ADR)['action'];
+
         // crest.php holds the decisions of the user. `crest init` writes it
         // through the same stub and the same Settings.
         $settings = new Settings(
             $namespace,
-            $namespace . '\\' . Settings::FRONT,
+            $namespace . '\\' . Layout::FRONT,
             Config::defaultPaths(Flavor::ADR),
             $runtime
         );
@@ -228,16 +227,26 @@ final class NewCommand extends Command
         $replacements = [
             ...$settings->replacements(),
             'actionNamespace'   => $namespace . '\\Action',
-            'actionPath'        => self::ACTION_PATH,
+            'actionPath'        => $actionPath,
+            'autoloader'        => Layout::AUTOLOADER,
             'crestConstraint'   => self::CREST,
-            'jsonNamespace'     => str_replace('\\', '\\\\', $namespace),
-            'phalconConstraint' => $constraint,
-            'phalconPackage'    => $package,
-            'phalconVariant'    => $variant,
-            'phpVersion'        => $php,
-            'project'           => $name,
-            'seed'              => self::SEED,
-            'service'           => $settings->runtime->service,
+            'documentRoot'      => Layout::DOCUMENT_ROOT,
+            // The v5 lines of the Dockerfile name the extension also in a v6
+            // project, where they are comments.
+            'extensionConstraint' => self::PHALCON['v5'][1],
+            'front'               => Layout::FRONT,
+            'jsonNamespace'       => str_replace('\\', '\\\\', $namespace),
+            'phalconConstraint'   => $constraint,
+            'phalconPackage'      => $package,
+            'phalconVariant'      => $variant,
+            'phpVersion'          => $php,
+            'port'                => (string) Layout::PORT,
+            'portVariable'        => Layout::PORT_VARIABLE,
+            'project'             => $name,
+            'router'              => Layout::ROUTER,
+            'seed'                => self::SEED,
+            'service'             => $settings->runtime->service,
+            'source'              => Layout::SOURCE,
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',
@@ -259,7 +268,7 @@ final class NewCommand extends Command
 
         // The seed action uses the usual action stub. Convention cannot name
         // it, because Convention asks the router, and there is no vendor/ yet.
-        $files[self::ACTION_PATH . '/' . self::SEED . '.php'] = $stub->render(
+        $files[$actionPath . '/' . self::SEED . '.php'] = $stub->render(
             $flavor,
             'action',
             [
@@ -282,7 +291,8 @@ final class NewCommand extends Command
 
         $this->report(
             $output,
-            '' === $input->optionString('directory') ? $name : $target
+            '' === $input->optionString('directory') ? $name : $target,
+            $actionPath
         );
 
         return 0;
@@ -360,7 +370,7 @@ final class NewCommand extends Command
      * on every host. Only this text names the two ways, so nothing here
      * examines the environment.
      */
-    private function report(Output $output, string $shown): void
+    private function report(Output $output, string $shown, string $actionPath): void
     {
         // Quoted when the path has a space, so that the line works when pasted.
         $cd = sprintf('    cd %s', true === str_contains($shown, ' ') ? escapeshellarg($shown) : $shown);
@@ -379,6 +389,6 @@ final class NewCommand extends Command
         $output->line('    composer install');
         $output->line('    crest serve');
         $output->line();
-        $output->line(sprintf('Then GET / answers from %s/%s.php', self::ACTION_PATH, self::SEED));
+        $output->line(sprintf('Then GET / answers from %s/%s.php', $actionPath, self::SEED));
     }
 }

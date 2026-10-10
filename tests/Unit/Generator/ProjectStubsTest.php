@@ -48,22 +48,30 @@ final class ProjectStubsTest extends TestCase
      * exactly these keys.
      */
     private const REPLACEMENTS = [
-        'actionNamespace'   => 'App\\Action',
-        'actionPath'        => 'src/Action',
-        'bootstrap'         => "    'bootstrap' => App\\AppFront::class,\n",
-        'crestConstraint'   => '^1.0',
-        'jsonNamespace'     => 'App',
-        'namespace'         => 'App',
-        'paths'             => "        'action' => 'src/Action',\n",
-        'phalconConstraint' => '^5',
-        'phalconPackage'    => 'ext-phalcon',
-        'phalconVariant'    => 'v5',
-        'phpVersion'        => '8.4',
-        'project'           => 'my-app',
-        'runtime'           => "['type' => 'docker', 'service' => 'app']",
-        'seed'              => 'Get',
-        'service'           => 'app',
-        'v5'                => '',
+        'actionNamespace'     => 'App\\Action',
+        'actionPath'          => 'src/Action',
+        'autoloader'          => 'vendor/autoload.php',
+        'bootstrap'           => "    'bootstrap' => App\\AppFront::class,\n",
+        'crestConstraint'     => '^1.0',
+        'documentRoot'        => 'public',
+        'extensionConstraint' => '^5.18',
+        'front'               => 'AppFront',
+        'jsonNamespace'       => 'App',
+        'namespace'           => 'App',
+        'paths'               => "        'action' => 'src/Action',\n",
+        'phalconConstraint'   => '^5',
+        'phalconPackage'      => 'ext-phalcon',
+        'phalconVariant'      => 'v5',
+        'phpVersion'          => '8.4',
+        'port'                => '8080',
+        'portVariable'        => 'APP_PORT',
+        'project'             => 'my-app',
+        'router'              => '.htrouter.php',
+        'runtime'             => "['type' => 'docker', 'service' => 'app']",
+        'seed'                => 'Get',
+        'service'             => 'app',
+        'source'              => 'src',
+        'v5'                  => '',
     ];
 
     /**
@@ -145,6 +153,17 @@ final class ProjectStubsTest extends TestCase
         );
     }
 
+    public function testTheDockerfileGetsTheExtensionConstraintFromAPlaceholder(): void
+    {
+        $rendered = (new Stub(Paths::stubs()))->render(
+            self::FLAVOR,
+            Stub::PROJECT_PREFIX . 'dockerfile',
+            [...self::REPLACEMENTS, 'extensionConstraint' => '^9.9']
+        );
+
+        $this->assertStringContainsString('phalcon/cphalcon:^9.9', $rendered);
+    }
+
     public function testTheFrontControllerImportsResolve(): void
     {
         if (
@@ -163,6 +182,48 @@ final class ProjectStubsTest extends TestCase
                 class_exists($import) || interface_exists($import),
                 sprintf('project-front imports %s, which does not exist', $import)
             );
+        }
+    }
+
+    public function testTheLayoutComesOnlyFromPlaceholders(): void
+    {
+        // NewCommand gives the layout to the stubs. A literal copy in a stub
+        // does not follow Layout, so another layout must leave no trace of
+        // the default one. The bootstrap value names the front controller
+        // too, so it changes with the layout.
+        $layout = [
+            'autoloader'   => 'deps/autoload.php',
+            'bootstrap'    => "    'bootstrap' => App\\SiteFront::class,\n",
+            'documentRoot' => 'web',
+            'front'        => 'SiteFront',
+            'port'         => '9090',
+            'portVariable' => 'SITE_PORT',
+            'router'       => 'router.php',
+            'source'       => 'lib',
+        ];
+
+        $defaults = [
+            'public',
+            '.htrouter.php',
+            'APP_PORT',
+            'AppFront',
+            'vendor/autoload.php',
+            '"src/"',
+            ':-8080',
+            '=8080',
+            'localhost:8080',
+        ];
+
+        foreach (self::packagedNames() as $name) {
+            $rendered = (new Stub(Paths::stubs()))->render(self::FLAVOR, $name, [...self::REPLACEMENTS, ...$layout]);
+
+            foreach ($defaults as $default) {
+                $this->assertStringNotContainsString(
+                    $default,
+                    $rendered,
+                    sprintf("stub '%s' has the literal '%s'", $name, $default)
+                );
+            }
         }
     }
 

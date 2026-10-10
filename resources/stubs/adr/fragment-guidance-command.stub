@@ -1,0 +1,9 @@
+Nothing lists it yet. Declare it in the package composer.json:
+
+    "extra": {
+        "{{ extraKey }}": {
+            "commands": {
+                "{{ command }}": "{{ classJson }}"
+            }
+        }
+    }

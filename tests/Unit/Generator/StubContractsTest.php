@@ -37,6 +37,7 @@ use function enum_exists;
 use function extension_loaded;
 use function glob;
 use function interface_exists;
+use function method_exists;
 use function preg_match_all;
 use function sprintf;
 use function str_contains;
@@ -64,7 +65,11 @@ final class StubContractsTest extends TestCase
     private const REPLACEMENTS = [
         'attributes' => '',
         'class'      => 'GeneratedArtifact',
+        'classJson'  => 'App\\\\Generated\\\\GeneratedArtifact',
         'command'    => 'generated',
+        'entries'    => '',
+        'extraKey'   => 'crest',
+        'name'       => 'id',
         'namespace'  => 'App\\Generated',
         'params'     => '',
         'template'   => 'generated/index',
@@ -77,6 +82,20 @@ final class StubContractsTest extends TestCase
             && false === extension_loaded('phalcon')
         ) {
             $this->markTestSkipped('resolving the stub imports needs Phalcon present');
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function fragmentStubs(): iterable
+    {
+        $directory = Stub::packagedDirectory(Paths::stubs(), self::FLAVOR);
+
+        foreach (glob($directory . '/' . Stub::FRAGMENT_PREFIX . '*.stub') ?: [] as $file) {
+            $name = basename($file, '.stub');
+
+            yield $name => [$name];
         }
     }
 
@@ -117,13 +136,28 @@ final class StubContractsTest extends TestCase
             $name = basename($file, '.stub');
 
             // The project stubs render a whole application, not one artifact
-            // class. ProjectStubsTest holds their contract.
-            if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
+            // class. ProjectStubsTest holds their contract. A fragment is not
+            // a whole class: fragmentStubs() holds its contract.
+            if (
+                true === str_starts_with($name, Stub::PROJECT_PREFIX)
+                || true === str_starts_with($name, Stub::FRAGMENT_PREFIX)
+            ) {
                 continue;
             }
 
             yield $name => [$name];
         }
+    }
+
+    /**
+     * @dataProvider fragmentStubs
+     */
+    public function testAFragmentLeavesNoPlaceholder(string $name): void
+    {
+        $this->assertFalse(
+            str_contains($this->render($name), '{{'),
+            sprintf("fragment '%s' left a placeholder unrendered", $name)
+        );
     }
 
     /**
@@ -209,6 +243,18 @@ final class StubContractsTest extends TestCase
         // Proves the class placeholder actually landed, rather than the file
         // merely happening to parse.
         $this->assertStringContainsString('class GeneratedArtifact', $rendered);
+    }
+
+    public function testTheAttributeFragmentCallsAMethodOfTheFramework(): void
+    {
+        // fragment-action-attribute writes $request->getAttributes()->get().
+        $type = (new ReflectionMethod(AttributeRequest::class, 'getAttributes'))->getReturnType();
+
+        $this->assertInstanceOf(ReflectionNamedType::class, $type);
+        $this->assertTrue(
+            method_exists($type->getName(), 'get'),
+            sprintf('%s has no get(), which fragment-action-attribute calls', $type->getName())
+        );
     }
 
     private function render(string $name): string

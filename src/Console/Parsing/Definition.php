@@ -28,8 +28,13 @@ use function strlen;
 use function substr;
 
 /**
- * A command's schema. Declared once, then used for three things: binding argv
- * (Task 4), rendering usage, and rejecting nonsense before a command runs.
+ * A command's schema. Declared once, then used for four things: binding argv
+ * (Task 4), reading a few options out of argv for another reader, rendering
+ * usage, and rejecting nonsense before a command runs.
+ *
+ * A command declares its schema with for(), argument() and option().
+ *
+ * @api
  */
 final class Definition
 {
@@ -80,43 +85,14 @@ final class Definition
      * tokenization: without it, `--force GET` would consume `GET` as the value
      * of a flag and lose the positional entirely.
      *
+     * @internal For the console core and the tool that runs it. A command only
+     *           declares its schema.
+     *
      * @param list<string> $tokens argv minus the script name and command name
      */
     public function bind(array $tokens): Bound
     {
-        $options     = [];
-        $positionals = [];
-        $literal     = false;
-
-        while ([] !== $tokens) {
-            $token = array_shift($tokens);
-
-            if (true === $literal) {
-                $positionals[] = $token;
-
-                continue;
-            }
-
-            if ('--' === $token) {
-                $literal = true;
-
-                continue;
-            }
-
-            if (true === str_starts_with($token, '--')) {
-                $this->bindLongOption(substr($token, 2), $tokens, $options);
-
-                continue;
-            }
-
-            if (true === str_starts_with($token, '-') && strlen($token) > 1) {
-                $this->bindShortOptions(substr($token, 1), $tokens, $options);
-
-                continue;
-            }
-
-            $positionals[] = $token;
-        }
+        [$options, $positionals] = $this->read($tokens, false);
 
         return new Bound(
             $this->resolveArguments($positionals),
@@ -125,6 +101,34 @@ final class Definition
         );
     }
 
+    /**
+     * Reads the options of this schema from tokens that also hold other
+     * things: a command name, its arguments and its own options. The rules
+     * are the rules of bind(), and nothing throws. A token that this schema
+     * does not declare stays in the rest, in order, and so do `--` and each
+     * token after it. A declared option without the value that it needs is
+     * null. A short cluster with a letter that this schema does not declare
+     * stays whole in the rest.
+     *
+     * @internal For the console core and the tool that runs it. A command only
+     *           declares its schema.
+     *
+     * @param list<string> $tokens
+     */
+    public function extract(array $tokens): Extracted
+    {
+        [$options, $rest] = $this->read($tokens, true);
+
+        return new Extracted($options, $rest);
+    }
+
+    /**
+     * The declared option with this long or short name. Null when there is
+     * none.
+     *
+     * @internal For the console core and the tool that runs it. A command only
+     *           declares its schema.
+     */
     public function findOption(string $name): ?Option
     {
         foreach ($this->options as $option) {
@@ -166,6 +170,9 @@ final class Definition
      * Folds another definition's options into this one, keeping this
      * definition's name. Used by the kernel to merge global options into each
      * command. Collisions are a programming error, not user input.
+     *
+     * @internal For the console core and the tool that runs it. A command only
+     *           declares its schema.
      */
     public function merge(self $other): static
     {
@@ -215,8 +222,10 @@ final class Definition
     /**
      * @param list<string>         $tokens
      * @param array<string, mixed> $options
+     *
+     * @return bool False when the lenient reader does not know the option.
      */
-    private function bindLongOption(string $token, array &$tokens, array &$options): void
+    private function bindLongOption(string $token, array &$tokens, array &$options, bool $lenient): bool
     {
         $value = null;
         if (true === str_contains($token, '=')) {
@@ -225,20 +234,49 @@ final class Definition
 
         $option = $this->findOption($token);
         if (null === $option) {
+            if (true === $lenient) {
+                return false;
+            }
+
             throw new Exception(sprintf("unknown option '--%s'", $token));
         }
 
-        $options[$option->name] = $this->valueFor($option, $value, $tokens, true);
+        $options[$option->name] = $this->valueFor($option, $value, $tokens, true, $lenient);
+
+        return true;
+    }
+
+    /**
+     * One option token: long (`--name`) or a short cluster (`-abc`).
+     *
+     * @param list<string>         $tokens
+     * @param array<string, mixed> $options
+     */
+    private function bindOption(string $token, array &$tokens, array &$options, bool $lenient): bool
+    {
+        if (true === str_starts_with($token, '--')) {
+            return $this->bindLongOption(substr($token, 2), $tokens, $options, $lenient);
+        }
+
+        return $this->bindShortOptions(substr($token, 1), $tokens, $options, $lenient);
     }
 
     /**
      * @param list<string>         $tokens
      * @param array<string, mixed> $options
+     *
+     * @return bool False when the lenient reader does not know a letter.
      */
-    private function bindShortOptions(string $cluster, array &$tokens, array &$options): void
+    private function bindShortOptions(string $cluster, array &$tokens, array &$options, bool $lenient): bool
     {
         $letters = str_split($cluster);
         $last    = count($letters) - 1;
+
+        // The lenient reader takes a cluster whole or not at all. A letter
+        // that this schema does not declare belongs to another reader.
+        if (true === $lenient && false === $this->declaresAll($letters)) {
+            return false;
+        }
 
         foreach ($letters as $index => $letter) {
             $option = $this->findOption($letter);
@@ -252,9 +290,26 @@ final class Definition
                 $option,
                 null,
                 $tokens,
-                $index === $last
+                $index === $last,
+                $lenient
             );
         }
+
+        return true;
+    }
+
+    /**
+     * @param list<string> $letters
+     */
+    private function declaresAll(array $letters): bool
+    {
+        foreach ($letters as $letter) {
+            if (null === $this->findOption($letter)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function guardAgainstCollision(Option $option): void
@@ -266,6 +321,40 @@ final class Definition
         if (null !== $option->short && null !== $this->findOption($option->short)) {
             throw new Exception(sprintf("option '-%s' is already declared", $option->short));
         }
+    }
+
+    /**
+     * One pass over the tokens, for bind() (strict) and extract() (lenient).
+     *
+     * @param list<string> $tokens
+     *
+     * @return array{array<string, mixed>, list<string>} The options that the
+     *                                                   tokens gave, and the
+     *                                                   other tokens.
+     */
+    private function read(array $tokens, bool $lenient): array
+    {
+        $options = [];
+        $other   = [];
+
+        while ([] !== $tokens) {
+            $token = array_shift($tokens);
+
+            if ('--' === $token) {
+                // Each token after `--` is a value. bind() drops the marker.
+                // extract() keeps it, so that the tokens after it stay values
+                // for the next reader.
+                return [$options, [...$other, ...(true === $lenient ? ['--'] : []), ...$tokens]];
+            }
+
+            $isOption = true === str_starts_with($token, '-') && strlen($token) > 1;
+
+            if (false === $isOption || false === $this->bindOption($token, $tokens, $options, $lenient)) {
+                $other[] = $token;
+            }
+        }
+
+        return [$options, $other];
     }
 
     /**
@@ -325,15 +414,18 @@ final class Definition
      * @param bool         $mayConsume False for a non-final letter in a short
      *                                 cluster, which can never own the next
      *                                 token.
+     * @param bool         $lenient    True for extract(): nothing throws, and
+     *                                 a missing value is null.
      */
     private function valueFor(
         Option $option,
         ?string $attached,
         array &$tokens,
         bool $mayConsume,
+        bool $lenient,
     ): mixed {
         if ($option->mode === OptionMode::None) {
-            if (null !== $attached) {
+            if (null !== $attached && false === $lenient) {
                 throw new Exception(sprintf("option '--%s' takes no value", $option->name));
             }
 
@@ -353,6 +445,10 @@ final class Definition
         if (null === $value) {
             if ($option->mode === OptionMode::Optional) {
                 return $option->default;
+            }
+
+            if (true === $lenient) {
+                return null;
             }
 
             throw new Exception(sprintf("option '--%s' requires a value", $option->name));

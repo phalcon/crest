@@ -46,7 +46,7 @@ final class InstallCommandTest extends TestCase
 
         $runner = new FakeRunner();
 
-        $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+        $this->handleDirectly(new InstallCommand($runner, true), ['--directory', $this->root]);
 
         $this->assertSame(
             [[['docker', 'compose', 'exec', 'web', 'composer', 'install'], $this->root]],
@@ -58,7 +58,7 @@ final class InstallCommandTest extends TestCase
     {
         $runner = new FakeRunner();
 
-        $status = $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+        $status = $this->handleDirectly(new InstallCommand($runner, true), ['--directory', $this->root]);
 
         $this->assertSame(0, $status);
         $this->assertSame(
@@ -78,10 +78,23 @@ final class InstallCommandTest extends TestCase
 
         $runner = new FakeRunner();
 
-        $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+        $this->handleDirectly(new InstallCommand($runner, true), ['--directory', $this->root]);
 
         $this->assertSame(
             [[['docker', 'compose', 'exec', 'web', 'composer', 'install'], $this->root]],
+            $runner->calls
+        );
+    }
+
+    public function testWithoutATerminalDockerGetsDashT(): void
+    {
+        // As the hand-off and the launcher: CI or a pipe.
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new InstallCommand($runner, false), ['--directory', $this->root]);
+
+        $this->assertSame(
+            [[['docker', 'compose', 'exec', '-T', 'app', 'composer', 'install'], $this->root]],
             $runner->calls
         );
     }
@@ -97,7 +110,7 @@ final class InstallCommandTest extends TestCase
         $this->expectExceptionMessage("no crest.php found; run 'crest init'");
 
         try {
-            $this->handleDirectly(new InstallCommand($runner), ['--directory', $this->root]);
+            $this->handleDirectly(new InstallCommand($runner, true), ['--directory', $this->root]);
         } finally {
             $this->assertSame([], $runner->calls);
         }

@@ -37,6 +37,11 @@ use const STDOUT;
  */
 final class Kernel
 {
+    /**
+     * The flags that print the version.
+     */
+    public const VERSION = ['--version', '-V'];
+
     private string $name;
 
     private Output $output;
@@ -72,17 +77,40 @@ final class Kernel
     }
 
     /**
+     * The command that the tokens name: the first token, when it is not an
+     * option. Null for the listing (no token, or an option first) and for
+     * the version.
+     *
+     * @param list<string> $tokens The arguments after the program name.
+     */
+    public static function command(array $tokens): ?string
+    {
+        $first = $tokens[0] ?? null;
+
+        return null === $first || true === str_starts_with($first, '-') ? null : $first;
+    }
+
+    /**
      * The options every command gets for free.
      */
     public static function globals(): Definition
     {
-        return Definition::for('')
-            ->option('config=s', 'Path to the project configuration file')
-            ->option('directory=s', 'Directory to use instead of the working directory')
+        return self::paths()
             ->option('trace', 'Show the full exception trace')
             ->option('help|h', 'Show this help')
             ->option('quiet|q', 'Suppress non-essential output')
             ->option('no-interaction|n', 'Ask no questions; use the default answers');
+    }
+
+    /**
+     * The global options that hold host paths. A caller that passes a call
+     * to another process reads them with Definition::extract().
+     */
+    public static function paths(): Definition
+    {
+        return Definition::for('')
+            ->option('config=s', 'Path to the project configuration file')
+            ->option('directory=s', 'Directory to use instead of the working directory');
     }
 
     /**
@@ -91,15 +119,16 @@ final class Kernel
     public function handle(array $argv): int
     {
         $tokens = array_slice($argv, 1);
-        $first  = $tokens[0] ?? null;
 
-        if ('--version' === $first || '-V' === $first) {
+        if (true === in_array($tokens[0] ?? null, self::VERSION, true)) {
             $this->output->banner($this->name . ' ' . $this->version());
 
             return 0;
         }
 
-        if (null === $first || true === str_starts_with($first, '-')) {
+        $command = self::command($tokens);
+
+        if (null === $command) {
             $this->listCommands();
 
             return 0;
@@ -108,7 +137,7 @@ final class Kernel
         $trace = in_array('--trace', $this->beforeLiteral($tokens), true);
 
         try {
-            return $this->run($first, array_slice($tokens, 1));
+            return $this->run($command, array_slice($tokens, 1));
         } catch (Exception | ParsingException $exception) {
             // Both clusters throw their own type; both are user-facing errors,
             // not bugs, so both render as one clean line.

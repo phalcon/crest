@@ -13,11 +13,6 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
-use Crest\Console\Output;
-use Crest\Generator\Placement;
-
-use function sprintf;
-
 /**
  * Generates an ADR Middleware - a wrapper around the handler chain that may
  * pass the request through, decorate the response, short-circuit with its own,
@@ -25,8 +20,8 @@ use function sprintf;
  *
  * The generated class is inert until the router's middleware map names it, and
  * crest will not edit the project's bootstrap to do that. So the command prints
- * the registration instead: the file is crest's to write, the wiring is the
- * developer's to place.
+ * the registration instead (the stub fragment-guidance-middleware holds the
+ * text): the file is crest's to write, the wiring is the developer's to place.
  */
 final class MiddlewareCommand extends NamedArtifactCommand
 {
@@ -38,24 +33,6 @@ final class MiddlewareCommand extends NamedArtifactCommand
     protected function example(): string
     {
         return 'Auth';
-    }
-
-    protected function guidance(Placement $placement, Output $output): void
-    {
-        $output->line('Nothing runs it yet. Add it to the router\'s middleware map:');
-        $output->line();
-        $output->line(
-            sprintf(
-                "    \$router->setMiddlewareMap(['' => [\\%s\\%s::class]]);",
-                $placement->namespace,
-                $placement->class
-            )
-        );
-        $output->line();
-        $output->line(
-            "The key is a namespace suffix under the base namespace: '' guards every "
-            . "action, '\\Album' only the actions beneath it."
-        );
     }
 
     protected function key(): string

@@ -125,10 +125,17 @@ final class PublishCommand extends ProjectCommand
         $found = [];
 
         // The project stubs have an effect only in the directory that the
-        // project goes into, not in a project. Thus a publish with no name
-        // leaves them out. A publish by name still copies them.
+        // project goes into, not in a project. The fragment stubs hold pieces
+        // of the framework API and guidance text, and a copy does not get the
+        // changes of later releases. Thus a publish with no name leaves both
+        // out. A publish by name still copies them.
         foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
-            if (true === str_starts_with(basename($path), Stub::PROJECT_PREFIX)) {
+            $stub = basename($path);
+
+            if (
+                true === str_starts_with($stub, Stub::PROJECT_PREFIX)
+                || true === str_starts_with($stub, Stub::FRAGMENT_PREFIX)
+            ) {
                 continue;
             }
 

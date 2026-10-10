@@ -13,7 +13,10 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit;
 
+use Crest\Commands;
+use Crest\Console\Kernel;
 use Crest\Console\Output;
+use Crest\Console\Parsing\Option;
 use Crest\HandOff;
 use Crest\Process\ShellRunner;
 use Crest\Tests\Support\CapturesOutput;
@@ -21,6 +24,7 @@ use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
@@ -68,6 +72,7 @@ final class HandOffTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv(HandOff::VARIABLE);
         chdir($this->previousCwd);
 
         $this->closeStreams();
@@ -175,7 +180,10 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'vendor/bin/crest', 'route:list', '--config=crest.local.php',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -244,7 +252,25 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'vendor/bin/crest', 'route:list', '--trace',
+                ],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testADirectoryOptionWithoutAValueIsLeftOutInTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['route:list', '--directory']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app', 'vendor/bin/crest', 'route:list'],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -274,7 +300,10 @@ final class HandOffTest extends TestCase
         $this->assertSame(4, $status);
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'web', 'vendor/bin/crest', 'route:list', '--trace'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'web',
+                    'vendor/bin/crest', 'route:list', '--trace',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -320,6 +349,35 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn(['route:list', '--directory=']);
     }
 
+    public function testANewerGlobalCrestIsReported(): void
+    {
+        putenv(HandOff::VARIABLE . '=' . (HandOff::PROTOCOL + 1));
+
+        $status = $this->handOff(['route:list']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame([], $this->runner->calls);
+        $this->assertStringContainsString(
+            'crest: the global crest is newer than the crest of this project (hand-off 2, this crest 1); '
+            . "run 'composer update phalcon/crest' in the project",
+            $this->readStderr()
+        );
+    }
+
+    public function testAnOlderGlobalCrestIsReported(): void
+    {
+        putenv(HandOff::VARIABLE . '=0');
+
+        $status = $this->handOff(['route:list']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            'crest: the global crest is older than the crest of this project (hand-off 0, this crest 1); '
+            . "run 'composer global update phalcon/crest'",
+            $this->readStderr()
+        );
+    }
+
     public function testAnOptionThatOnlyStartsLikeConfigIsNotConfig(): void
     {
         // --configure is not --config. The project crest reports it.
@@ -347,7 +405,10 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--trace'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'vendor/bin/crest', 'route:list', '--trace',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -401,6 +462,15 @@ final class HandOffTest extends TestCase
         );
     }
 
+    public function testAProtocolThatIsNotANumberIsAnOlderProtocol(): void
+    {
+        // One crest line, no PHP warning.
+        putenv(HandOff::VARIABLE . '=abc');
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertStringContainsString('the global crest is older', $this->readStderr());
+    }
+
     public function testARelativeConfigFileReachesTheContainerByName(): void
     {
         // Only the value is a path, not the whole token.
@@ -413,7 +483,10 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.local.php'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'vendor/bin/crest', 'route:list', '--config=crest.local.php',
+                ],
                 '.',
             ]],
             $this->runner->calls
@@ -449,7 +522,7 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'],
+                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', '-T', 'app', 'vendor/bin/crest', 'route:list'],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -481,7 +554,10 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', 'app', 'vendor/bin/crest', 'route:list', '--config=crest.php', '--trace'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'vendor/bin/crest', 'route:list', '--config=crest.php', '--trace',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -598,6 +674,52 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn($tokens);
     }
 
+    public function testTheListingWithAConfigFileReachesTheContainerByName(): void
+    {
+        $this->runtime("['type' => 'docker']");
+        chdir($this->root . '/other');
+
+        $this->handOff(['--config=' . $this->root . '/app/crest.php']);
+
+        $this->assertSame(
+            [[
+                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app', 'vendor/bin/crest', '--config=crest.php'],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testTheProjectCrestGetsTheProtocolOnTheHost(): void
+    {
+        $this->handOff(['route:list']);
+
+        $this->assertSame([[HandOff::VARIABLE => '1']], $this->runner->environments);
+    }
+
+    public function testTheProtocolCoversTheRoutingLists(): void
+    {
+        // A snapshot. When it fails, change HandOff::PROTOCOL too: a global
+        // crest and the crest of a project can be different versions.
+        $this->assertSame(
+            [1, ['down', 'install', 'up', 'init', 'new'], ['serve', 'server'], ['config', 'directory']],
+            [
+                HandOff::PROTOCOL,
+                Commands::HOST,
+                Commands::ON_HOST,
+                array_map(static fn (Option $option): string => $option->name, Kernel::paths()->getOptions()),
+            ],
+            'The hand-off lists changed. Change HandOff::PROTOCOL, then this snapshot.'
+        );
+    }
+
+    public function testTheSameProtocolRunsTheCall(): void
+    {
+        putenv(HandOff::VARIABLE . '=' . HandOff::PROTOCOL);
+
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/vendor'));
+    }
+
     /**
      * @dataProvider versionFlags
      */
@@ -618,6 +740,8 @@ final class HandOffTest extends TestCase
                     'docker',
                     'compose',
                     'exec',
+                    '-e',
+                    'CREST_HANDOFF=1',
                     'app',
                     'vendor/bin/crest',
                     'make:action',

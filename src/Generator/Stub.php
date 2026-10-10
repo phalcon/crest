@@ -33,6 +33,12 @@ use function str_replace;
 final class Stub
 {
     /**
+     * The name prefix of the stubs that are not a whole file: a piece of
+     * code that a generator puts into a file, or text that a command prints.
+     */
+    public const FRAGMENT_PREFIX = 'fragment-';
+
+    /**
      * The name prefix of the stubs that `crest new` renders into a new
      * project. They are not artifact stubs, so stub:publish with no name
      * leaves them out.
@@ -100,6 +106,14 @@ final class Stub
     }
 
     /**
+     * Whether the project or the package has the stub.
+     */
+    public function has(string $flavor, string $name): bool
+    {
+        return null !== $this->find($flavor, $name);
+    }
+
+    /**
      * Fails when a placeholder has no value. A published copy can keep a
      * placeholder that crest no longer sends, and the raw placeholder must not
      * go into the generated file.
@@ -124,6 +138,16 @@ final class Stub
 
     public function resolve(string $flavor, string $name): string
     {
+        return $this->find($flavor, $name)
+            ?? throw new Exception(sprintf("stub '%s/%s' not found", $flavor, $name));
+    }
+
+    /**
+     * The project override, else the packaged copy. Null when neither
+     * exists.
+     */
+    private function find(string $flavor, string $name): ?string
+    {
         if (null !== $this->projectRoot) {
             $override = self::overridePath($this->projectRoot, $flavor, $name);
 
@@ -134,10 +158,6 @@ final class Stub
 
         $packaged = self::packagedPath($this->packagedRoot, $flavor, $name);
 
-        if (true === is_file($packaged)) {
-            return $packaged;
-        }
-
-        throw new Exception(sprintf("stub '%s/%s' not found", $flavor, $name));
+        return true === is_file($packaged) ? $packaged : null;
     }
 }

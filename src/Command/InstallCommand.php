@@ -38,6 +38,6 @@ final class InstallCommand extends ComposeCommand
         $file = Config::file($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'))
             ?? throw new Exception(Config::MISSING);
 
-        return $this->compose($input, ['exec', Runtime::fromFile($file)->service, 'composer', 'install']);
+        return $this->exec($input, Runtime::fromFile($file)->service, ['composer', 'install']);
     }
 }

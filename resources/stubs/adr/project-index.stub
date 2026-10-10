@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use {{ namespace }}\AppFront;
+use {{ namespace }}\{{ front }};
 
 $root = dirname(__DIR__);
 
-require_once $root . '/vendor/autoload.php';
+require_once $root . '/{{ autoloader }}';
 
-exit((new AppFront($root))->run());
+exit((new {{ front }}($root))->run());

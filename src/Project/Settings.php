@@ -29,12 +29,6 @@ use function var_export;
 final class Settings
 {
     /**
-     * The front controller class that `crest new` writes. `crest init`
-     * proposes it when the file is there.
-     */
-    public const FRONT = 'AppFront';
-
-    /**
      * @param array<string, string> $paths
      */
     public function __construct(

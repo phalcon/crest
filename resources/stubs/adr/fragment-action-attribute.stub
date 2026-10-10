@@ -1,0 +1,1 @@
+        ${{ name }} = $request->getAttributes()->get('{{ name }}');

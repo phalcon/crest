@@ -10,7 +10,7 @@ services:
     hostname: ${PROJECT_PREFIX:-{{ project }}}-app
     working_dir: /srv
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${{{ portVariable }}:-{{ port }}}:8080"
     volumes:
       - .:/srv
     env_file: .env

@@ -14,7 +14,10 @@ declare(strict_types=1);
 namespace Crest;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Console\Kernel;
 use Crest\Console\Output;
+use Crest\Console\Parsing\Extracted;
+use Crest\Process\Compose;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
 use Crest\Project\Config;
@@ -24,16 +27,14 @@ use Throwable;
 
 use function array_slice;
 use function basename;
-use function count;
 use function dirname;
+use function getenv;
 use function in_array;
 use function is_file;
+use function is_string;
 use function realpath;
 use function sprintf;
-use function str_starts_with;
 use function stream_isatty;
-use function strlen;
-use function substr;
 
 use const PHP_BINARY;
 use const STDIN;
@@ -55,7 +56,8 @@ use const STDIN;
  * v5 project works on a host without ext-phalcon.
  *
  * The host commands (Commands::HOST) and --version stay in the crest that the
- * user typed.
+ * user typed. The arguments are read with the rules of the parser:
+ * Kernel::command() and Definition::extract().
  */
 final class HandOff
 {
@@ -65,16 +67,16 @@ final class HandOff
     public const BINARY = 'vendor/bin/crest';
 
     /**
-     * The commands that run on the host also with a docker runtime: `serve`
-     * and its alias start PHP's built-in server, which must listen on the
-     * host (A8).
+     * The version of the hand-off protocol: Commands::HOST, Commands::ON_HOST
+     * and the options of Kernel::paths(). The global crest sends it to the
+     * crest of the project in VARIABLE. Change it when one of them changes.
      */
-    private const ON_HOST = ['serve', 'server'];
+    public const PROTOCOL = 1;
 
     /**
-     * The global options that hold host paths.
+     * The environment variable that holds the protocol of the global crest.
      */
-    private const PATH_OPTIONS = ['--config', '--directory'];
+    public const VARIABLE = 'CREST_HANDOFF';
 
     private readonly Runner $runner;
 
@@ -103,13 +105,22 @@ final class HandOff
      */
     public function run(array $argv, Output $output): ?int
     {
+        $mismatch = $this->mismatch();
+
+        if (null !== $mismatch) {
+            $output->error(Commands::NAME . ': ' . $mismatch);
+
+            return 1;
+        }
+
         $tokens = array_slice($argv, 1);
 
         if (false === $this->isProjectCall($tokens)) {
             return null;
         }
 
-        $file = $this->file($tokens);
+        $paths = Kernel::paths()->extract($tokens);
+        $file  = $this->file($paths);
 
         if (null === $file) {
             return null;
@@ -129,7 +140,7 @@ final class HandOff
         }
 
         try {
-            return $this->pass($file, $root, $binary, $tokens);
+            return $this->pass($file, $root, $binary, $tokens, $paths);
         } catch (Throwable $throwable) {
             // As the kernel does: one crest line, not a PHP trace. A broken
             // crest.php or a missing docker comes here.
@@ -140,15 +151,24 @@ final class HandOff
     }
 
     /**
+     * What the crest of the project gets in its environment: the protocol of
+     * this crest.
+     *
+     * @return array<string, string>
+     */
+    private function environment(): array
+    {
+        return [self::VARIABLE => (string) self::PROTOCOL];
+    }
+
+    /**
      * The crest.php of the project, by the root rule. Null when there is
      * none. Null also when the path in an option does not exist: this crest
      * then runs the call and reports the path.
-     *
-     * @param list<string> $tokens
      */
-    private function file(array $tokens): ?string
+    private function file(Extracted $paths): ?string
     {
-        $directory = $this->value($tokens, 'directory');
+        $directory = $this->path($paths, 'directory');
         $start     = realpath('' === $directory ? '.' : $directory);
 
         if (false === $start) {
@@ -156,30 +176,55 @@ final class HandOff
         }
 
         try {
-            return Config::file($start, $this->value($tokens, 'config'));
+            return Config::file($start, $this->path($paths, 'config'));
         } catch (Exception) {
             return null;
         }
     }
 
     /**
+     * The tokens for the crest in the container: without the options of
+     * Kernel::paths(), which hold host paths, and with only the file name of
+     * --config. The container works in the root, the folder of the config
+     * file, so the name finds the file there. The command name stays first.
+     *
+     * @param list<string> $tokens
+     *
+     * @return list<string>
+     */
+    private function forContainer(array $tokens, Extracted $paths): array
+    {
+        $config  = $paths->option('config');
+        $named   = true === is_string($config) ? ['--config=' . basename($config)] : [];
+        $command = Kernel::command($tokens);
+
+        if (null === $command) {
+            return [...$named, ...$paths->rest];
+        }
+
+        return [$command, ...$named, ...array_slice($paths->rest, 1)];
+    }
+
+    /**
      * `docker compose exec` runs the crest of the project in its service.
-     * The working folder of the service is the project root (A7). -T when
-     * stdin is not a terminal, for CI and pipes.
+     * The working folder of the service is the project root (A7).
      *
      * @param list<string> $tokens
      *
      * @return non-empty-list<string>
      */
-    private function inContainer(string $service, array $tokens): array
+    private function inContainer(string $service, array $tokens, Extracted $paths): array
     {
-        $command = ['docker', 'compose', 'exec'];
-
-        if (false === $this->terminal) {
-            $command[] = '-T';
-        }
-
-        return [...$command, $service, self::BINARY, ...$this->withoutPaths($tokens)];
+        return [
+            'docker',
+            'compose',
+            ...Compose::exec(
+                $service,
+                [self::BINARY, ...$this->forContainer($tokens, $paths)],
+                $this->terminal,
+                $this->environment()
+            ),
+        ];
     }
 
     /**
@@ -191,13 +236,13 @@ final class HandOff
      */
     private function isProjectCall(array $tokens): bool
     {
-        $first = $tokens[0] ?? null;
+        $command = Kernel::command($tokens);
 
-        if (null === $first || true === str_starts_with($first, '-')) {
-            return false === in_array($first, ['--version', '-V'], true);
+        if (null === $command) {
+            return false === in_array($tokens[0] ?? null, Kernel::VERSION, true);
         }
 
-        return false === in_array($first, Commands::HOST, true);
+        return false === in_array($command, Commands::HOST, true);
     }
 
     /**
@@ -210,6 +255,32 @@ final class HandOff
     private function isSelf(string $root): bool
     {
         return realpath($root . '/vendor') === realpath($this->vendor);
+    }
+
+    /**
+     * The error when the global crest that passed this call has another
+     * protocol. Null when it has this protocol, or when no global crest
+     * passed the call: the user ran this crest directly.
+     */
+    private function mismatch(): ?string
+    {
+        $received = getenv(self::VARIABLE);
+
+        if (false === $received || (string) self::PROTOCOL === $received) {
+            return null;
+        }
+
+        $newer = (int) $received > self::PROTOCOL;
+
+        return sprintf(
+            'the global crest is %s than the crest of this project (hand-off %s, this crest %d); run %s',
+            true === $newer ? 'newer' : 'older',
+            $received,
+            self::PROTOCOL,
+            true === $newer
+                ? sprintf("'composer update %s' in the project", Commands::PACKAGE)
+                : sprintf("'composer global update %s'", Commands::PACKAGE)
+        );
     }
 
     /**
@@ -239,105 +310,31 @@ final class HandOff
     /**
      * Runs the crest of the project: in its compose service for a docker
      * runtime, else with the PHP of the host. `serve` always runs on the
-     * host (ON_HOST).
+     * host (Commands::ON_HOST).
      *
      * Only the runtime key is read (Runtime::fromFile()).
      *
      * @param list<string> $tokens
      */
-    private function pass(string $file, string $root, string $binary, array $tokens): int
+    private function pass(string $file, string $root, string $binary, array $tokens, Extracted $paths): int
     {
         $runtime = Runtime::fromFile($file);
 
-        if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', self::ON_HOST, true)) {
-            return $this->runner->run($this->inContainer($runtime->service, $tokens), $root);
+        if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', Commands::ON_HOST, true)) {
+            return $this->runner->run($this->inContainer($runtime->service, $tokens, $paths), $root);
         }
 
-        return $this->runner->run([PHP_BINARY, $binary, ...$tokens]);
+        return $this->runner->run([PHP_BINARY, $binary, ...$tokens], null, $this->environment());
     }
 
     /**
-     * The value of a global path option: `--name=value` or `--name value`.
-     * The last value wins, and a next token that starts with `-` is not a
-     * value, as in the parser. After `--`, tokens are values, not options.
-     * Empty when the option is absent.
-     *
-     * @param list<string> $tokens
+     * The value of a path option. Empty when the option is absent or has no
+     * value: then the working directory, or no config file.
      */
-    private function value(array $tokens, string $name): string
+    private function path(Extracted $paths, string $name): string
     {
-        $option = '--' . $name;
-        $value  = '';
+        $value = $paths->option($name);
 
-        foreach ($tokens as $index => $token) {
-            if ('--' === $token) {
-                break;
-            }
-
-            if (true === str_starts_with($token, $option . '=')) {
-                $value = substr($token, strlen($option) + 1);
-            }
-
-            if ($option === $token) {
-                $next  = $tokens[$index + 1] ?? '';
-                $value = true === str_starts_with($next, '-') ? '' : $next;
-            }
-        }
-
-        return $value;
-    }
-
-    /**
-     * The tokens without --directory and its value, and with only the file
-     * name of --config. They are host paths, and the root is already found.
-     * The container works in the root, the folder of the config file, so the
-     * name finds the file there. A value is the next token when it does not
-     * start with `-`, as in the parser. After `--`, tokens are values and
-     * stay.
-     *
-     * @param list<string> $tokens
-     *
-     * @return list<string>
-     */
-    private function withoutPaths(array $tokens): array
-    {
-        $kept  = [];
-        $count = count($tokens);
-
-        for ($index = 0; $index < $count; $index++) {
-            $token = $tokens[$index];
-
-            if ('--' === $token) {
-                return [...$kept, ...array_slice($tokens, $index)];
-            }
-
-            if (true === in_array($token, self::PATH_OPTIONS, true)) {
-                $next = $tokens[$index + 1] ?? '-';
-
-                if (false === str_starts_with($next, '-')) {
-                    $index++;
-
-                    if ('--config' === $token) {
-                        $kept[] = '--config=' . basename($next);
-                    }
-                }
-
-                continue;
-            }
-
-            if (true === str_starts_with($token, '--config=')) {
-                $kept[] = '--config=' . basename(substr($token, strlen('--config=')));
-
-                continue;
-            }
-
-            if (true === str_starts_with($token, '--directory=')) {
-                continue;
-            }
-
-            $kept[] = $token;
-        }
-
-        return $kept;
+        return true === is_string($value) ? $value : '';
     }
 }

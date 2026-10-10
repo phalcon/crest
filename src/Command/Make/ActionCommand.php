@@ -22,8 +22,8 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Generator\Stub;
 
-use function implode;
 use function sprintf;
 use function str_replace;
 use function strtolower;
@@ -103,6 +103,8 @@ final class ActionCommand extends ProjectCommand
 
         $file = $config->path('action') . '/' . $target->relativePath;
 
+        $stub     = $this->stub($config);
+        $flavor   = $config->flavor()->value;
         $writer   = $this->writer($config);
         $template = $this->template($target, $input->optionString('template'));
 
@@ -112,8 +114,8 @@ final class ActionCommand extends ProjectCommand
             [
                 'namespace'  => $target->namespace,
                 'class'      => $target->class,
-                'attributes' => $this->attributeBlock($target),
-                'params'     => $this->paramsBlock($target),
+                'attributes' => $this->attributeBlock($stub, $flavor, $target),
+                'params'     => $this->paramsBlock($stub, $flavor, $target),
                 'template'   => $template,
             ],
             true === $input->option('force')
@@ -126,15 +128,8 @@ final class ActionCommand extends ProjectCommand
         // may not render a template, and crest does not know which, so it says
         // nothing rather than guessing.
         if ('view' === $responder) {
-            $output->line();
-            $output->line('Nothing renders it yet. The responder asks for this template:');
-            $output->line();
-            $output->line('    ' . $template);
-            $output->line();
-            $output->line(
-                'Create it wherever your renderer looks. Renderer::render() takes a '
-                . 'name, not a path, so the directory and the extension belong to the '
-                . 'renderer rather than to crest.'
+            $output->write(
+                $stub->render($flavor, Stub::FRAGMENT_PREFIX . 'guidance-action-view', ['template' => $template])
             );
         }
 
@@ -143,20 +138,31 @@ final class ActionCommand extends ProjectCommand
 
     /**
      * Placeholder segments become request attributes; pre-writing the reads
-     * saves the user from looking up the accessor.
+     * saves the user from looking up the accessor. One
+     * fragment-action-attribute for each attribute, then a blank line before
+     * the body of the stub.
      */
-    private function attributeBlock(Target $target): string
+    private function attributeBlock(Stub $stub, string $flavor, Target $target): string
     {
         if ([] === $target->attributes) {
             return '';
         }
 
-        $lines = [];
+        return $this->eachAttribute($stub, $flavor, 'action-attribute', $target) . "\n";
+    }
+
+    /**
+     * One fragment for each attribute, in path order.
+     */
+    private function eachAttribute(Stub $stub, string $flavor, string $fragment, Target $target): string
+    {
+        $text = '';
+
         foreach ($target->attributes as $name) {
-            $lines[] = sprintf("        \$%s = \$request->getAttributes()->get('%s');", $name, $name);
+            $text .= $stub->render($flavor, Stub::FRAGMENT_PREFIX . $fragment, ['name' => $name]);
         }
 
-        return implode("\n", $lines) . "\n\n";
+        return $text;
     }
 
     /**
@@ -165,30 +171,21 @@ final class ActionCommand extends ProjectCommand
      * Routing does not read this - the convention places arguments after the
      * static path regardless. It exists so the attributes arrive constrained,
      * cast and converted rather than as raw strings, which is why the emitted
-     * block is a starting point the user is expected to tighten.
+     * block is a starting point the user is expected to tighten. The shape is
+     * the framework's: fragment-action-params and fragment-action-param hold
+     * it.
      */
-    private function paramsBlock(Target $target): string
+    private function paramsBlock(Stub $stub, string $flavor, Target $target): string
     {
         if ([] === $target->attributes) {
             return '';
         }
 
-        $lines = [];
-        foreach ($target->attributes as $name) {
-            $lines[] = sprintf("            '%s' => ['type' => 'string'],", $name);
-        }
-
-        return "\n"
-            . "    /**\n"
-            . "     * Trailing route attributes, in path order. Constrains, casts and\n"
-            . "     * converts them after the route has matched.\n"
-            . "     */\n"
-            . "    public static function params(): array\n"
-            . "    {\n"
-            . "        return [\n"
-            . implode("\n", $lines) . "\n"
-            . "        ];\n"
-            . "    }\n";
+        return $stub->render(
+            $flavor,
+            Stub::FRAGMENT_PREFIX . 'action-params',
+            ['entries' => $this->eachAttribute($stub, $flavor, 'action-param', $target)]
+        );
     }
 
     /**

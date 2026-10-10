@@ -39,7 +39,7 @@ COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
 {{ v5 }}apt-get install -yq --no-install-recommends ${PHPIZE_DEPS} libtool
 {{ v5 }}curl -fsSL https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar -o /usr/local/bin/pie
 {{ v5 }}chmod +x /usr/local/bin/pie
-{{ v5 }}pie install --no-interaction phalcon/cphalcon:^5.18
+{{ v5 }}pie install --no-interaction phalcon/cphalcon:{{ extensionConstraint }}
 {{ v5 }}php -m | grep -i phalcon
 {{ v5 }}apt-get clean -y
 {{ v5 }}rm -rf /var/lib/apt/lists/*
@@ -56,4 +56,4 @@ USER ${USER}
 # mounts the project at /srv, and `crest install` runs composer there.
 EXPOSE 8080
 
-CMD ["php", "-S", "0.0.0.0:8080", "-t", "public", ".htrouter.php"]
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "{{ documentRoot }}", "{{ router }}"]

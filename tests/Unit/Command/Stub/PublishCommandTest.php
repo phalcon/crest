@@ -249,6 +249,24 @@ final class PublishCommandTest extends TestCase
         );
     }
 
+    public function testFragmentStubsAreNotPublishedInBulk(): void
+    {
+        // A fragment holds a piece of the framework API or guidance text. A
+        // publish with no name must not freeze copies of them in a project
+        // without notice. A publish by name still copies one.
+        $fragments = glob(Paths::stubs() . '/adr/' . Stub::FRAGMENT_PREFIX . '*.stub') ?: [];
+
+        $this->assertNotEmpty($fragments);
+
+        $this->runCommand([]);
+
+        foreach ($fragments as $path) {
+            $this->assertFileDoesNotExist(
+                Stub::overridePath($this->root, 'adr', basename($path, '.stub'))
+            );
+        }
+    }
+
     public function testProjectStubsAreNotPublishedInBulk(): void
     {
         // They have an effect only in the directory that `crest new` puts the
@@ -323,7 +341,7 @@ final class PublishCommandTest extends TestCase
 
     /**
      * The stubs a publish with no name copies: every packaged ADR stub except
-     * the project stubs.
+     * the project stubs and the fragment stubs.
      *
      * @return list<string>
      */
@@ -334,7 +352,10 @@ final class PublishCommandTest extends TestCase
         foreach (glob(Paths::stubs() . '/adr/*.stub') ?: [] as $path) {
             $name = basename($path, '.stub');
 
-            if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
+            if (
+                true === str_starts_with($name, Stub::PROJECT_PREFIX)
+                || true === str_starts_with($name, Stub::FRAGMENT_PREFIX)
+            ) {
                 continue;
             }
 

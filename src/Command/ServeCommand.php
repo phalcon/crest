@@ -21,6 +21,7 @@ use Crest\Console\Parsing\Definition;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
 use Crest\Project\Config;
+use Crest\Project\Layout;
 
 use function count;
 use function file_get_contents;
@@ -34,9 +35,9 @@ use const PHP_BINARY;
 
 /**
  * Starts PHP's built-in web server for the project. It uses the router
- * script that `new` writes. The router and the document root are the same
- * as in the CMD of the generated Dockerfile. Thus `serve` and `up` run the
- * same application.
+ * script that `new` writes. The router and the document root come from
+ * Layout, as do those in the CMD of the generated Dockerfile. Thus `serve`
+ * and `up` run the same application.
  *
  * It extends the console Command, not ProjectCommand. It does not read
  * crest.php, it only finds it for the root, and it does not load the
@@ -47,50 +48,23 @@ use const PHP_BINARY;
 final class ServeCommand extends Command
 {
     /**
-     * The router script, relative to the project root. NewCommand writes the
-     * file with this name.
-     */
-    public const ROUTER = '.htrouter.php';
-
-    /**
-     * The composer autoloader, relative to the project root. The
-     * public/index.php that `new` writes loads it.
-     */
-    private const AUTOLOADER = 'vendor/autoload.php';
-
-    /**
-     * The document root, relative to the project root.
-     */
-    private const DOCUMENT_ROOT = 'public';
-
-    /**
-     * The variables file of docker compose, relative to the project root.
-     */
-    private const ENV_FILE = '.env';
-
-    /**
      * Only this machine can connect. The container listens on 0.0.0.0. Not
      * localhost: on some hosts localhost gives ::1 first, and then PHP
      * listens on IPv6 only.
      */
     private const HOST = '127.0.0.1';
 
-    private const PORT_DEFAULT = 8080;
-
     /**
-     * An APP_PORT line of .env, as docker compose reads it: an optional
-     * `export`, then '=' or ':'. Spaces around the name, the separator and
-     * the value are ignored. A quoted value ends at its quote. An unquoted
-     * value ends before ' #'. A ' #' comment after the value is ignored.
+     * A port line of .env (Layout::PORT_VARIABLE), as docker compose reads
+     * it: an optional `export`, then '=' or ':'. Spaces around the name, the
+     * separator and the value are ignored. A quoted value ends at its quote.
+     * An unquoted value ends before ' #'. A ' #' comment after the value is
+     * ignored.
      */
-    private const PORT_LINE = '/^\h*(?:export\h+)?APP_PORT\h*[=:]\h*(?|"([^"]*)"|\'([^\']*)\'|(.*?))\h*(?: #.*)?\r?$/m';
+    private const PORT_LINE = '/^\h*(?:export\h+)?' . Layout::PORT_VARIABLE
+        . '\h*[=:]\h*(?|"([^"]*)"|\'([^\']*)\'|(.*?))\h*(?: #.*)?\r?$/m';
 
     private const PORT_MAX = 65535;
-
-    /**
-     * The variable that docker-compose.yml reads for the published port.
-     */
-    private const PORT_VARIABLE = 'APP_PORT';
 
     private readonly Runner $runner;
 
@@ -117,7 +91,7 @@ final class ServeCommand extends Command
     public function handle(Input $input, Output $output): int
     {
         $root   = $this->root($input);
-        $router = $root . '/' . self::ROUTER;
+        $router = $root . '/' . Layout::ROUTER;
 
         if (false === is_file($router)) {
             throw new Exception(
@@ -125,7 +99,7 @@ final class ServeCommand extends Command
             );
         }
 
-        $autoloader = $root . '/' . self::AUTOLOADER;
+        $autoloader = $root . '/' . Layout::AUTOLOADER;
 
         if (false === is_file($autoloader)) {
             throw new Exception(sprintf('%s was not found; run composer install first', $autoloader));
@@ -135,7 +109,7 @@ final class ServeCommand extends Command
 
         // The PHP that runs crest, not the first php on the PATH.
         return $this->runner->run(
-            [PHP_BINARY, '-S', self::HOST . ':' . $port, '-t', self::DOCUMENT_ROOT, self::ROUTER],
+            [PHP_BINARY, '-S', self::HOST . ':' . $port, '-t', Layout::DOCUMENT_ROOT, Layout::ROUTER],
             $root
         );
     }
@@ -160,7 +134,7 @@ final class ServeCommand extends Command
 
     /**
      * --port, if the user gave it. If not, APP_PORT from the environment,
-     * then APP_PORT from .env, then PORT_DEFAULT. docker compose uses the
+     * then APP_PORT from .env, then Layout::PORT. docker compose uses the
      * same order, so that serve and up use the same port. An empty APP_PORT
      * reads as absent, as ${APP_PORT:-8080} in docker-compose.yml reads it.
      */
@@ -172,20 +146,20 @@ final class ServeCommand extends Command
             return $this->portNumber($option, '');
         }
 
-        $variable = (string) getenv(self::PORT_VARIABLE);
+        $variable = (string) getenv(Layout::PORT_VARIABLE);
 
         if ('' !== $variable) {
-            return $this->portNumber($variable, sprintf(' (%s in the environment)', self::PORT_VARIABLE));
+            return $this->portNumber($variable, sprintf(' (%s in the environment)', Layout::PORT_VARIABLE));
         }
 
-        $file  = $root . '/' . self::ENV_FILE;
+        $file  = $root . '/' . Layout::ENV_FILE;
         $value = $this->envValue($file);
 
         if ('' !== $value) {
-            return $this->portNumber($value, sprintf(' (%s in %s)', self::PORT_VARIABLE, $file));
+            return $this->portNumber($value, sprintf(' (%s in %s)', Layout::PORT_VARIABLE, $file));
         }
 
-        return self::PORT_DEFAULT;
+        return Layout::PORT;
     }
 
     /**

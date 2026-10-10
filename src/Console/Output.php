@@ -41,6 +41,11 @@ use const STDOUT;
  * questions come in here. The input stream and the two output streams are
  * injected so the whole kernel is testable against php://memory with no
  * process spawning.
+ *
+ * A command uses ask(), choice(), error(), line(), success(), table() and
+ * write(). The other public methods are for the tool itself.
+ *
+ * @api
  */
 final class Output
 {
@@ -136,6 +141,8 @@ final class Output
      * The mark is colored through decorate() rather than carrying its own
      * escapes, so a piped run or one with NO_COLOR set gets the glyph and no
      * control codes.
+     *
+     * @internal Only the tool itself uses it. A command does not.
      */
     public function banner(string $text): void
     {
@@ -174,6 +181,8 @@ final class Output
      * command prints the same thing, and two copies of the layout had to be
      * kept in agreement by hand.
      *
+     * @internal Only the tool itself uses it. A command does not.
+     *
      * @param array<string, string> $descriptions Command name => description.
      */
     public function commandTable(string $banner, array $descriptions): void
@@ -191,6 +200,8 @@ final class Output
     /**
      * No more questions in this run: each one gives its default. The kernel
      * calls this for --no-interaction.
+     *
+     * @internal Only the tool itself uses it. A command does not.
      */
     public function disableInteraction(): void
     {
@@ -244,6 +255,8 @@ final class Output
     /**
      * Renders a command's usage block from its definition. Presentation lives
      * here rather than on Definition so the schema stays a pure data structure.
+     *
+     * @internal Only the tool itself uses it. A command does not.
      */
     public function usage(string $tool, Definition $definition): void
     {

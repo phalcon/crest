@@ -37,7 +37,7 @@ use function trim;
  * crest.php marks a crest project, and it is required (D07). The project root
  * is the folder of the crest.php that the root rule finds (see file()).
  */
-final class Config
+final class Config implements ProjectContext
 {
     /**
      * The error when the root rule finds no crest.php.
@@ -84,14 +84,14 @@ final class Config
     {
         return match ($flavor) {
             Flavor::ADR => [
-                'action'     => 'src/Action',
+                'action'     => Layout::SOURCE . '/Action',
                 // Not an ADR artifact: a crest command is the same class in any
                 // flavor. It sits here because ADR is the only populated set,
                 // and moves to a shared one when cli, mvc and micro arrive.
-                'command'    => 'src/Command',
-                'middleware' => 'src/Middleware',
-                'provider'   => 'src/Provider',
-                'responder'  => 'src/Responder',
+                'command'    => Layout::SOURCE . '/Command',
+                'middleware' => Layout::SOURCE . '/Middleware',
+                'provider'   => Layout::SOURCE . '/Provider',
+                'responder'  => Layout::SOURCE . '/Responder',
             ],
             Flavor::CLI, Flavor::MVC => [],
         };

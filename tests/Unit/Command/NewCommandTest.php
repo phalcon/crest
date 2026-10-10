@@ -355,6 +355,21 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
+    public function testAPublishedStubWithLiteralsStillWorks(): void
+    {
+        // A copy published before the layout placeholders existed. `new`
+        // reads overrides from the directory that the project goes into.
+        $path = Stub::overridePath($this->root, 'adr', Stub::PROJECT_PREFIX . 'env');
+
+        mkdir(dirname($path), 0o775, true);
+        file_put_contents($path, "APP_PORT=8080\n");
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame("APP_PORT=8080\n", $this->read('.env'));
+    }
+
     public function testATargetThatIsAFileIsRefused(): void
     {
         file_put_contents($this->root . '/my-app', 'not a directory');
@@ -365,6 +380,18 @@ final class NewCommandTest extends TestCase
         $this->assertStringContainsString(
             $this->root . '/my-app exists and is not a directory',
             $this->readStderr()
+        );
+    }
+
+    public function testAV6DockerfileKeepsTheV5ConstraintInItsComments(): void
+    {
+        // The v5 lines are comments in a v6 project. They must still name the
+        // extension that v5 needs, for a switch back to v5.
+        $this->runCommand(['my-app', '--phalcon=v6']);
+
+        $this->assertStringContainsString(
+            '# pie install --no-interaction phalcon/cphalcon:^5.18',
+            $this->read('resources/docker/Dockerfile')
         );
     }
 
@@ -588,8 +615,8 @@ final class NewCommandTest extends TestCase
 
     public function testTheDockerfileInstallsTheExtensionVersionThatComposerRequires(): void
     {
-        // The constraint is in two places: NewCommand writes it into
-        // composer.json, and the Dockerfile stub has its own copy. They must
+        // NewCommand writes the constraint into composer.json and, through the
+        // extensionConstraint placeholder, into the Dockerfile. They must
         // agree.
         $this->runCommand(['my-app']);
 

@@ -15,9 +15,14 @@ namespace Crest\Command;
 
 use Crest\Console\Command\Command;
 use Crest\Console\Input;
+use Crest\Process\Compose;
 use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
 use Crest\Project\Config;
+
+use function stream_isatty;
+
+use const STDIN;
 
 /**
  * The base for the commands that control the project containers.
@@ -32,13 +37,19 @@ abstract class ComposeCommand extends Command
 {
     private readonly Runner $runner;
 
+    private readonly bool $terminal;
+
     /**
-     * The default lets the kernel's `new $class()` work. A test gives a fake
+     * The defaults let the kernel's `new $class()` work. A test gives a fake
      * runner, and checks the exact argv without docker.
+     *
+     * @param bool|null $terminal Whether stdin is a terminal. Null asks the
+     *                            stream.
      */
-    public function __construct(?Runner $runner = null)
+    public function __construct(?Runner $runner = null, ?bool $terminal = null)
     {
-        $this->runner = $runner ?? new ShellRunner();
+        $this->runner   = $runner ?? new ShellRunner();
+        $this->terminal = $terminal ?? stream_isatty(STDIN);
     }
 
     /**
@@ -52,5 +63,16 @@ abstract class ComposeCommand extends Command
             ['docker', 'compose', ...$arguments],
             Config::rootFor($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'))
         );
+    }
+
+    /**
+     * Runs a command in a compose service of the project, with the -T rule
+     * of Compose::exec().
+     *
+     * @param list<string> $command
+     */
+    protected function exec(Input $input, string $service, array $command): int
+    {
+        return $this->compose($input, Compose::exec($service, $command, $this->terminal));
     }
 }

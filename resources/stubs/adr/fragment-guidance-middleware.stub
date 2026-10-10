@@ -1,0 +1,5 @@
+Nothing runs it yet. Add it to the router's middleware map:
+
+    $router->setMiddlewareMap(['' => [\{{ namespace }}\{{ class }}::class]]);
+
+The key is a namespace suffix under the base namespace: '' guards every action, '\Album' only the actions beneath it.

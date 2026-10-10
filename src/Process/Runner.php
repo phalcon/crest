@@ -26,10 +26,13 @@ interface Runner
      * Runs the program and returns its exit status. The output of the program
      * goes directly to the terminal, not through crest's Output.
      *
-     * @param non-empty-list<string> $command   The program, then its
-     *                                          arguments. No shell.
-     * @param string|null            $directory Where the program runs; null
-     *                                          for the working directory.
+     * @param non-empty-list<string> $command     The program, then its
+     *                                            arguments. No shell.
+     * @param string|null            $directory   Where the program runs; null
+     *                                            for the working directory.
+     * @param array<string, string>  $environment Variables to add to the
+     *                                            environment of crest for the
+     *                                            program. Empty for none.
      */
-    public function run(array $command, ?string $directory = null): int;
+    public function run(array $command, ?string $directory = null, array $environment = []): int;
 }

@@ -10,13 +10,13 @@ use Phalcon\Container\Container;
 use Phalcon\Contracts\ADR\Application as ApplicationInterface;
 
 /**
- * The front controller. public/index.php runs it for every request, and
+ * The front controller. {{ documentRoot }}/index.php runs it for every request, and
  * crest boots it for container:list and event:list.
  *
  * Add services by overriding registerProviders(); `crest make:provider`
  * prints the override to paste here.
  */
-final class AppFront extends AbstractHttpFront
+final class {{ front }} extends AbstractHttpFront
 {
     protected function getApplication(Container $container): ApplicationInterface
     {

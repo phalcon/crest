@@ -25,6 +25,8 @@ use function is_string;
  * lists and values alike. The typed accessors alongside them narrow the common
  * string case once, here, so commands do not each repeat an is_string() guard
  * to satisfy the static analyzer.
+ *
+ * @api
  */
 final class Input
 {

@@ -55,11 +55,11 @@ final class Survey
      */
     private static function bootstrap(string $root, string $namespace, string $directory): ?string
     {
-        if (false === is_file($root . '/' . $directory . '/' . Settings::FRONT . '.php')) {
+        if (false === is_file($root . '/' . $directory . '/' . Layout::FRONT . '.php')) {
             return null;
         }
 
-        return $namespace . '\\' . Settings::FRONT;
+        return $namespace . '\\' . Layout::FRONT;
     }
 
     /**

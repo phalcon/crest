@@ -16,6 +16,7 @@ namespace Crest\Tests\Unit\Command;
 use Crest\Command\NewCommand;
 use Crest\Command\ServeCommand;
 use Crest\Console\Exceptions\Exception;
+use Crest\Project\Layout;
 use Crest\Tests\Support\Process\FakeRunner;
 use Crest\Tests\Support\RunsACommandDirectly;
 use Crest\Tests\Support\ScratchDirectory;
@@ -126,7 +127,7 @@ final class ServeCommandTest extends TestCase
         // composer install has not run. src/ is a second project with its own
         // crest.php.
         file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
-        file_put_contents($this->root . '/src/' . ServeCommand::ROUTER, "<?php\n");
+        file_put_contents($this->root . '/src/' . Layout::ROUTER, "<?php\n");
 
         $this->assertSame(
             $this->root . '/src/vendor/autoload.php was not found; run composer install first',
@@ -418,7 +419,7 @@ final class ServeCommandTest extends TestCase
     private function project(string $directory): void
     {
         mkdir($directory . '/vendor');
-        file_put_contents($directory . '/' . ServeCommand::ROUTER, "<?php\n");
+        file_put_contents($directory . '/' . Layout::ROUTER, "<?php\n");
         file_put_contents($directory . '/vendor/autoload.php', "<?php\n");
     }
 

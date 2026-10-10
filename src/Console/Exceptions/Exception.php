@@ -19,6 +19,10 @@ use RuntimeException;
  * The exception type the kernel catches from the application cluster and
  * renders as a clean stderr line. The parsing cluster has its own; see
  * Crest\Console\Parsing\Exceptions\Exception.
+ *
+ * A command throws it to stop with one error line.
+ *
+ * @api
  */
 class Exception extends RuntimeException
 {

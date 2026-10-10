@@ -16,6 +16,8 @@ namespace Crest\Tests\Unit\Console;
 use Crest\Console\Kernel;
 use Crest\Console\Output;
 use Crest\Console\PackageVersion;
+use Crest\Console\Parsing\Definition;
+use Crest\Console\Parsing\Option;
 use Crest\Console\Registry;
 use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\Console\AskingCommand;
@@ -23,6 +25,7 @@ use Crest\Tests\Support\Console\FakeCommand;
 use Crest\Tests\Support\Console\ThrowingCommand;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
 use function preg_quote;
 use function strpos;
 
@@ -42,6 +45,18 @@ final class KernelTest extends TestCase
         $this->closeStreams();
     }
 
+    /**
+     * @return iterable<string, array{list<string>, string|null}>
+     */
+    public static function commandTokens(): iterable
+    {
+        yield 'no token' => [[], null];
+        yield 'an option first' => [['--help'], null];
+        yield 'the version' => [['-V'], null];
+        yield 'the double dash' => [['--', 'x'], null];
+        yield 'a command' => [['route:list', '--trace'], 'route:list'];
+    }
+
     public function testAnInteractiveRunAsksTheQuestion(): void
     {
         $this->answers("typed\n");
@@ -59,6 +74,16 @@ final class KernelTest extends TestCase
         $this->assertSame(1, $status);
         $this->assertStringContainsString("demo: unexpected argument 'b'", $this->readStderr());
         $this->assertStringNotContainsString('#0', $this->readStderr());
+    }
+
+    /**
+     * @dataProvider commandTokens
+     *
+     * @param list<string> $tokens
+     */
+    public function testCommandIsTheFirstTokenWhenItIsNotAnOption(array $tokens, ?string $expected): void
+    {
+        $this->assertSame($expected, Kernel::command($tokens));
     }
 
     public function testDoubleDashShieldsALaterHelpFlagFromTheKernel(): void
@@ -171,6 +196,15 @@ final class KernelTest extends TestCase
         $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
     }
 
+    public function testPathsAreTheGlobalsThatHoldHostPaths(): void
+    {
+        $this->assertSame(['config', 'directory'], $this->names(Kernel::paths()));
+        $this->assertSame(
+            ['config', 'directory', 'trace', 'help', 'quiet', 'no-interaction'],
+            $this->names(Kernel::globals())
+        );
+    }
+
     public function testShortHelpFlagAlsoRendersUsage(): void
     {
         $status = $this->kernel()->handle(['demo', 'fake', '-h']);
@@ -194,6 +228,11 @@ final class KernelTest extends TestCase
         $this->asking(['crest', 'ask', '-n']);
 
         $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testTheVersionFlagsAreDeclaredOnce(): void
+    {
+        $this->assertSame(['--version', '-V'], Kernel::VERSION);
     }
 
     public function testToolNameIsNeverHardcoded(): void
@@ -284,6 +323,16 @@ final class KernelTest extends TestCase
         $registry = (new Registry())->add('fake', FakeCommand::class);
 
         return new Kernel('demo', $registry, 'phalcon/crest', $this->stdout, $this->stderr, false);
+    }
+
+    /**
+     * The option names of a definition, in the order of declaration.
+     *
+     * @return list<string>
+     */
+    private function names(Definition $definition): array
+    {
+        return array_map(static fn (Option $option): string => $option->name, $definition->getOptions());
     }
 
     private function throwingKernel(): Kernel

@@ -14,12 +14,32 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ResponderCommand;
+use Crest\Generator\Stub;
 use Crest\Tests\Support\NamedArtifactCommandTestCase;
 
+use function dirname;
 use function file_get_contents;
+use function file_put_contents;
+use function mkdir;
+
+use const PHP_EOL;
 
 final class ResponderCommandTest extends NamedArtifactCommandTestCase
 {
+    public function testAProjectCanAddGuidance(): void
+    {
+        // The packaged responder has no guidance fragment. A project that
+        // publishes one gets it printed after "Created".
+        $path = Stub::overridePath($this->root, 'adr', Stub::FRAGMENT_PREFIX . 'guidance-responder');
+
+        mkdir(dirname($path), 0o775, true);
+        file_put_contents($path, "Wire {{ class }} in {{ namespace }}.\n");
+
+        $this->runCommand(['Album']);
+
+        $this->assertStringEndsWith('Wire AlbumResponder in App\Responder.' . PHP_EOL, $this->readStdout());
+    }
+
     public function testTheWholeResponderIsRendered(): void
     {
         // Asserted whole rather than by substring: this is generated code nobody

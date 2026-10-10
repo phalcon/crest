@@ -14,14 +14,14 @@ With PHP and composer on the host:
     composer install
     crest serve
 
-Then open http://localhost:8080/.
+Then open http://localhost:{{ port }}/.
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `public/index.php` | The web entry point |
-| `src/AppFront.php` | The front controller: container, providers, application |
+| `{{ documentRoot }}/index.php` | The web entry point |
+| `{{ source }}/{{ front }}.php` | The front controller: container, providers, application |
 | `{{ actionPath }}/` | One class for each route. `GET /` is `{{ actionPath }}/{{ seed }}.php` |
 | `crest.php` | The crest configuration |
 

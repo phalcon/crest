@@ -43,7 +43,7 @@ use const PATH_SEPARATOR;
  */
 final class ShellRunner implements Runner
 {
-    public function run(array $command, ?string $directory = null): int
+    public function run(array $command, ?string $directory = null, array $environment = []): int
     {
         if (false === $this->exists($command[0])) {
             throw new Exception(
@@ -55,7 +55,7 @@ final class ShellRunner implements Runner
             throw new Exception(sprintf('%s is not a directory', $directory));
         }
 
-        return proc_close($this->start($command, $directory));
+        return proc_close($this->start($command, $directory, $environment));
     }
 
     /**
@@ -96,17 +96,22 @@ final class ShellRunner implements Runner
     /**
      * Starts the program with crest's own stdin, stdout and stderr.
      *
+     * Null as the environment of proc_open() gives the child the environment
+     * of crest. A list replaces it, so the variables of crest come first.
+     *
      * proc_open() returns false only when it cannot create the process. run()
      * checks the program and the directory first, so the guard is a last
      * defense that the suite cannot reach.
      *
      * @param non-empty-list<string> $command
+     * @param array<string, string>  $environment
      *
      * @return resource
      */
-    private function start(array $command, ?string $directory)
+    private function start(array $command, ?string $directory, array $environment)
     {
-        $process = proc_open($command, [], $pipes, $directory);
+        $variables = [] === $environment ? null : [...getenv(), ...$environment];
+        $process   = proc_open($command, [], $pipes, $directory, $variables);
 
         if (false === $process) {
             throw new Exception(sprintf('could not start %s', $command[0])); // @codeCoverageIgnore

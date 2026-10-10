@@ -20,9 +20,11 @@ use Crest\Console\Output;
 use Crest\Generator\Stub;
 use Crest\Tests\Support\ADR\StubActionResolver;
 use Crest\Tests\Support\GeneratesInAScratchProject;
+use Phalcon\ADR\Router\AttributeFilter;
 use Phalcon\ADR\Router\Router;
 use PHPUnit\Framework\TestCase;
 
+use function class_exists;
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
@@ -94,6 +96,18 @@ final class ActionCommandTest extends TestCase
             'implements Action',
             (string) file_get_contents($this->root . '/src/Action/Health/GetHealth.php')
         );
+    }
+
+    public function testAPublishedAttributeFragmentIsUsed(): void
+    {
+        // The project copy wins, one line for each attribute.
+        $this->publishStub(Stub::FRAGMENT_PREFIX . 'action-attribute', "        // read {{ name }}\n");
+
+        $this->runCommand(['GET', '/company/users/{id}/{userId}']);
+
+        $contents = (string) file_get_contents($this->root . '/src/Action/Company/Users/GetCompanyUsers.php');
+
+        $this->assertStringContainsString("        // read id\n        // read userId\n\n", $contents);
     }
 
     public function testAStubThatDoesNotExistIsReported(): void
@@ -314,6 +328,19 @@ final class ActionCommandTest extends TestCase
         $this->assertStringContainsString('    shared/table', $this->readStdout());
     }
 
+    public function testTheFrameworkReadsTheGeneratedParams(): void
+    {
+        // The params() entries are the schema of the framework, written by
+        // fragment stubs. The filter of the framework must read them.
+        $this->runCommand(['GET', '/contract/filter/{id}']);
+
+        require_once $this->root . '/src/Action/Contract/Filter/GetContractFilter.php';
+
+        $class = $this->declaredClass('App\Action\Contract\Filter\GetContractFilter');
+
+        $this->assertSame(['id' => '5'], (new AttributeFilter())->filter($class, ['5']));
+    }
+
     public function testTheJsonResponderReportsNoTemplate(): void
     {
         $this->runCommand(['GET', '/company/all']);
@@ -405,6 +432,20 @@ final class ActionCommandTest extends TestCase
         $contents = (string) file_get_contents($this->root . '/src/Action/Company/GetCompany.php');
 
         $this->assertStringContainsString("\$id = \$request->getAttributes()->get('id');", $contents);
+    }
+
+    /**
+     * A class that the test has loaded. Stops the test when it is not there.
+     *
+     * @return class-string
+     */
+    private function declaredClass(string $class): string
+    {
+        if (false === class_exists($class)) {
+            $this->fail($class . ' was not declared');
+        }
+
+        return $class;
     }
 
     /**

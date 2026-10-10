@@ -21,6 +21,11 @@ use Crest\Console\Parsing\Definition;
  * Every command is constructed with no arguments and resolves whatever it
  * needs inside handle(). That keeps the kernel free of any knowledge about
  * project config, flavors or generators.
+ *
+ * A package that adds commands extends this class. The kernel makes each
+ * command with `new $class()`, so a constructor must work without arguments.
+ *
+ * @api
  */
 abstract class Command
 {

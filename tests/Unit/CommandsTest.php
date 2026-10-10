@@ -108,4 +108,11 @@ final class CommandsTest extends TestCase
         // devtools answered to `server` too.
         $this->assertSame(ServeCommand::class, Commands::registry()->get('server'));
     }
+
+    public function testTheHostCommandsAreTheComposeCommandsAndTheWriters(): void
+    {
+        $this->assertSame(['down', 'install', 'up'], Commands::COMPOSE);
+        $this->assertSame(['down', 'install', 'up', 'init', 'new'], Commands::HOST);
+        $this->assertSame(['serve', 'server'], Commands::ON_HOST);
+    }
 }

@@ -143,6 +143,24 @@ final class ShellRunnerTest extends TestCase
         (new ShellRunner())->run(['hello'], $this->root . '/missing');
     }
 
+    public function testTheEnvironmentAddsToTheEnvironmentOfCrest(): void
+    {
+        // The child keeps the variables of crest, and gets the new ones.
+        putenv('CREST_RUNNER_PARENT=5');
+
+        try {
+            $status = (new ShellRunner())->run(
+                [PHP_BINARY, '-r', 'exit((int) getenv("CREST_RUNNER_PARENT") + (int) getenv("CREST_RUNNER_CHILD"));'],
+                null,
+                ['CREST_RUNNER_CHILD' => '2']
+            );
+        } finally {
+            putenv('CREST_RUNNER_PARENT');
+        }
+
+        $this->assertSame(7, $status);
+    }
+
     public function testTheExitStatusIsReturned(): void
     {
         $this->assertSame(3, (new ShellRunner())->run([PHP_BINARY, '-r', 'exit(3);']));

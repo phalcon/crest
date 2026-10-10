@@ -1,0 +1,10 @@
+
+    /**
+     * Trailing route attributes, in path order. Constrains, casts and
+     * converts them after the route has matched.
+     */
+    public static function params(): array
+    {
+        return [
+{{ entries }}        ];
+    }

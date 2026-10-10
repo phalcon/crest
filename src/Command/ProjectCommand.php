@@ -23,24 +23,24 @@ use Crest\Paths;
 use Crest\Project\Config;
 
 /**
- * Base for every command that reads the project it is run against.
+ * Base for the commands of crest that read the project they run against.
  *
  * `--directory` and `--config` are global options the kernel merges into each
- * definition, so resolving them was repeated identically in ten commands. It
- * lives here rather than on Crest\Console\Command\Command because that class may
- * not reference Crest\Project - Crest\Console stays independent of the rest of
- * the tool, which IsolationTest enforces. And it is not a Config::fromInput()
- * factory, because that would point Crest\Project at Crest\Console\Input and
- * couple project configuration to the console for the sake of two arguments.
+ * definition; Project::config() resolves them. It lives here rather than on
+ * Crest\Console\Command\Command because that class may not reference
+ * Crest\Project - Crest\Console stays independent of the rest of the tool,
+ * which IsolationTest enforces.
+ *
+ * Not for packages: a package that adds commands extends
+ * Crest\Console\Command\Command and calls Project::context().
+ *
+ * @internal
  */
 abstract class ProjectCommand extends Command
 {
     protected function config(Input $input): Config
     {
-        return Config::discover(
-            $input->optionStringOrNull('directory'),
-            $input->optionStringOrNull('config')
-        );
+        return Project::config($input);
     }
 
     /**
@@ -67,12 +67,20 @@ abstract class ProjectCommand extends Command
     }
 
     /**
+     * The stubs of the project: its overrides first, then the packaged
+     * copies.
+     */
+    protected function stub(Config $config): Stub
+    {
+        return new Stub(Paths::stubs(), $config->root());
+    }
+
+    /**
      * The writer a generator renders through.
      *
      * Assembly was repeated verbatim in every make:* command, which meant five
      * copies of the stub resolution order - packaged root, then project root -
-     * and five places to change when it moves. Contributed commands get it by
-     * extending this class rather than by knowing how a writer goes together.
+     * and five places to change when it moves.
      *
      * stub:publish deliberately does not come through here: it copies rather
      * than renders, so it has no stub to construct a writer around and uses the
@@ -80,9 +88,6 @@ abstract class ProjectCommand extends Command
      */
     protected function writer(Config $config): ArtifactWriter
     {
-        return new ArtifactWriter(
-            new Stub(Paths::stubs(), $config->root()),
-            $config->flavor()->value
-        );
+        return new ArtifactWriter($this->stub($config), $config->flavor()->value);
     }
 }

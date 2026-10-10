@@ -150,17 +150,21 @@ name in the directory that the project goes into (the working directory, or
 
 A project stub needs no `crest.php`, and it always uses the `adr` flavor. A
 publish with no name leaves the project stubs out, because they do nothing
-inside a project.
+inside a project. It also leaves the fragment stubs (`fragment-*`) out: they
+hold pieces of the framework API and the guidance text that the generators
+print, and a copy does not get the changes of later releases. Publish a
+fragment by name to change it.
 
-You can change each project stub on its own, but `project-front`,
-`project-config` and `project-index` must agree with each other. Also,
-`project-dockerfile`, `project-compose` and `project-env` must agree with
-`serve`: keep `-t public .htrouter.php` in the `CMD`, and keep `APP_PORT`,
-with the default 8080, as the port variable. Do not change
-the name of the front controller class `AppFront` or the paths of the
-generated files, because `new` does not read them from the stubs. A published
-copy must use only the placeholders of the packaged copy. If a placeholder has
-no value, `new` stops before it writes a file.
+You can change each project stub on its own. The names that the stubs and
+crest must agree on come from placeholders: `{{ documentRoot }}`,
+`{{ router }}`, `{{ portVariable }}`, `{{ port }}`, `{{ front }}`,
+`{{ source }}` and `{{ autoloader }}`. Keep these placeholders where the
+packaged copy has them. Then `serve`, `init` and the generated files agree.
+`project-front`, `project-config` and `project-index` must also agree with
+each other on the namespace. `new` decides where each file goes: a stub
+cannot move its file. A published copy must use only the placeholders of the
+packaged copy. If a placeholder has no value, `new` stops before it writes a
+file.
 
 ## Adding crest to an existing project
 
@@ -256,3 +260,73 @@ is rejected, with `/album/edit/{id}` suggested instead.
 A view action names a template but does not create one. `Renderer::render()`
 takes a name rather than a path, so the directory and the extension belong to
 your renderer, and crest prints the name instead of guessing at a file.
+
+## Adding commands from a package
+
+A package adds commands to crest in its `composer.json`:
+
+```json
+"extra": {
+    "crest": {
+        "commands": {
+            "demo:greet": "Vendor\\Demo\\GreetCommand"
+        }
+    }
+}
+```
+
+crest reads this block from each installed package, and from the root
+project. `crest make:command` writes a command and prints its block.
+
+A command extends `Crest\Console\Command\Command` and declares two methods:
+
+```php
+use Crest\Console\Command\Command;
+use Crest\Console\Input;
+use Crest\Console\Output;
+use Crest\Console\Parsing\Definition;
+
+final class GreetCommand extends Command
+{
+    public function define(): Definition
+    {
+        return Definition::for('demo:greet', 'Greet someone')
+            ->argument('name', true, 'Who to greet')
+            ->option('shout', 'Use capital letters');
+    }
+
+    public function handle(Input $input, Output $output): int
+    {
+        $output->line('Hello ' . $input->argumentString('name'));
+
+        return 0;
+    }
+}
+```
+
+crest makes the command with `new $class()`, so the constructor must work
+without arguments. Each command also gets the global options (`--config`,
+`--directory`, `--trace`, `--help`, `--quiet`, `--no-interaction`).
+
+These classes are the API for a package. Each has `@api` in its docblock:
+
+| Class | Use |
+|---|---|
+| `Crest\Console\Command\Command` | the base class of a command |
+| `Crest\Console\Parsing\Definition` | `for()`, `argument()` and `option()` declare the arguments and options |
+| `Crest\Console\Input` | the values of the call |
+| `Crest\Console\Output` | `line()`, `success()`, `error()`, `write()`, `table()`, `ask()` and `choice()` |
+| `Crest\Console\Exceptions\Exception` | throw it to stop with one clean error line |
+| `Crest\Command\Project` | `Project::context($input)` gives the project of the call |
+| `Crest\Project\ProjectContext` | `root()`, `path($key)` and `namespaceFor($key)` |
+
+`Project::context()` finds the project by the rule of the other commands:
+the file that `--config` names, or the nearest `crest.php` above
+`--directory` or the working directory. Without `crest.php`, the command
+stops with the `crest init` hint.
+
+A public element with `@internal` in its docblock is not part of the API,
+and it can change in any release. Tools that read the tag, for example an
+IDE or a static-analysis rule, can report its use from another package. Do
+not extend `Crest\Command\ProjectCommand`: it is the base of the commands of
+crest, and it changes with them.

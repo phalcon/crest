@@ -1,0 +1,10 @@
+Nothing registers it yet. Call it from your front controller:
+
+    protected function registerProviders(Container $container): void
+    {
+        parent::registerProviders($container);
+
+        (new \{{ namespace }}\{{ class }}())->provide($container);
+    }
+
+Keep the parent call: it is what registers the ADR services.

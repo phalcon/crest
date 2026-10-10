@@ -49,6 +49,31 @@ final class StubTest extends TestCase
         $stub->render('adr', 'action', ['a' => 'X']);
     }
 
+    public function testHasFindsAPackagedStub(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');
+
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertTrue($stub->has('adr', 'action'));
+    }
+
+    public function testHasFindsAStubThatOnlyTheProjectHas(): void
+    {
+        file_put_contents($this->root . '/project/resources/stubs/adr/only-here.stub', 'project');
+
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertTrue($stub->has('adr', 'only-here'));
+    }
+
+    public function testHasIsFalseForAStubThatNobodyHas(): void
+    {
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertFalse($stub->has('adr', 'nope'));
+    }
+
     public function testPackagedRootIsAlsoStrippedOfATrailingSlash(): void
     {
         file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');

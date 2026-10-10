@@ -40,12 +40,23 @@ use Crest\Console\Registry;
 final class Commands
 {
     /**
+     * The host commands that run docker compose on the host. The launcher
+     * that `crest new` writes (./crest) runs these on the host too, and
+     * LauncherTest holds the launcher to this list.
+     */
+    public const COMPOSE = ['down', 'install', 'up'];
+
+    /**
      * The commands that need no vendor/ of the project: `new` and `init`
-     * write crest.php, and `up`, `down` and `install` run before composer
+     * write crest.php, and the COMPOSE commands run before composer
      * install. A global crest runs them itself, and passes the other
      * commands to the crest of the project.
+     *
+     * A closed set: the global crest and the crest of the project can be
+     * different versions. A change here is a change of the hand-off
+     * protocol (HandOff::PROTOCOL).
      */
-    public const HOST = ['down', 'init', 'install', 'new', 'up'];
+    public const HOST = [...self::COMPOSE, 'init', 'new'];
 
     /**
      * Composer `extra` key packages use to contribute commands.
@@ -56,6 +67,13 @@ final class Commands
      * Tool name shown in errors, the banner and usage lines.
      */
     public const NAME = 'crest';
+
+    /**
+     * The commands that run on the host also with a docker runtime: `serve`
+     * and its alias start PHP's built-in server, which must listen on the
+     * host (A8). Part of the hand-off protocol, as HOST is.
+     */
+    public const ON_HOST = ['serve', 'server'];
 
     /**
      * Composer package name, used to resolve --version.

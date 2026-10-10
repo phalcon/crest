@@ -13,18 +13,31 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command;
 
+use Crest\Command\ComposeCommand;
+use Crest\Command\DownCommand;
+use Crest\Command\InstallCommand;
 use Crest\Command\NewCommand;
+use Crest\Command\UpCommand;
+use Crest\Commands;
+use Crest\Generator\Stub;
+use Crest\Paths;
 use Crest\Tests\Support\GeneratesInAScratchProject;
+use Crest\Tests\Support\Process\FakeRunner;
+use Crest\Tests\Support\RunsACommandDirectly;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function array_slice;
 use function chmod;
 use function fclose;
+use function file_get_contents;
 use function file_put_contents;
 use function implode;
 use function mkdir;
+use function preg_match_all;
 use function proc_close;
 use function proc_open;
+use function sort;
 use function stream_get_contents;
 
 use const PHP_EOL;
@@ -38,6 +51,7 @@ use const PHP_EOL;
 final class LauncherTest extends TestCase
 {
     use GeneratesInAScratchProject;
+    use RunsACommandDirectly;
 
     protected function setUp(): void
     {
@@ -53,6 +67,16 @@ final class LauncherTest extends TestCase
     protected function tearDown(): void
     {
         $this->endScratchProject();
+    }
+
+    /**
+     * @return iterable<string, array{string, class-string<ComposeCommand>}>
+     */
+    public static function composeCommands(): iterable
+    {
+        yield 'down' => ['down', DownCommand::class];
+        yield 'install' => ['install', InstallCommand::class];
+        yield 'up' => ['up', UpCommand::class];
     }
 
     public function testACallFromASubfolderRunsInTheProjectRoot(): void
@@ -198,6 +222,45 @@ final class LauncherTest extends TestCase
             $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'),
             $stdout
         );
+    }
+
+    public function testTheLauncherRunsExactlyTheComposeCommandsOnTheHost(): void
+    {
+        // The launcher keeps its own list of host commands. This holds the
+        // list to Commands::COMPOSE.
+        preg_match_all(
+            '/^\s+(\w+)\)/m',
+            (string) file_get_contents(
+                Stub::packagedPath(Paths::stubs(), 'adr', Stub::PROJECT_PREFIX . 'launcher')
+            ),
+            $matches
+        );
+
+        $labels = $matches[1];
+        sort($labels);
+
+        $this->assertSame(Commands::COMPOSE, $labels);
+    }
+
+    /**
+     * @dataProvider composeCommands
+     *
+     * @param class-string<ComposeCommand> $class
+     */
+    public function testTheLauncherRunsTheComposeOfTheCrestCommand(string $name, string $class): void
+    {
+        // The launcher is a shell script with its own copy of each docker
+        // compose call. Without a terminal, as here, both add -T where they
+        // must.
+        $project = $this->create();
+        $runner  = new FakeRunner();
+
+        [, $stdout] = $this->launch($project, './crest', [$name]);
+
+        $this->handleDirectly(new $class($runner, false), ['--directory', $project]);
+
+        $this->assertSame($project, $runner->calls[0][1]);
+        $this->assertSame($this->docker($project, ...array_slice($runner->calls[0][0], 1)), $stdout);
     }
 
     public function testTheServiceComesFromNew(): void

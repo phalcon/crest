@@ -1,0 +1,6 @@
+
+Nothing renders it yet. The responder asks for this template:
+
+    {{ template }}
+
+Create it wherever your renderer looks. Renderer::render() takes a name, not a path, so the directory and the extension belong to the renderer rather than to crest.
