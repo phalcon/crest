@@ -29,6 +29,7 @@ use Crest\Project\Settings;
 use FilesystemIterator;
 
 use function array_keys;
+use function chmod;
 use function escapeshellarg;
 use function file_exists;
 use function getcwd;
@@ -81,11 +82,18 @@ final class NewCommand extends Command
         Stub::PROJECT_PREFIX . 'gitignore'  => '.gitignore',
         Stub::PROJECT_PREFIX . 'htrouter'   => ServeCommand::ROUTER,
         Stub::PROJECT_PREFIX . 'readme'     => 'README.md',
+        Stub::PROJECT_PREFIX . 'launcher'   => self::LAUNCHER,
         Stub::PROJECT_PREFIX . 'compose'    => 'docker-compose.yml',
         Stub::PROJECT_PREFIX . 'dockerfile' => 'resources/docker/Dockerfile',
         Stub::PROJECT_PREFIX . 'index'      => 'public/index.php',
         Stub::PROJECT_PREFIX . 'front'      => 'src/AppFront.php',
     ];
+
+    /**
+     * The launcher in the project root. `./crest` runs crest with docker
+     * only: PHP on the host is not necessary.
+     */
+    private const LAUNCHER = 'crest';
 
     /**
      * A project name: letters, digits, '-' and '_', with a letter or digit
@@ -268,6 +276,10 @@ final class NewCommand extends Command
             ArtifactWriter::write($target . '/' . $path, $contents);
         }
 
+        // The return value is not checked: this command has just written the
+        // file, so chmod() cannot fail on a usual filesystem.
+        chmod($target . '/' . self::LAUNCHER, 0o755);
+
         $this->report(
             $output,
             '' === $input->optionString('directory') ? $name : $target
@@ -358,8 +370,8 @@ final class NewCommand extends Command
         $output->line('Nothing runs it yet. With docker:');
         $output->line();
         $output->line($cd);
-        $output->line('    crest up');
-        $output->line('    crest install');
+        $output->line('    ./crest up');
+        $output->line('    ./crest install');
         $output->line();
         $output->line('Or with PHP and composer on the host:');
         $output->line();

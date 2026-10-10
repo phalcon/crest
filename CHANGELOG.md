@@ -40,6 +40,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `runtime` key to `crest.php`: `host`, or `docker` with a compose service. With docker, a global crest runs project commands with `docker compose exec`, except `serve`, which runs on the host. [#28](https://github.com/phalcon/crest/issues/28)
 - Added questions to `new` for the values that no option gives (namespace, PHP, Phalcon, runtime). [#28](https://github.com/phalcon/crest/issues/28)
 - Added the options `--runtime=host|docker` and `--service` to `new`: they answer the runtime questions. [#28](https://github.com/phalcon/crest/issues/28)
+- Added the launcher `./crest` to the projects that `new` creates: it runs crest with docker only. `up`, `down` and `install` run docker compose on the host; all other commands run `vendor/bin/crest` in the compose service. [#29](https://github.com/phalcon/crest/issues/29)
 
 ### Changed
 

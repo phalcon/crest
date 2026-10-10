@@ -58,8 +58,16 @@ one. `new` runs nothing: no composer, no docker, no network. It prints the
 next steps:
 
     cd my-app
-    crest up          docker compose up -d
-    crest install     composer install in the app container
+    ./crest up        docker compose up -d
+    ./crest install   composer install in the app container
+
+`./crest` is a launcher script that `new` writes into the project. It needs docker
+only: PHP on the host is not necessary. `up`, `down` and `install` run docker compose on
+the host. All other commands run `vendor/bin/crest` in the service of the project (`app`,
+or the `--service` of `new`). Before `./crest install`, they stop with
+`crest: run './crest install' first`. Without a terminal (CI, a pipe), the launcher
+adds `-T` to `docker compose exec`. On Windows, run it in WSL2. With a global crest,
+`crest up` and `crest install` do the same.
 
 `crest down` stops and removes the containers. `up --build` rebuilds the image
 first, and `down --volumes` also removes the named volumes.
@@ -89,7 +97,8 @@ Use your port if it is not 8080.
 
 `new`, `up`, `down` and `install` run before the project has a `vendor/`. Run
 them with a crest outside the project, for example one that you install with
-`composer global require phalcon/crest`.
+`composer global require phalcon/crest`. On a host with docker and no PHP, run
+`up`, `down` and `install` with `./crest`.
 
 The generated project requires `phalcon/crest` as a dev dependency. The
 commands that work on the project, for example `make:action` and
@@ -103,6 +112,10 @@ arguments, and returns its exit status:
 In the container, there is no global crest. Run the crest of the project:
 
     docker compose exec app vendor/bin/crest make:action GET /hello
+
+On a host without PHP, `./crest` does the same:
+
+    ./crest make:action GET /hello
 
 `new`, `init`, `up`, `down`, `install` and `--version` always run in the crest that you
 type. crest finds the project by its `crest.php`: the file that `--config` names, or the

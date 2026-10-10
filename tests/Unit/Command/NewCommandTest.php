@@ -27,6 +27,7 @@ use SplFileInfo;
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
+use function fileperms;
 use function json_decode;
 use function mkdir;
 use function preg_match;
@@ -311,6 +312,20 @@ final class NewCommandTest extends TestCase
         $this->assertSame("custom my-app\n", (string) file_get_contents($directory . '/my-app/README.md'));
     }
 
+    public function testAPublishedLauncherIsExecutable(): void
+    {
+        $override = Stub::overridePath($this->root, 'adr', 'project-launcher');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents($override, "#!/bin/sh\n\necho {{ service }}\n");
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame("#!/bin/sh\n\necho app\n", $this->read('crest'));
+        $this->assertSame(0o755, fileperms($this->root . '/my-app/crest') & 0o777);
+    }
+
     public function testAPublishedProjectStubInTheParentDirectoryIsUsed(): void
     {
         $override = Stub::overridePath($this->root, 'adr', 'project-readme');
@@ -394,6 +409,7 @@ final class NewCommandTest extends TestCase
             [
                 'composer.json',
                 'crest.php',
+                'crest',
                 '.env',
                 '.gitignore',
                 '.htrouter.php',
@@ -502,8 +518,8 @@ final class NewCommandTest extends TestCase
             . 'Nothing runs it yet. With docker:' . PHP_EOL
             . PHP_EOL
             . '    cd ' . $target . PHP_EOL
-            . '    crest up' . PHP_EOL
-            . '    crest install' . PHP_EOL
+            . '    ./crest up' . PHP_EOL
+            . '    ./crest install' . PHP_EOL
             . PHP_EOL
             . 'Or with PHP and composer on the host:' . PHP_EOL
             . PHP_EOL
@@ -684,6 +700,13 @@ final class NewCommandTest extends TestCase
         $this->runCommand(['my-app']);
 
         $this->assertSame("/vendor/\n", $this->read('.gitignore'));
+    }
+
+    public function testTheLauncherIsExecutable(): void
+    {
+        $this->runCommand(['my-app']);
+
+        $this->assertSame(0o755, fileperms($this->root . '/my-app/crest') & 0o777);
     }
 
     public function testThePhalconVersionIsCaseInsensitive(): void
