@@ -6,8 +6,8 @@ A Phalcon ADR application.
 
 With docker:
 
-    crest up
-    crest install
+    ./crest up
+    ./crest install
 
 With PHP and composer on the host:
 
@@ -35,7 +35,8 @@ in the `{{ service }}` container:
     crest make:action GET /hello
     crest route:list
 
-Without a global crest, use `vendor/bin/crest`. With docker:
+Without a global crest, use `./crest`. It needs docker only, and it runs them
+in the `{{ service }}` container:
 
-    docker compose exec {{ service }} vendor/bin/crest make:action GET /hello
-    docker compose exec {{ service }} vendor/bin/crest route:list
+    ./crest make:action GET /hello
+    ./crest route:list

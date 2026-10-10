@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Runs crest for this project with docker only. PHP on the host is not necessary.
+# up, down and install run docker compose here. All other commands run
+# vendor/bin/crest in the {{ service }} service.
+
+# An empty CDPATH: cd goes only to the folder of this script.
+CDPATH= cd -- "$(dirname -- "$0")" || exit 1
+
+# No terminal for the container when stdin is not one (CI, pipes).
+tty=
+[ -t 0 ] || tty=-T
+
+case "$1" in
+    up)      shift; exec docker compose up -d "$@" ;;
+    down)    shift; exec docker compose down "$@" ;;
+    install) shift; exec docker compose exec $tty {{ service }} composer install "$@" ;;
+esac
+
+[ -f vendor/bin/crest ] || { echo "crest: run './crest install' first" >&2; exit 1; }
+
+exec docker compose exec $tty {{ service }} vendor/bin/crest "$@"
