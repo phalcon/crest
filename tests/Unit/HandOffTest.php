@@ -26,7 +26,6 @@ use function file_put_contents;
 use function getcwd;
 use function getenv;
 use function json_encode;
-use function mkdir;
 use function putenv;
 use function unlink;
 
@@ -36,7 +35,7 @@ use const PHP_EOL;
 /**
  * The scratch root has three directories: app/ is a project with crest.php
  * that requires crest and has vendor/bin/crest, other/ is not a project, and
- * self/ is the running crest.
+ * self/ is the vendor folder of the running crest.
  *
  * A walk up from other/ finds no crest.php: this repository has none.
  */
@@ -299,7 +298,7 @@ final class HandOffTest extends TestCase
         putenv('PATH=' . $this->root . '/other');
 
         try {
-            $status = (new HandOff(new ShellRunner(), $this->root . '/self', true))->run(
+            $status = (new HandOff($this->root . '/self', new ShellRunner(), true))->run(
                 ['crest', 'route:list'],
                 new Output($this->stdout, $this->stderr, false)
             );
@@ -532,12 +531,23 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn($tokens);
     }
 
+    public function testTheCrestOfTheProjectFindsItselfByTheComposerPath(): void
+    {
+        // The composer proxy names vendor/bin/../autoload.php.
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/vendor/bin/..'));
+    }
+
+    public function testTheCrestOfTheProjectFindsItselfWithARelativeConfigFile(): void
+    {
+        // The root is then '.', not the full path.
+        $this->assertStays($this->handOff(['route:list', '--config', 'crest.php'], 0, $this->root . '/app/vendor'));
+    }
+
     public function testTheCrestOfTheProjectRunsTheCallItself(): void
     {
-        // vendor/bin/crest, run directly. A hand-off here would never stop.
-        mkdir($this->root . '/app/vendor/phalcon/crest', 0o775, true);
-
-        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/vendor/phalcon/crest'));
+        // vendor/bin/crest of the project loads the autoloader in its vendor/.
+        // A hand-off here would never stop.
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/vendor'));
     }
 
     public function testTheDirectoryOptionFindsTheProject(): void
@@ -642,14 +652,14 @@ final class HandOffTest extends TestCase
 
     /**
      * @param list<string> $tokens   The arguments after `crest`.
-     * @param string|null  $self     The root of the running crest.
+     * @param string|null  $vendor   The vendor folder of the running crest.
      * @param bool         $terminal Whether stdin is a terminal.
      */
-    private function handOff(array $tokens, int $status = 0, ?string $self = null, bool $terminal = true): ?int
+    private function handOff(array $tokens, int $status = 0, ?string $vendor = null, bool $terminal = true): ?int
     {
         $this->runner = new FakeRunner($status);
 
-        return (new HandOff($this->runner, $self ?? $this->root . '/self', $terminal))->run(
+        return (new HandOff($vendor ?? $this->root . '/self', $this->runner, $terminal))->run(
             ['crest', ...$tokens],
             new Output($this->stdout, $this->stderr, false)
         );
