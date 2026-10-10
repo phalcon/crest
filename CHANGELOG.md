@@ -74,6 +74,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `ClassName::suffixed()` accepts non-Latin class names. [#5](https://github.com/phalcon/crest/issues/5)
 - `container:list` and `event:list` type against Phalcon's published contracts (`Phalcon\Contracts\Container\Service\Collection`, `Enumerable`), not `Container` and `Manager`. [#1](https://github.com/phalcon/crest/issues/1)
 - `route:list` gets the HTTP method from the router, not from the class name. [#1](https://github.com/phalcon/crest/issues/1)
+- `bin/crest` loads the autoloader of its install, not the one in a dev checkout. A global crest from a symlinked path repository passes project commands to the crest of the project. [#33](https://github.com/phalcon/crest/issues/33)
 
 ### Removed
 

@@ -17,8 +17,16 @@ use Crest\Console\Kernel;
 use Crest\Console\Output;
 use Crest\HandOff;
 
-// Dev checkout: bin/../vendor; installed dependency: vendor/phalcon/crest/bin -> vendor.
-foreach ([dirname(__DIR__) . '/vendor/autoload.php', dirname(__DIR__, 3) . '/autoload.php'] as $autoload) {
+// The composer proxy (vendor/bin/crest, composer 2.2+) names the autoloader of
+// the install. Without it: an installed dependency (vendor/phalcon/crest/bin ->
+// vendor), then the dev checkout (bin/../vendor).
+$autoloads = [
+    $GLOBALS['_composer_autoload_path'] ?? '',
+    dirname(__DIR__, 3) . '/autoload.php',
+    dirname(__DIR__) . '/vendor/autoload.php',
+];
+
+foreach ($autoloads as $autoload) {
     if (file_exists($autoload)) {
         require $autoload;
 
@@ -34,8 +42,8 @@ if (!class_exists(Kernel::class)) {
 $arguments = $_SERVER['argv'] ?? [];
 
 // In a project, a global crest passes the project commands to the crest of
-// the project.
-$status = (new HandOff())->run($arguments, new Output());
+// the project. The folder of the autoloader is the vendor folder of this crest.
+$status = (new HandOff(dirname($autoload)))->run($arguments, new Output());
 
 if (null !== $status) {
     exit($status);
