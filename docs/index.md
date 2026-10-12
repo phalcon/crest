@@ -54,8 +54,8 @@ version, the Phalcon version, and the runtime (`docker` with the service `app`, 
 terminal (CI, a pipe), asks nothing and takes the defaults. The options stay, for CI.
 
 The project goes into the working directory, or into `--directory` if you give
-one. `new` runs nothing: no composer, no docker, no network. It prints the
-next steps:
+one. By default, `new` runs nothing: no composer, no docker, no network. It
+prints the next steps:
 
     cd my-app
     ./crest up        docker compose up -d
@@ -170,6 +170,53 @@ each other on the namespace. `new` decides where each file goes: a stub
 cannot move its file. A published copy must use only the placeholders of the
 packaged copy. If a placeholder has no value, `new` stops before it writes a
 file.
+
+### Commands after `new`
+
+`new` can run commands after it writes the files, for example `crest up` and
+`crest install`. Publish the `project-config` stub in the folder that the projects go
+into, and add the key `new` to the copy:
+
+    crest stub:publish project-config
+
+    'new' => [
+        ['crest', 'up'],
+        ['crest', 'install'],
+    ],
+
+With the host runtime, use `['composer', 'install']` instead. With the docker runtime,
+composer runs in the container: the host often has no Phalcon, or an older PHP, and then
+`composer install` on the host stops.
+
+Each entry is one command, as a list of words. There is no shell: pipes, `&&` and
+variables do not work. When the first word is `crest`, the crest that runs `new` also runs
+the command. Use `crest`, not `./crest`: crest looks for a relative path from the folder
+where you type the command, not from the project. `new` runs the commands in order, in
+the project folder, and prints `Running: <command>` before each one. At the end, it prints
+`Ran 2 commands from the 'new' key of crest.php`.
+
+The first command that fails stops the list, and `new` returns its exit status:
+
+    crest: 'composer install' failed with exit status 2; the files in my-app/ stay
+
+A program that is not in the `PATH` also stops the list, with exit status 1:
+
+    crest: 'composer' was not found; install it or add it to the PATH
+
+`new` reads the key from the `crest.php` that it writes. Thus it checks the key after it
+writes the files. If the key is not a list of commands, or if PHP cannot parse the file,
+`new` stops before the first command, and the files stay. The error names the published
+stub. Change the stub, not the `crest.php` of the project, then run `new` again with
+`--force`:
+
+    crest: my-app/crest.php: 'new' entry 2 in crest.php must be a list of strings, e.g. ['crest', 'up']; the files in my-app/ stay; fix /path/to/resources/stubs/adr/project-config.stub and run new again with --force
+
+The key stays in the `crest.php` of the project. No other command reads it, and
+`config:show` does not show it. `init` uses the same stub: it writes the key, but runs
+nothing. Without the key, `new` runs nothing.
+
+The one-line setup (see "With docker only" in the README) runs `new` in a container
+without docker. There, `crest up` fails. Do not use the key with it.
 
 ## Adding crest to an existing project
 

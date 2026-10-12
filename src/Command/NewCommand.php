@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Command;
 
+use Crest\Commands;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
@@ -22,18 +23,26 @@ use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Process\Runner;
+use Crest\Process\ShellRunner;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
 use Crest\Project\Layout;
 use Crest\Project\Runtime;
 use Crest\Project\Settings;
+use Crest\Project\Steps;
 use FilesystemIterator;
+use Throwable;
 
 use function array_keys;
+use function array_map;
+use function array_slice;
 use function chmod;
+use function count;
 use function escapeshellarg;
 use function file_exists;
 use function getcwd;
+use function implode;
 use function is_dir;
 use function preg_match;
 use function rtrim;
@@ -43,6 +52,8 @@ use function str_replace;
 use function strtolower;
 use function version_compare;
 
+use const PHP_BINARY;
+
 /**
  * Creates a new ADR project from stubs.
  *
@@ -51,10 +62,13 @@ use function version_compare;
  * ProjectCommand. It gets its values from its arguments. When an option is
  * not given, it asks the question, through the code that `crest init` uses.
  * A run without interaction takes the default of the option. It writes
- * crest.php. It does not read it.
+ * crest.php, and reads back only its `new` key.
  *
- * It runs nothing: no composer, no docker, no network. It checks all its
- * input before it writes the first file. Only a write error, for example a
+ * By default, it runs nothing: no composer, no docker, no network. The `new`
+ * key of crest.php can list commands that it runs after it writes the files
+ * (Steps). It checks all its input before it writes the first file. The `new`
+ * key is the exception: it reads the key from the crest.php that it writes,
+ * so it checks the key after the write. Only a write error, for example a
  * full disk, can stop it after it has written some of the files.
  */
 final class NewCommand extends Command
@@ -129,6 +143,17 @@ final class NewCommand extends Command
      * make sure that the copy is correct.
      */
     private const SEED = 'Get';
+
+    private readonly Runner $runner;
+
+    /**
+     * The default lets the kernel's `new $class()` work. A test gives a fake
+     * runner, and checks the exact argv.
+     */
+    public function __construct(?Runner $runner = null)
+    {
+        $this->runner = $runner ?? new ShellRunner();
+    }
 
     /**
      * The directory that the project goes into.
@@ -289,13 +314,30 @@ final class NewCommand extends Command
         // file, so chmod() cannot fail on a usual filesystem.
         chmod($target . '/' . self::LAUNCHER, 0o755);
 
-        $this->report(
-            $output,
-            '' === $input->optionString('directory') ? $name : $target,
-            $actionPath
-        );
+        $shown = '' === $input->optionString('directory') ? $name : $target;
 
-        return 0;
+        $output->success(sprintf('Created %s/', $shown));
+        $output->line();
+
+        $steps = $this->steps($target, $shown, $parent);
+
+        if ([] === $steps) {
+            $this->report($output, $shown, $actionPath);
+
+            return 0;
+        }
+
+        return $this->runSteps($output, $steps, $target, $shown);
+    }
+
+    /**
+     * The words of a step, as a user types them in a shell.
+     *
+     * @param non-empty-list<string> $step
+     */
+    private function display(array $step): string
+    {
+        return implode(' ', array_map($this->quote(...), $step));
     }
 
     /**
@@ -366,6 +408,31 @@ final class NewCommand extends Command
     }
 
     /**
+     * The argv for the runner. The word `crest` runs the crest that runs this
+     * command, with the same PHP: the user can have no crest on the PATH.
+     *
+     * @param non-empty-list<string> $step
+     *
+     * @return non-empty-list<string>
+     */
+    private function program(array $step): array
+    {
+        if (Commands::NAME !== $step[0]) {
+            return $step;
+        }
+
+        return [PHP_BINARY, Paths::root() . '/bin/crest', ...array_slice($step, 1)];
+    }
+
+    /**
+     * Quoted when the word has a space, so that the line works when pasted.
+     */
+    private function quote(string $word): string
+    {
+        return true === str_contains($word, ' ') ? escapeshellarg($word) : $word;
+    }
+
+    /**
      * Both ways to run the project, always. The generated files are the same
      * on every host. Only this text names the two ways, so nothing here
      * examines the environment.
@@ -373,10 +440,8 @@ final class NewCommand extends Command
     private function report(Output $output, string $shown, string $actionPath): void
     {
         // Quoted when the path has a space, so that the line works when pasted.
-        $cd = sprintf('    cd %s', true === str_contains($shown, ' ') ? escapeshellarg($shown) : $shown);
+        $cd = '    cd ' . $this->quote($shown);
 
-        $output->success(sprintf('Created %s/', $shown));
-        $output->line();
         $output->line('Nothing runs it yet. With docker:');
         $output->line();
         $output->line($cd);
@@ -390,5 +455,74 @@ final class NewCommand extends Command
         $output->line('    crest serve');
         $output->line();
         $output->line(sprintf('Then GET / answers from %s/%s.php', $actionPath, self::SEED));
+    }
+
+    /**
+     * Runs the commands of the `new` key in the project, in order. The first
+     * command that fails stops the list, and its exit status is the result.
+     * The output of each command goes directly to the terminal.
+     *
+     * @param list<non-empty-list<string>> $steps
+     */
+    private function runSteps(Output $output, array $steps, string $target, string $shown): int
+    {
+        foreach ($steps as $step) {
+            $display = $this->display($step);
+
+            $output->line('Running: ' . $display);
+
+            $status = $this->runner->run($this->program($step), $target);
+
+            if (0 !== $status) {
+                $output->error(
+                    sprintf(
+                        "%s: '%s' failed with exit status %d; the files in %s/ stay",
+                        Commands::NAME,
+                        $display,
+                        $status,
+                        $shown
+                    )
+                );
+
+                return $status;
+            }
+        }
+
+        $count = count($steps);
+
+        $output->success(
+            sprintf("Ran %d %s from the 'new' key of crest.php", $count, 1 === $count ? 'command' : 'commands')
+        );
+
+        return 0;
+    }
+
+    /**
+     * The `new` key of the crest.php that this command has just written. A
+     * bad key, or a file that PHP cannot parse, comes from a published
+     * project-config stub: the packaged stub has no key. A change to the
+     * written crest.php does nothing, so the error names the stub. The files
+     * stay, and nothing runs.
+     *
+     * @return list<non-empty-list<string>>
+     */
+    private function steps(string $target, string $shown, string $parent): array
+    {
+        $file = self::FILES[Stub::PROJECT_PREFIX . 'config'];
+
+        try {
+            return Steps::fromFile($target . '/' . $file);
+        } catch (Throwable $throwable) {
+            throw new Exception(
+                sprintf(
+                    '%s/%s: %s; the files in %s/ stay; fix %s and run new again with --force',
+                    $shown,
+                    $file,
+                    $throwable->getMessage(),
+                    $shown,
+                    Stub::overridePath($parent, Flavor::ADR->value, Stub::PROJECT_PREFIX . 'config')
+                )
+            );
+        }
     }
 }

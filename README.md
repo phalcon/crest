@@ -50,6 +50,10 @@ group IDs into the project `.env`, then runs `./crest up` and `./crest install`.
 GET / answers on http://localhost:8080/. A v5 project compiles the Phalcon extension in
 `./crest up`. This takes some minutes. On Windows, run it in WSL2.
 
+Do not add a `new` key to a published `project-config` stub for this command. `new` runs
+in a container without docker, so `crest up` fails there. The script runs `./crest up`
+and `./crest install` itself.
+
 The script runs on your host. To read it before it runs:
 
     curl -fsSL https://phalcon.io/crest-setup -o crest-setup.sh
@@ -101,6 +105,11 @@ the defaults:
 containers, stop them, and install the dependencies. All other commands run
 `vendor/bin/crest` in the service of the project. Before `./crest install`, they stop
 with a hint. On Windows, run it in WSL2.
+
+By default, `new` runs nothing: it writes the files and prints the next commands. A
+published `project-config` stub can add a `new` key, with commands that `new` runs after
+it writes the files, for example `crest up` and `crest install`. See
+[docs/index.md](docs/index.md#commands-after-new).
 
 For an existing project, `crest init` writes `crest.php`:
 

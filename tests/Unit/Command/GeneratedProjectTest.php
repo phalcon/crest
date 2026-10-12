@@ -53,9 +53,9 @@ use const TOKEN_PARSE;
 /**
  * The generated project must run, not only exist.
  *
- * `new` runs nothing, so no other test proves the wiring: crest.php names a
- * front controller that crest can boot, and the front sends GET / to the seed
- * action. Boot alone does not prove the second part:
+ * By default, `new` runs nothing, so no other test proves the wiring:
+ * crest.php names a front controller that crest can boot, and the front
+ * sends GET / to the seed action. Boot alone does not prove the second part:
  * AbstractHttpFront::boot() does not call getApplication(), and
  * getApplication() sets the base namespace and the action directory. Thus
  * the last test sends GET / through the generated application in this

@@ -15,9 +15,13 @@ namespace Crest\Tests\Support\Process;
 
 use Crest\Process\Runner;
 
+use function array_values;
+use function count;
+use function min;
+
 /**
- * Records each command, directory and environment, and returns a set exit
- * status. Runs nothing.
+ * Records each command, directory and environment, and returns the set exit
+ * statuses in order. Runs nothing.
  */
 final class FakeRunner implements Runner
 {
@@ -27,9 +31,16 @@ final class FakeRunner implements Runner
     /** @var list<array<string, string>> The environment of each call, in order. */
     public array $environments = [];
 
-    public function __construct(
-        private readonly int $status = 0,
-    ) {
+    /** @var list<int> */
+    private readonly array $statuses;
+
+    /**
+     * Call n returns status n. After the last status, the last status
+     * repeats. With no status, each call returns 0.
+     */
+    public function __construct(int ...$statuses)
+    {
+        $this->statuses = array_values($statuses);
     }
 
     public function run(array $command, ?string $directory = null, array $environment = []): int
@@ -37,6 +48,6 @@ final class FakeRunner implements Runner
         $this->calls[]        = [$command, $directory];
         $this->environments[] = $environment;
 
-        return $this->status;
+        return $this->statuses[min(count($this->calls), count($this->statuses)) - 1] ?? 0;
     }
 }

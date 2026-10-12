@@ -26,7 +26,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Command\ProjectCommand::writer()`: builds the stub writer for the `make:*` commands. [#5](https://github.com/phalcon/crest/issues/5)
 - Added `Crest\ADR\ActionResolver::methodFor()`: gets an Action's HTTP method from the router. [#1](https://github.com/phalcon/crest/issues/1)
 - Added `Crest\Console\Registry::descriptions()` and `Crest\Console\Output::commandTable()`: one listing for `crest` and `crest list`.
-- Added `new`: creates an ADR project from stubs (front controller, `public/index.php`, `crest.php`, a `GET /` action, `composer.json`, docker files). Runs no composer, docker or network. Options: `--namespace`, `--php`, `--phalcon`. The project requires `phalcon/crest` in `require-dev`; project commands run as `vendor/bin/crest`. Writes nothing if a stub fails to render. [#8](https://github.com/phalcon/crest/issues/8)
+- Added `new`: creates an ADR project from stubs (front controller, `public/index.php`, `crest.php`, a `GET /` action, `composer.json`, docker files). By default, runs no composer, docker or network. Options: `--namespace`, `--php`, `--phalcon`. The project requires `phalcon/crest` in `require-dev`; project commands run as `vendor/bin/crest`. Writes nothing if a stub fails to render. [#8](https://github.com/phalcon/crest/issues/8)
 - Added `up`, `down` and `install`: `docker compose up -d`, `docker compose down` and `composer install` in the `app` container. `--directory` names the project. [#8](https://github.com/phalcon/crest/issues/8)
 - Added `Crest\Process\Runner` and `ShellRunner`: run external programs. A missing program or directory is a crest error. [#8](https://github.com/phalcon/crest/issues/8)
 - Added `Crest\Generator\ClassName::namespace()`: validates a namespace. [#8](https://github.com/phalcon/crest/issues/8)
@@ -42,6 +42,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the options `--runtime=host|docker` and `--service` to `new`: they answer the runtime questions. [#28](https://github.com/phalcon/crest/issues/28)
 - Added the launcher `./crest` to the projects that `new` creates: it runs crest with docker only. `up`, `down` and `install` run docker compose on the host; all other commands run `vendor/bin/crest` in the compose service. [#29](https://github.com/phalcon/crest/issues/29)
 - Added `resources/setup.sh`: one command creates, starts and installs a project with docker only: `curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app`. [#30](https://github.com/phalcon/crest/issues/30)
+- Added the `new` key to `crest.php`: the commands that `new` runs in the project after it writes the files, in order, for example `[['crest', 'up'], ['crest', 'install']]`. Add it to a published `project-config` stub. The first command that fails stops the list. Without the key, `new` runs nothing. [#32](https://github.com/phalcon/crest/issues/32)
+- Added `Crest\Project\Steps`: reads and checks the `new` key. [#32](https://github.com/phalcon/crest/issues/32)
 
 ### Changed
 
@@ -67,6 +69,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `install`: it uses the service of the `runtime` key. [#28](https://github.com/phalcon/crest/issues/28)
 - Changed the `project-config` stub: its placeholders are `namespace`, `bootstrap`, `paths` and `runtime`. `bootstrap` and `paths` give whole lines. A copy that was published before this change stops `new` and `init`; publish it again. [#28](https://github.com/phalcon/crest/issues/28)
 - Reserved the global option `--no-interaction` (`-n`). A contributed command that declares either one fails when it runs. [#28](https://github.com/phalcon/crest/issues/28)
+- Changed `new`: it takes an optional `Runner`. [#32](https://github.com/phalcon/crest/issues/32)
 
 ### Fixed
 
