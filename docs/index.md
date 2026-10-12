@@ -100,6 +100,11 @@ them with a crest outside the project, for example one that you install with
 `composer global require phalcon/crest`. On a host with docker and no PHP, run
 `up`, `down` and `install` with `./crest`.
 
+On a host with docker and no PHP, one command creates a project, starts it and
+installs it. See "With docker only" in the [README](../README.md#with-docker-only):
+
+    curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
+
 The generated project requires `phalcon/crest` as a dev dependency. The
 commands that work on the project, for example `make:action` and
 `route:list`, need the autoloader and the Phalcon of the project. After
