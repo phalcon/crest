@@ -34,6 +34,31 @@ directory must be in your `PATH`:
 
     composer global require phalcon/crest
 
+### With docker only
+
+On a host with docker and no PHP, one command creates a project, starts it and installs
+it:
+
+    curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
+
+The options of `new` follow the name, for example `--phalcon v6`. `new` asks no questions
+here: the options give the values, else the defaults apply. The project goes into the
+working directory. `--directory` is not supported.
+
+The script runs `crest new` in a one-off `composer:2` container. It writes your user and
+group IDs into the project `.env`, then runs `./crest up` and `./crest install`. Then
+GET / answers on http://localhost:8080/. A v5 project compiles the Phalcon extension in
+`./crest up`. This takes some minutes. On Windows, run it in WSL2.
+
+The script runs on your host. To read it before it runs:
+
+    curl -fsSL https://phalcon.io/crest-setup -o crest-setup.sh
+    less crest-setup.sh
+    sh crest-setup.sh my-app
+
+`https://phalcon.io/crest-setup` points to
+`https://raw.githubusercontent.com/phalcon/crest/master/resources/setup.sh`.
+
 ## Usage
 
 Run `crest` in a project. The commands that work on the project need the project

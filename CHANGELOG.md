@@ -41,6 +41,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added questions to `new` for the values that no option gives (namespace, PHP, Phalcon, runtime). [#28](https://github.com/phalcon/crest/issues/28)
 - Added the options `--runtime=host|docker` and `--service` to `new`: they answer the runtime questions. [#28](https://github.com/phalcon/crest/issues/28)
 - Added the launcher `./crest` to the projects that `new` creates: it runs crest with docker only. `up`, `down` and `install` run docker compose on the host; all other commands run `vendor/bin/crest` in the compose service. [#29](https://github.com/phalcon/crest/issues/29)
+- Added `resources/setup.sh`: one command creates, starts and installs a project with docker only: `curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app`. [#30](https://github.com/phalcon/crest/issues/30)
 
 ### Changed
 
