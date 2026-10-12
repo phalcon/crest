@@ -13,17 +13,22 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command;
 
+use Closure;
 use Crest\Command\NewCommand;
 use Crest\Command\Stub\PublishCommand;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Process\Runner;
 use Crest\Tests\Support\GeneratesInAScratchProject;
+use Crest\Tests\Support\Process\FakeRunner;
+use Crest\Tests\Support\RunsACommandDirectly;
 use FilesystemIterator;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function count;
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
@@ -32,13 +37,17 @@ use function json_decode;
 use function mkdir;
 use function preg_match;
 use function sprintf;
+use function str_replace;
+use function var_export;
 
 use const JSON_THROW_ON_ERROR;
+use const PHP_BINARY;
 use const PHP_EOL;
 
 final class NewCommandTest extends TestCase
 {
     use GeneratesInAScratchProject;
+    use RunsACommandDirectly;
 
     protected function setUp(): void
     {
@@ -69,6 +78,64 @@ final class NewCommandTest extends TestCase
     {
         yield 'v5' => ['v5'];
         yield 'v6' => ['v6'];
+    }
+
+    public function testABadNewKeyStopsBeforeTheFirstCommand(): void
+    {
+        // Entry 1 names a program that does not exist. If it ran, the error
+        // would be 'was not found'. new checks the whole key first. The error
+        // names the stub, because a change to the written crest.php does
+        // nothing.
+        $this->publishSteps([['crest-no-such-program'], 'composer install']);
+
+        $status = $this->runCommand(['my-app']);
+        $target = $this->root . '/my-app';
+
+        $this->assertSame(1, $status);
+        $this->assertSame('Created ' . $target . '/' . PHP_EOL . PHP_EOL, $this->readStdout());
+        $this->assertSame(
+            'crest: ' . $target . "/crest.php: 'new' entry 2 in crest.php must be a list of strings, "
+            . "e.g. ['crest', 'up']; the files in " . $target . '/ stay; fix '
+            . Stub::overridePath($this->root, 'adr', 'project-config') . ' and run new again with --force'
+            . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileExists($target . '/composer.json');
+    }
+
+    public function testACrestPhpThatDoesNotParseStopsAfterTheWrite(): void
+    {
+        // new reads crest.php back for its `new` key. A published copy that
+        // PHP cannot parse stops new here, not in a later command.
+        $override = Stub::overridePath($this->root, 'adr', 'project-config');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents($override, "<?php\n\nreturn [\n");
+
+        $status = $this->runCommand(['my-app']);
+        $target = $this->root . '/my-app';
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            'crest: ' . $target . "/crest.php: Unclosed '[' on line 3; the files in " . $target . '/ stay; fix '
+            . $override . ' and run new again with --force' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileExists($target . '/crest.php');
+    }
+
+    public function testAMissingProgramStopsTheList(): void
+    {
+        $this->publishSteps([['crest-no-such-program']]);
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "crest: 'crest-no-such-program' was not found; install it or add it to the PATH",
+            $this->readStderr()
+        );
+        $this->assertFileExists($this->root . '/my-app/composer.json');
     }
 
     public function testANamespacedRootReachesEveryFile(): void
@@ -370,6 +437,18 @@ final class NewCommandTest extends TestCase
         $this->assertSame("APP_PORT=8080\n", $this->read('.env'));
     }
 
+    public function testAStepRunsForRealAndPassesOnItsStatus(): void
+    {
+        // The kernel creates the command with its default runner, ShellRunner.
+        // The step prints nothing, so the output of the test run stays clean.
+        $this->publishSteps([[PHP_BINARY, '-r', 'exit(3);']]);
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(3, $status);
+        $this->assertStringContainsString('failed with exit status 3', $this->readStderr());
+    }
+
     public function testATargetThatIsAFileIsRefused(): void
     {
         file_put_contents($this->root . '/my-app', 'not a directory');
@@ -393,6 +472,15 @@ final class NewCommandTest extends TestCase
             '# pie install --no-interaction phalcon/cphalcon:^5.18',
             $this->read('resources/docker/Dockerfile')
         );
+    }
+
+    public function testAWordWithASpaceIsShownInQuotes(): void
+    {
+        $this->publishSteps([['php', '-r', 'echo 1;']]);
+
+        $this->runWith(new FakeRunner());
+
+        $this->assertStringContainsString("Running: php -r 'echo 1;'" . PHP_EOL, $this->readStdout());
     }
 
     public function testComposerJsonRequiresTheExtensionByDefault(): void
@@ -424,6 +512,40 @@ final class NewCommandTest extends TestCase
     public function testDefinitionNamesItselfNew(): void
     {
         $this->assertSame('new', (new NewCommand())->define()->getName());
+    }
+
+    public function testEachRunningLineComesBeforeItsCommand(): void
+    {
+        // The output of a step goes directly to the terminal. Thus new must
+        // write the Running: line before the step runs, and no line for a
+        // step after a failure.
+        $this->publishSteps([['composer', 'validate'], ['composer', 'install'], ['crest', 'up']]);
+
+        $runner = new class ($this->readStdout(...)) implements Runner {
+            /** @var list<string> What stdout holds at each call. */
+            public array $seen = [];
+
+            /**
+             * @param Closure(): string $stdout
+             */
+            public function __construct(private readonly Closure $stdout)
+            {
+            }
+
+            public function run(array $command, ?string $directory = null, array $environment = []): int
+            {
+                $this->seen[] = ($this->stdout)();
+
+                return 1 === count($this->seen) ? 0 : 2;
+            }
+        };
+
+        $this->handleDirectly(new NewCommand($runner), ['my-app', '--directory', $this->root]);
+
+        $this->assertCount(2, $runner->seen);
+        $this->assertStringEndsWith('Running: composer validate' . PHP_EOL, $runner->seen[0]);
+        $this->assertStringEndsWith('Running: composer install' . PHP_EOL, $runner->seen[1]);
+        $this->assertStringEndsWith('Running: composer install' . PHP_EOL, $this->readStdout());
     }
 
     public function testEveryProjectFileIsWritten(): void
@@ -461,6 +583,20 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertSame('project', $this->composer()['type']);
+    }
+
+    public function testForceRunsTheListOfTheNewCrestPhp(): void
+    {
+        // The second run overwrites crest.php. new must read the new file,
+        // not the one that the first run has read.
+        $this->runCommand(['my-app']);
+        $this->publishSteps([['composer', 'install']]);
+
+        $runner = new FakeRunner();
+
+        $this->runWith($runner, ['--force']);
+
+        $this->assertSame([[['composer', 'install'], $this->root . '/my-app']], $runner->calls);
     }
 
     public function testForceWritesIntoANonEmptyDirectory(): void
@@ -524,6 +660,18 @@ final class NewCommandTest extends TestCase
         }
 
         $this->assertGreaterThan(0, $scanned);
+    }
+
+    public function testOneCommandIsCountedInTheSingular(): void
+    {
+        $this->publishSteps([['composer', 'install']]);
+
+        $this->runWith(new FakeRunner());
+
+        $this->assertStringEndsWith(
+            "Ran 1 command from the 'new' key of crest.php" . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testSurroundingBackslashesAreDropped(): void
@@ -652,6 +800,24 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
+    public function testTheFirstFailureStopsTheList(): void
+    {
+        $this->publishSteps([['composer', 'validate'], ['composer', 'install'], ['crest', 'up']]);
+
+        $runner = new FakeRunner(0, 2, 0);
+        $status = $this->runWith($runner);
+
+        $this->assertSame(2, $status);
+        $this->assertCount(2, $runner->calls);
+        $this->assertSame(
+            "crest: 'composer install' failed with exit status 2; the files in "
+            . $this->root . '/my-app/ stay' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertStringNotContainsString('Ran ', $this->readStdout());
+        $this->assertFileExists($this->root . '/my-app/composer.json');
+    }
+
     public function testTheFrontControllerIsRendered(): void
     {
         // Asserted whole: this is generated code nobody reviews.
@@ -734,6 +900,33 @@ final class NewCommandTest extends TestCase
         $this->runCommand(['my-app']);
 
         $this->assertSame(0o755, fileperms($this->root . '/my-app/crest') & 0o777);
+    }
+
+    public function testTheNewKeyRunsEachCommandInTheProject(): void
+    {
+        $this->publishSteps([['composer', 'install'], ['composer', 'test']]);
+
+        $runner = new FakeRunner();
+        $status = $this->runWith($runner);
+        $target = $this->root . '/my-app';
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            [
+                [['composer', 'install'], $target],
+                [['composer', 'test'], $target],
+            ],
+            $runner->calls
+        );
+        $this->assertSame([[], []], $runner->environments);
+        $this->assertSame(
+            'Created ' . $target . '/' . PHP_EOL
+            . PHP_EOL
+            . 'Running: composer install' . PHP_EOL
+            . 'Running: composer test' . PHP_EOL
+            . "Ran 2 commands from the 'new' key of crest.php" . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testThePhalconVersionIsCaseInsensitive(): void
@@ -875,6 +1068,34 @@ final class NewCommandTest extends TestCase
         );
     }
 
+    public function testTheWordCrestRunsThisCrest(): void
+    {
+        // The crest that runs new, with the same PHP: the user can have no
+        // crest on the PATH.
+        $this->publishSteps([['crest', 'up', '--build']]);
+
+        $runner = new FakeRunner();
+
+        $this->runWith($runner);
+
+        $this->assertSame(
+            [[[PHP_BINARY, Paths::root() . '/bin/crest', 'up', '--build'], $this->root . '/my-app']],
+            $runner->calls
+        );
+        $this->assertStringContainsString('Running: crest up --build' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testWithoutANewKeyNothingRuns(): void
+    {
+        // The packaged stub has no key: the D01 behavior.
+        $runner = new FakeRunner();
+        $status = $this->runWith($runner);
+
+        $this->assertSame(0, $status);
+        $this->assertSame([], $runner->calls);
+        $this->assertStringContainsString('Nothing runs it yet. With docker:', $this->readStdout());
+    }
+
     public function testWithoutDirectoryTheProjectLandsInTheWorkingDirectory(): void
     {
         // startScratchProject() moved the working directory into the scratch
@@ -898,6 +1119,25 @@ final class NewCommandTest extends TestCase
         return $decoded;
     }
 
+    /**
+     * Publishes the packaged project-config stub with a `new` key, where new
+     * reads its overrides.
+     */
+    private function publishSteps(mixed $steps): void
+    {
+        $override = Stub::overridePath($this->root, 'adr', 'project-config');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents(
+            $override,
+            str_replace(
+                "\n];\n",
+                "\n    'new'       => " . var_export($steps, true) . ",\n];\n",
+                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), 'adr', 'project-config'))
+            )
+        );
+    }
+
     private function read(string $path): string
     {
         return (string) file_get_contents($this->root . '/my-app/' . $path);
@@ -919,5 +1159,18 @@ final class NewCommandTest extends TestCase
     private function runInWorkingDirectory(array $arguments): int
     {
         return $this->runThroughKernel('new', NewCommand::class, $arguments);
+    }
+
+    /**
+     * Runs `new my-app` without the kernel, with a fake runner.
+     *
+     * @param list<string> $options
+     */
+    private function runWith(FakeRunner $runner, array $options = []): int
+    {
+        return $this->handleDirectly(
+            new NewCommand($runner),
+            ['my-app', '--directory', $this->root, ...$options]
+        );
     }
 }
