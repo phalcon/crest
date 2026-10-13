@@ -15,17 +15,24 @@ namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
 
+use function basename;
 use function file_get_contents;
+use function glob;
 use function is_file;
 use function preg_match;
 use function rtrim;
+use function sort;
 use function sprintf;
 use function str_replace;
 
 /**
- * Loads a stub through a two-level chain - project override, then the copy
- * shipped in the package - and substitutes placeholders. Plain string
- * replacement, deliberately not a template engine.
+ * Loads a stub and substitutes placeholders. Plain string replacement,
+ * deliberately not a template engine.
+ *
+ * The lookup checks four files and takes the first that exists: the project
+ * flavor folder, the project shared folder, the packaged flavor folder, the
+ * packaged shared folder. A copy that the project published always wins over
+ * a packaged one; on one level, a flavor stub wins over a shared stub.
  *
  * The static path builders exist so that stub:publish writes exactly where
  * resolve() reads. Nothing outside this class assembles a stub path.
@@ -44,6 +51,13 @@ final class Stub
      * leaves them out.
      */
     public const PROJECT_PREFIX = 'project-';
+
+    /**
+     * The folder of the stubs that all flavors use, in the package and in the
+     * project: a stub that is the same in each flavor, for example a crest
+     * command.
+     */
+    public const SHARED = 'shared';
 
     /**
      * Where a project keeps the stubs it has taken over, relative to its root.
@@ -106,11 +120,64 @@ final class Stub
     }
 
     /**
+     * The folders of one level of the lookup, in their order: the flavor
+     * folder, then the shared folder.
+     *
+     * @return list<string>
+     */
+    private static function folders(string $flavor): array
+    {
+        return [$flavor, self::SHARED];
+    }
+
+    /**
      * Whether the project or the package has the stub.
      */
     public function has(string $flavor, string $name): bool
     {
         return null !== $this->find($flavor, $name);
+    }
+
+    /**
+     * The packaged folder that has the stub: the flavor folder, else the
+     * shared folder. Null when neither has it.
+     */
+    public function packagedFolder(string $flavor, string $name): ?string
+    {
+        foreach (self::folders($flavor) as $folder) {
+            if (true === is_file(self::packagedPath($this->packagedRoot, $folder, $name))) {
+                return $folder;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Every packaged stub of the flavor, name => folder. On the same name, the
+     * flavor folder wins. The flavor stubs come first, then the shared stubs,
+     * each in byte order of the file name: glob() sorts with the collation of
+     * the locale, so its order changes from machine to machine, and sort()
+     * does not. The file name, not the name: `action-view.stub` comes before
+     * `action.stub`, as stub:publish has always listed them.
+     *
+     * @return array<string, string>
+     */
+    public function packagedFolders(string $flavor): array
+    {
+        $folders = [];
+
+        foreach (self::folders($flavor) as $folder) {
+            $paths = glob(self::packagedDirectory($this->packagedRoot, $folder) . '/*.stub') ?: [];
+
+            sort($paths);
+
+            foreach ($paths as $path) {
+                $folders[basename($path, '.stub')] ??= $folder;
+            }
+        }
+
+        return $folders;
     }
 
     /**
@@ -143,21 +210,23 @@ final class Stub
     }
 
     /**
-     * The project override, else the packaged copy. Null when neither
-     * exists.
+     * The project flavor folder, the project shared folder, then the package
+     * (packagedFolder()). Null when no folder has the stub.
      */
     private function find(string $flavor, string $name): ?string
     {
         if (null !== $this->projectRoot) {
-            $override = self::overridePath($this->projectRoot, $flavor, $name);
+            foreach (self::folders($flavor) as $folder) {
+                $override = self::overridePath($this->projectRoot, $folder, $name);
 
-            if (true === is_file($override)) {
-                return $override;
+                if (true === is_file($override)) {
+                    return $override;
+                }
             }
         }
 
-        $packaged = self::packagedPath($this->packagedRoot, $flavor, $name);
+        $folder = $this->packagedFolder($flavor, $name);
 
-        return true === is_file($packaged) ? $packaged : null;
+        return null === $folder ? null : self::packagedPath($this->packagedRoot, $folder, $name);
     }
 }

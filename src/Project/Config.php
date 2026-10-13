@@ -23,6 +23,7 @@ use function in_array;
 use function is_array;
 use function is_file;
 use function is_string;
+use function ksort;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -43,6 +44,14 @@ final class Config implements ProjectContext
      * The error when the root rule finds no crest.php.
      */
     public const MISSING = "no crest.php found; run 'crest init'";
+
+    /**
+     * The default paths that all flavors share: an artifact that is the same
+     * class in each flavor, for example a crest command.
+     */
+    private const SHARED_PATHS = [
+        'command' => Layout::SOURCE . '/Command',
+    ];
 
     /**
      * @param array<string, string> $paths
@@ -67,34 +76,43 @@ final class Config implements ProjectContext
     }
 
     /**
-     * Where each generated artifact lands when crest.php does not say.
+     * Where each generated artifact lands when crest.php does not say: the
+     * shared set, and the set of the flavor over it (the flavor wins on the
+     * same key).
      *
-     * Keyed by flavor rather than shared, because the artifacts themselves are
+     * Keyed by flavor rather than one flat set, because most artifacts are
      * flavor-specific: a provider registers against `Phalcon\Container` under
      * ADR and against DI under MVC, so one flat set would offer every project
-     * directories for artifacts it can never generate.
+     * directories for artifacts it can never generate. An artifact that is the
+     * same class in each flavor is in SHARED_PATHS.
      *
-     * Only ADR is populated. The others get their keys when their generators
-     * land - defaults no command reads would show up in `config:show` as
-     * locations that mean nothing.
+     * Only ADR has a set of its own. The others get their keys when their
+     * generators land - defaults no command reads would show up in
+     * `config:show` as locations that mean nothing.
+     *
+     * The keys are sorted, so crest.php lists them in the same order for each
+     * flavor.
      *
      * @return array<string, string>
      */
     public static function defaultPaths(Flavor $flavor): array
     {
-        return match ($flavor) {
-            Flavor::ADR => [
-                'action'     => Layout::SOURCE . '/Action',
-                // Not an ADR artifact: a crest command is the same class in any
-                // flavor. It sits here because ADR is the only populated set,
-                // and moves to a shared one when cli, mvc and micro arrive.
-                'command'    => Layout::SOURCE . '/Command',
-                'middleware' => Layout::SOURCE . '/Middleware',
-                'provider'   => Layout::SOURCE . '/Provider',
-                'responder'  => Layout::SOURCE . '/Responder',
-            ],
-            Flavor::CLI, Flavor::MVC => [],
-        };
+        $paths = [
+            ...self::SHARED_PATHS,
+            ...match ($flavor) {
+                Flavor::ADR => [
+                    'action'     => Layout::SOURCE . '/Action',
+                    'middleware' => Layout::SOURCE . '/Middleware',
+                    'provider'   => Layout::SOURCE . '/Provider',
+                    'responder'  => Layout::SOURCE . '/Responder',
+                ],
+                Flavor::CLI, Flavor::MVC => [],
+            },
+        ];
+
+        ksort($paths);
+
+        return $paths;
     }
 
     /**

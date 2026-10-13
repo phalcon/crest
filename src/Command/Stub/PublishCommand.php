@@ -24,25 +24,27 @@ use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Flavor;
 
-use function basename;
 use function file_get_contents;
-use function glob;
 use function is_file;
 use function preg_match;
-use function sort;
 use function sprintf;
 use function str_starts_with;
 
 /**
  * Copies packaged stubs into the project so they can be edited.
  *
- * The two-level stub chain has always worked - a file under the project's
- * override directory wins over the packaged one - but nothing told anybody it
- * was there, and guessing the layout is not a reasonable ask. This command is
+ * The stub lookup has always worked - a file under the project's override
+ * directory wins over the packaged one - but nothing told anybody it was
+ * there, and guessing the layout is not a reasonable ask. This command is
  * what makes the mechanism discoverable.
  *
  * Renders nothing, so it is the one generator-adjacent command with no stub of
- * its own and no flavor-specific behavior beyond which directory it reads.
+ * its own and no flavor-specific behavior beyond which directories it reads.
+ *
+ * A shared stub goes into the shared folder of the project. When the flavor
+ * folder of the project has a copy with the same name, that copy wins, and the
+ * command prints a note that names it: an edit of the shared copy has no
+ * effect then.
  */
 final class PublishCommand extends ProjectCommand
 {
@@ -74,20 +76,29 @@ final class PublishCommand extends ProjectCommand
             $flavor = $config->flavor()->value;
         }
 
-        foreach ($this->sources($flavor, $name) as $source) {
-            $target = Stub::overridePath($root, $flavor, basename($source, '.stub'));
+        foreach ($this->sources($flavor, $name) as $stub => $folder) {
+            $target = Stub::overridePath($root, $folder, $stub);
 
             if (true === is_file($target) && false === $force) {
                 $output->line(
                     sprintf('Skipped %s; it exists already, pass --force to overwrite', $target)
                 );
+            } else {
+                ArtifactWriter::write(
+                    $target,
+                    (string) file_get_contents(Stub::packagedPath(Paths::stubs(), $folder, $stub))
+                );
 
-                continue;
+                $output->success(sprintf('Published %s', $target));
             }
 
-            ArtifactWriter::write($target, (string) file_get_contents($source));
+            // A copy in the flavor folder of the project wins over the shared
+            // copy, so an edit of the shared copy has no effect.
+            $winner = Stub::overridePath($root, $flavor, $stub);
 
-            $output->success(sprintf('Published %s', $target));
+            if (Stub::SHARED === $folder && true === is_file($winner)) {
+                $output->line(sprintf('Note: crest uses %s, because the flavor folder comes first', $winner));
+            }
         }
 
         return 0;
@@ -99,16 +110,20 @@ final class PublishCommand extends ProjectCommand
     }
 
     /**
-     * The packaged stubs this run will copy.
+     * The packaged stubs this run will copy, name => packaged folder. A stub
+     * goes into the project folder with the same name, where the lookup finds
+     * it.
      *
-     * Reads the packaged directory rather than going through Stub::resolve():
+     * Reads the package rather than going through Stub::resolve():
      * resolution prefers a project override, and publishing an already-published
      * stub over itself is not a copy anyone asked for.
      *
-     * @return list<string>
+     * @return array<string, string>
      */
     private function sources(string $flavor, string $name): array
     {
+        $packaged = new Stub(Paths::stubs());
+
         if ('' !== $name) {
             // A name is a name, not a path. Without this, `stub:publish
             // ../../elsewhere/thing` resolves and copies a file from outside the
@@ -118,13 +133,10 @@ final class PublishCommand extends ProjectCommand
                 throw new Exception(sprintf("'%s' is not a stub name", $name));
             }
 
-            $single = Stub::packagedPath(Paths::stubs(), $flavor, $name);
+            $folder = $packaged->packagedFolder($flavor, $name)
+                ?? throw new Exception(sprintf("stub '%s/%s' is not packaged", $flavor, $name));
 
-            if (false === is_file($single)) {
-                throw new Exception(sprintf("stub '%s/%s' is not packaged", $flavor, $name));
-            }
-
-            return [$single];
+            return [$name => $folder];
         }
 
         $found = [];
@@ -134,9 +146,7 @@ final class PublishCommand extends ProjectCommand
         // of the framework API and guidance text, and a copy does not get the
         // changes of later releases. Thus a publish with no name leaves both
         // out. A publish by name still copies them.
-        foreach (glob(Stub::packagedDirectory(Paths::stubs(), $flavor) . '/*.stub') ?: [] as $path) {
-            $stub = basename($path);
-
+        foreach ($packaged->packagedFolders($flavor) as $stub => $folder) {
             if (
                 true === str_starts_with($stub, Stub::PROJECT_PREFIX)
                 || true === str_starts_with($stub, Stub::FRAGMENT_PREFIX)
@@ -144,15 +154,7 @@ final class PublishCommand extends ProjectCommand
                 continue;
             }
 
-            $found[] = $path;
-        }
-
-        // glob() sorts with the collation of the locale, so its order changes
-        // from machine to machine. sort() gives byte order everywhere.
-        sort($found);
-
-        if ([] === $found) {
-            throw new Exception(sprintf("no stubs are packaged for the '%s' flavor", $flavor));
+            $found[$stub] = $folder;
         }
 
         return $found;
