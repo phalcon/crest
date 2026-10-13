@@ -19,6 +19,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Bootstrap;
+use Crest\Project\Flavor;
 use Phalcon\Contracts\Container\Service\Collection;
 use Phalcon\Contracts\Container\Service\Enumerable;
 
@@ -63,6 +64,12 @@ final class ListCommand extends ProjectCommand
         $output->table(['SERVICE', 'CLASS', 'RESOLVED'], $rows);
 
         return 0;
+    }
+
+    protected function flavors(): array
+    {
+        // It reads Phalcon\Container. An MVC project uses DI.
+        return [Flavor::ADR];
     }
 
     /**

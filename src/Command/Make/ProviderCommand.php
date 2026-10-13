@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
+use Crest\Project\Flavor;
+
 /**
  * Generates a service provider for the flavor's container.
  *
@@ -37,6 +39,12 @@ final class ProviderCommand extends NamedArtifactCommand
     protected function example(): string
     {
         return 'Cache';
+    }
+
+    protected function flavors(): array
+    {
+        // ADR only, until the MVC provider registers with DI.
+        return [Flavor::ADR];
     }
 
     protected function key(): string

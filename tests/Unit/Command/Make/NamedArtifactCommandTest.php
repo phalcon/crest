@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\NamedArtifactCommand;
 use Crest\Console\Parsing\Definition;
+use Crest\Project\Flavor;
 use PHPUnit\Framework\TestCase;
 
 final class NamedArtifactCommandTest extends TestCase
@@ -61,6 +62,11 @@ final class NamedArtifactCommandTest extends TestCase
             protected function example(): string
             {
                 return 'Blue';
+            }
+
+            protected function flavors(): array
+            {
+                return [Flavor::ADR];
             }
 
             protected function key(): string

@@ -49,6 +49,10 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `bootstrap`, `runtime` and `service` rows to `config:show`. [#42](https://github.com/phalcon/crest/issues/42)
 - Added `Crest\Project\Vendor`: the vendor and bin folders of a project, by the rules of composer. [#34](https://github.com/phalcon/crest/issues/34)
 - Added `--help` to `resources/setup.sh`: it shows the options of `new`. [#42](https://github.com/phalcon/crest/issues/42)
+- Added flavors to the project commands: `Crest\Command\ProjectCommand::flavors()` declares them, and `supports()` is the rule. A command for a different flavor stops with an error that names the flavor. `make:action`, `make:command`, `make:middleware`, `make:provider`, `make:responder`, `route:list`, `container:list` and `event:list` are for ADR projects only. [#44](https://github.com/phalcon/crest/issues/44)
+- Added `Crest\Console\Registry::withDefault()` and `defaultName()`: the command that the kernel runs when the user names none. Crest runs `list`. [#44](https://github.com/phalcon/crest/issues/44)
+- Added an optional filter to `Crest\Console\Registry::descriptions()`: it keeps only the commands that pass it. [#44](https://github.com/phalcon/crest/issues/44)
+- Added `Crest\Project\Config::find()`: the configuration of the project, or null when there is no `crest.php`. `list` reads the project with one walk up. [#44](https://github.com/phalcon/crest/issues/44)
 
 ### Changed
 
@@ -81,6 +85,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the `runtime` key: the host runtime keeps a stated `service`, and `crest install` uses it. A `service` that is not a service name is an error. [#42](https://github.com/phalcon/crest/issues/42)
 - Changed `./crest`: one `crest=` line names the crest of the project, and the crest commands get `CREST_HOST_ROOT`. [#42](https://github.com/phalcon/crest/issues/42)
 - Changed `resources/setup.sh`: the working folder has the same path in the one-off container, so the errors of `new` show host paths. A system folder, for example `/usr`, is refused as the working folder. `APP_PORT` goes into the project `.env`. With rootless docker, it writes `UID=0` and `GID=0`, and does no `chown`. After a failed `up` or `install`, it prints the commands to continue. [#42](https://github.com/phalcon/crest/issues/42)
+- Changed the listing: in a project, `crest` and `crest list` show only the commands for the flavor of the project. `crest --help` shows the help of `list`. An unknown option with no command, and a `crest.php` that is not valid, stop the listing with an error. [#44](https://github.com/phalcon/crest/issues/44)
 
 ### Fixed
 

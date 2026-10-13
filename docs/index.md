@@ -7,7 +7,8 @@ See the [README](../README.md) for installation, usage and configuration.
 ## Commands
 
 Aliases are shown in brackets. Run `crest` with no arguments, or `crest list`,
-for the same listing from the tool itself.
+for the same listing from the tool itself. In a project, the listing shows only
+the commands for the flavor of the project.
 
 | Command | Description |
 |---|---|
@@ -30,8 +31,12 @@ for the same listing from the tool itself.
 | `stub:publish` | copy packaged stubs into the project for editing |
 | `up` | start the project containers |
 
-Only the `adr` flavor has generators. A `cli` or `mvc` project can still run
-`about`, `config:show` and `list`.
+Only the `adr` flavor has generators. These commands are for ADR projects only:
+`make:action`, `make:command`, `make:middleware`, `make:provider`,
+`make:responder`, `route:list`, `container:list` and `event:list`. In a project
+of a different flavor, they stop with an error:
+
+    crest: make:responder does not support the 'mvc' flavor of this project; it supports: adr
 
 ## Creating a project
 

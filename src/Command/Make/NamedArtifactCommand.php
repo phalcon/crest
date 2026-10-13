@@ -26,9 +26,9 @@ use function ucfirst;
 /**
  * Base for a make:* command that writes one class from a user-given name.
  *
- * A subclass gives key(), suffix(), description() and example(). This class
- * declares the `name` argument and the `--force` option, because it reads
- * both. A subclass whose stub needs more values overrides replacements().
+ * A subclass gives key(), suffix(), description(), example() and flavors().
+ * This class declares the `name` argument and the `--force` option, because it
+ * reads both. A subclass whose stub needs more values overrides replacements().
  *
  * What the developer must do to make the class run is in the stub
  * `fragment-guidance-<key>`: this class prints it after "Created" when the

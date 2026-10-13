@@ -37,6 +37,9 @@ use function str_starts_with;
  * Aliases resolve through get()/has() but never appear in all(), so `list`
  * shows one row per command.
  *
+ * withDefault() names the command that runs when the user names none. The
+ * kernel gives it all the tokens.
+ *
  * Ships empty and names no commands: the owning tool seeds it.
  */
 final class Registry
@@ -46,6 +49,8 @@ final class Registry
 
     /** @var array<string, class-string<Command>> */
     private array $commands = [];
+
+    private ?string $default = null;
 
     private bool $discovered = false;
 
@@ -92,27 +97,45 @@ final class Registry
     }
 
     /**
+     * The command that runs when the user names none. Null when the tool
+     * names none: the kernel then prints its own listing.
+     */
+    public function defaultName(): ?string
+    {
+        return $this->default;
+    }
+
+    /**
      * Every canonical name mapped to its description, sorted by name.
      *
      * The one method here that instantiates anything: a description lives on
      * the command's definition, so answering this means constructing each
      * command. Resolution through get()/has() still instantiates nothing.
      *
-     * Lives here rather than in the callers because the kernel prints this
-     * listing when invoked with no arguments and the addressable `list` command
-     * prints the same thing - two copies of the loop that had to be kept in
+     * Lives here rather than in the callers because two callers print this
+     * listing: the kernel, when the tool names no default command, and the
+     * listing command of the tool. Two copies of the loop had to be kept in
      * agreement by hand.
+     *
+     * @param (callable(Command): bool)|null $keep Keeps a command when it gives
+     *                                             true. Null keeps all of them.
      *
      * @return array<string, string>
      */
-    public function descriptions(): array
+    public function descriptions(?callable $keep = null): array
     {
         $commands = $this->all();
         ksort($commands);
 
         $descriptions = [];
         foreach ($commands as $name => $class) {
-            $descriptions[$name] = (new $class())->define()->getDescription();
+            $command = new $class();
+
+            if (null !== $keep && false === $keep($command)) {
+                continue;
+            }
+
+            $descriptions[$name] = $command->define()->getDescription();
         }
 
         return $descriptions;
@@ -132,6 +155,17 @@ final class Registry
     public function has(string $name): bool
     {
         return isset($this->commands[$this->resolve($name)]);
+    }
+
+    /**
+     * Records the command that runs when the user names none. The name is not
+     * checked here: get() reports an unknown name when the kernel runs it.
+     */
+    public function withDefault(string $name): static
+    {
+        $this->default = $name;
+
+        return $this;
     }
 
     /**

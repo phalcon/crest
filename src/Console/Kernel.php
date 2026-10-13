@@ -32,6 +32,9 @@ use const STDOUT;
  * Resolves argv to a command, merges the global options into its definition,
  * binds, runs, and turns console exceptions into clean stderr lines.
  *
+ * With no command, it runs the default command of the registry with all the
+ * tokens. Without a default, it prints its own listing.
+ *
  * Owns no identity: the tool's name, its package and its command set are
  * supplied by the caller.
  */
@@ -137,6 +140,14 @@ final class Kernel
         }
 
         $command = self::command($tokens);
+        $rest    = array_slice($tokens, 1);
+
+        // No command: the tool can name one for this case. It gets all the
+        // tokens, so that its options work, for example --directory.
+        if (null === $command) {
+            $command = $this->registry->defaultName();
+            $rest    = $tokens;
+        }
 
         if (null === $command) {
             $this->listCommands();
@@ -147,7 +158,7 @@ final class Kernel
         $trace = in_array('--trace', $this->beforeLiteral($tokens), true);
 
         try {
-            return $this->run($command, array_slice($tokens, 1));
+            return $this->run($command, $rest);
         } catch (Exception | ParsingException $exception) {
             // Both clusters throw their own type; both are user-facing errors,
             // not bugs, so both render as one clean line.

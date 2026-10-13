@@ -18,6 +18,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Project\Config;
+use Crest\Project\Flavor;
 use Crest\Project\Locator;
 
 use function ksort;
@@ -73,6 +74,11 @@ final class ShowCommand extends ProjectCommand
         $output->table(['PATH', 'LOCATION', 'ORIGIN'], $rows);
 
         return 0;
+    }
+
+    protected function flavors(): array
+    {
+        return Flavor::cases();
     }
 
     private function origin(Config $config, string $key): string

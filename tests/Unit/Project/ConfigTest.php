@@ -254,6 +254,23 @@ final class ConfigTest extends TestCase
         $this->assertSame($this->root . '/crest.php', Config::file($this->root . '/src/Action'));
     }
 
+    public function testFindIsNullWithoutCrestPhp(): void
+    {
+        // This repository has no crest.php above tests/_output.
+        $this->assertNull(Config::find($this->root));
+    }
+
+    public function testFindLoadsTheNearestCrestPhp(): void
+    {
+        $this->writeCrestPhp("['namespace' => 'Found']");
+
+        $config = Config::find($this->root . '/src/Action');
+
+        $this->assertNotNull($config);
+        $this->assertSame($this->root, $config->root());
+        $this->assertSame('Found', $config->namespace());
+    }
+
     public function testFirstDeclarationWinsWhenTwoPsr4DirectoriesTie(): void
     {
         // Equal-length matches: the earlier declaration keeps the win, so the

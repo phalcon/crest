@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Command;
 
 use Crest\Console\Command\Command;
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
@@ -21,6 +22,12 @@ use Crest\Generator\Placement;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Config;
+use Crest\Project\Flavor;
+
+use function array_map;
+use function implode;
+use function in_array;
+use function sprintf;
 
 /**
  * Base for the commands of crest that read the project they run against.
@@ -31,6 +38,10 @@ use Crest\Project\Config;
  * Crest\Project - Crest\Console stays independent of the rest of the tool,
  * which IsolationTest enforces.
  *
+ * Each subclass declares the flavors that it runs in (flavors()). supports()
+ * is the one rule for them: config() stops a command for a different flavor
+ * with it, and `crest list` hides the command with it.
+ *
  * Not for packages: a package that adds commands extends
  * Crest\Console\Command\Command and calls Project::context().
  *
@@ -38,10 +49,48 @@ use Crest\Project\Config;
  */
 abstract class ProjectCommand extends Command
 {
+    /**
+     * Whether this command runs in a project of the flavor. The check in
+     * config() and the listing both use this rule, and nothing else reads
+     * flavors().
+     */
+    final public function supports(Flavor $flavor): bool
+    {
+        return in_array($flavor, $this->flavors(), true);
+    }
+
+    /**
+     * The configuration of the project. A command that does not support the
+     * flavor of the project stops here, before it does any work.
+     */
     protected function config(Input $input): Config
     {
-        return Project::config($input);
+        $config = Project::config($input);
+        $flavor = $config->flavor();
+
+        if (false === $this->supports($flavor)) {
+            throw new Exception(
+                sprintf(
+                    "%s does not support the '%s' flavor of this project; it supports: %s",
+                    $input->command,
+                    $flavor->value,
+                    implode(
+                        ', ',
+                        array_map(static fn (Flavor $supported): string => $supported->value, $this->flavors())
+                    )
+                )
+            );
+        }
+
+        return $config;
     }
+
+    /**
+     * The flavors that this command runs in. Flavor::cases() for all of them.
+     *
+     * @return list<Flavor>
+     */
+    abstract protected function flavors(): array;
 
     /**
      * Where a user-named artifact goes.

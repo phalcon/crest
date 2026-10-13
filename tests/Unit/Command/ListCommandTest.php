@@ -16,21 +16,40 @@ namespace Crest\Tests\Unit\Command;
 use Composer\InstalledVersions;
 use Crest\Command\ListCommand;
 use Crest\Commands;
-use Crest\Console\Input;
+use Crest\Console\Command\Command;
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Console\PackageVersion;
-use Crest\Console\Parsing\Bound;
-use Crest\Tests\Support\CapturesOutput;
 use Crest\Tests\Support\Console\FakeCommand;
+use Crest\Tests\Support\RunsACommandDirectly;
+use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function array_keys;
+use function file_put_contents;
+use function preg_quote;
 use function strpos;
 
 use const PHP_EOL;
 
 final class ListCommandTest extends TestCase
 {
-    use CapturesOutput;
+    use RunsACommandDirectly;
+    use ScratchDirectory;
+
+    /**
+     * The commands that have no MVC or CLI version yet.
+     */
+    private const ADR_ONLY = [
+        'container:list',
+        'event:list',
+        'make:action',
+        'make:command',
+        'make:middleware',
+        'make:provider',
+        'make:responder',
+        'route:list',
+    ];
 
     /**
      * @var array{
@@ -47,6 +66,7 @@ final class ListCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->captureStreams();
+        $this->makeScratchDirectory('list', 'src');
 
         $this->installed = InstalledVersions::getAllRawData()[0];
     }
@@ -56,6 +76,73 @@ final class ListCommandTest extends TestCase
         InstalledVersions::reload($this->installed);
 
         $this->closeStreams();
+        $this->removeScratchDirectory();
+    }
+
+    public function testACliProjectHidesTheAdrOnlyCommands(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'cli']");
+
+        $this->listCommands();
+
+        $output = $this->readStdout();
+
+        foreach (self::ADR_ONLY as $name) {
+            $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
+        }
+
+        $this->assertMatchesRegularExpression($this->row('config:show'), $output);
+    }
+
+    public function testAMissingConfigFileIsAnError(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/missing.php was not found');
+
+        $this->listCommands(['--config', $this->root . '/missing.php']);
+    }
+
+    public function testAnAdrProjectListsEveryCommand(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->listCommands();
+
+        $output = $this->readStdout();
+
+        foreach (array_keys(Commands::registry()->all()) as $name) {
+            $this->assertMatchesRegularExpression($this->row($name), $output);
+        }
+    }
+
+    public function testAnInvalidCrestPhpIsItsError(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'x']");
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("unknown flavor 'x'");
+
+        $this->listCommands();
+    }
+
+    public function testAnMvcProjectHidesTheAdrOnlyCommands(): void
+    {
+        $this->contribute('aaa:first', FakeCommand::class);
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->listCommands();
+
+        $output = $this->readStdout();
+
+        foreach (self::ADR_ONLY as $name) {
+            $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
+        }
+
+        // A command that is not a project command, a package command, and the
+        // project commands for all flavors.
+        foreach (['aaa:first', 'about', 'config:show', 'list', 'new', 'stub:publish'] as $name) {
+            $this->assertMatchesRegularExpression($this->row($name), $output);
+        }
     }
 
     public function testBannerPrecedesTheTable(): void
@@ -85,17 +172,7 @@ final class ListCommandTest extends TestCase
         // seeded one no matter what it is called. Sorting is what puts it back
         // where a reader expects it - and the seeded names are already
         // alphabetical, so this is the only way to prove the sort happens.
-        InstalledVersions::reload([
-            'root'     => $this->installed['root'],
-            'versions' => [
-                'vendor/pkg' => [
-                    'dev_requirement' => false,
-                    'extra'           => [
-                        Commands::KEY => ['commands' => ['aaa:first' => FakeCommand::class]],
-                    ],
-                ],
-            ],
-        ]);
+        $this->contribute('aaa:first', FakeCommand::class);
 
         $this->listCommands();
 
@@ -132,11 +209,58 @@ final class ListCommandTest extends TestCase
         $this->assertStringContainsString('list', $this->readStdout());
     }
 
-    private function listCommands(): int
+    public function testTheConfigOptionNamesTheProject(): void
     {
-        $output = new Output($this->stdout, $this->stderr, false);
-        $input  = new Input('list', new Bound([], [], []));
+        file_put_contents($this->root . '/mvc.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
 
-        return (new ListCommand())->handle($input, $output);
+        $this->listCommands(['--config', $this->root . '/mvc.php']);
+
+        $this->assertDoesNotMatchRegularExpression($this->row('make:action'), $this->readStdout());
+    }
+
+    public function testTheWalkUpFromASubfolderFindsTheFlavor(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->handleDirectly(new ListCommand(), ['--directory', $this->root . '/src']);
+
+        $this->assertDoesNotMatchRegularExpression($this->row('make:action'), $this->readStdout());
+    }
+
+    /**
+     * Makes an installed package contribute one command.
+     *
+     * @param class-string<Command> $class
+     */
+    private function contribute(string $name, string $class): void
+    {
+        InstalledVersions::reload([
+            'root'     => $this->installed['root'],
+            'versions' => [
+                'vendor/pkg' => [
+                    'dev_requirement' => false,
+                    'extra'           => [Commands::KEY => ['commands' => [$name => $class]]],
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Runs `list` for the scratch folder. Without a crest.php there, the walk
+     * up finds none: tests/_output is in /srv, which has no crest.php.
+     *
+     * @param list<string> $tokens
+     */
+    private function listCommands(array $tokens = []): int
+    {
+        return $this->handleDirectly(new ListCommand(), ['--directory', $this->root, ...$tokens]);
+    }
+
+    /**
+     * The row of a command in the table: its name at the start of a line.
+     */
+    private function row(string $name): string
+    {
+        return '/^' . preg_quote($name, '/') . ' /m';
     }
 }

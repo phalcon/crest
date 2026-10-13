@@ -23,6 +23,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\Stub;
+use Crest\Project\Flavor;
 
 use function sprintf;
 use function str_replace;
@@ -134,6 +135,11 @@ final class ActionCommand extends ProjectCommand
         }
 
         return 0;
+    }
+
+    protected function flavors(): array
+    {
+        return [Flavor::ADR];
     }
 
     /**
