@@ -57,6 +57,16 @@ final class KernelTest extends TestCase
         yield 'a command' => [['route:list', '--trace'], 'route:list'];
     }
 
+    public function testAliasReachesTheOutput(): void
+    {
+        $kernel = $this->kernel();
+        $kernel->alias('/srv', '/home/u/app');
+
+        $kernel->handle(['demo', 'fake', '/srv/x']);
+
+        $this->assertSame('hello /home/u/app/x' . PHP_EOL, $this->readStdout());
+    }
+
     public function testAnInteractiveRunAsksTheQuestion(): void
     {
         $this->answers("typed\n");
@@ -228,6 +238,16 @@ final class KernelTest extends TestCase
         $this->asking(['crest', 'ask', '-n']);
 
         $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testTheVersionFlagAfterACommandIsAnUnknownOption(): void
+    {
+        // Only the first token can ask for the version.
+        $status = $this->kernel()->handle(['demo', 'fake', '--version']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame('', $this->readStdout());
+        $this->assertSame("demo: unknown option '--version'" . PHP_EOL, $this->readStderr());
     }
 
     public function testTheVersionFlagsAreDeclaredOnce(): void

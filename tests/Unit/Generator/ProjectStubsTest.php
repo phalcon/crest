@@ -153,6 +153,13 @@ final class ProjectStubsTest extends TestCase
         );
     }
 
+    public function testTheComposeServiceRunsAnInit(): void
+    {
+        // php -S is not PID 1 then, so it stops on the SIGTERM of
+        // `docker compose down`.
+        $this->assertStringContainsString("    init: true\n", $this->render('project-compose'));
+    }
+
     public function testTheDockerfileGetsTheExtensionConstraintFromAPlaceholder(): void
     {
         $rendered = (new Stub(Paths::stubs()))->render(

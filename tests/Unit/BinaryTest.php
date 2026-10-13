@@ -20,6 +20,7 @@ use RuntimeException;
 
 use function fclose;
 use function file_put_contents;
+use function getenv;
 use function is_link;
 use function json_encode;
 use function mkdir;
@@ -105,6 +106,29 @@ final class BinaryTest extends TestCase
         $this->assertSame('project crest: route:list --trace' . PHP_EOL, $stdout);
     }
 
+    public function testTheHostRootShowsInTheErrorsOfACommand(): void
+    {
+        // As in the container of a docker runtime: the working folder is the
+        // project root, and the hand-off gives the host root.
+        [$status, , $stderr] = $this->crest(['init'], null, ['CREST_HOST_ROOT' => '/home/u/app']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame('crest: /home/u/app/crest.php exists; pass --force to overwrite' . PHP_EOL, $stderr);
+    }
+
+    public function testTheHostRootShowsInTheErrorsOfTheHandOff(): void
+    {
+        unlink($this->root . '/vendor/bin/crest');
+
+        [$status, , $stderr] = $this->crest(['route:list'], null, ['CREST_HOST_ROOT' => '/home/u/app']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: /home/u/app has no vendor/bin/crest; run 'crest install' or 'composer install' first" . PHP_EOL,
+            $stderr
+        );
+    }
+
     public function testTheVersionComesFromThisCrest(): void
     {
         [$status, $stdout] = $this->crest(['--version']);
@@ -115,18 +139,21 @@ final class BinaryTest extends TestCase
     }
 
     /**
-     * @param list<string> $arguments
-     * @param string|null  $binary    The crest to run. Null for bin/crest.
+     * @param list<string>          $arguments
+     * @param string|null           $binary      The crest to run. Null for
+     *                                           bin/crest.
+     * @param array<string, string> $environment More variables.
      *
-     * @return array{int, string} The exit status and stdout.
+     * @return array{int, string, string} The exit status, stdout and stderr.
      */
-    private function crest(array $arguments, ?string $binary = null): array
+    private function crest(array $arguments, ?string $binary = null, array $environment = []): array
     {
         $process = proc_open(
             [PHP_BINARY, $binary ?? Paths::root() . '/bin/crest', ...$arguments],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
-            $this->root
+            $this->root,
+            [] === $environment ? null : [...getenv(), ...$environment]
         );
 
         if (false === $process) {
@@ -134,10 +161,11 @@ final class BinaryTest extends TestCase
         }
 
         $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
 
         fclose($pipes[1]);
         fclose($pipes[2]);
 
-        return [proc_close($process), $stdout];
+        return [proc_close($process), $stdout, $stderr];
     }
 }

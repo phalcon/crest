@@ -136,6 +136,22 @@ final class ShowCommandTest extends TestCase
         $this->assertStringContainsString($this->root . '/crest.php', $this->readStdout());
     }
 
+    public function testTheFrontControllerAndTheRuntimeAreShown(): void
+    {
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['bootstrap' => 'App\\\\AppFront', 'runtime' => ['type' => 'docker']];\n"
+        );
+
+        $this->runCommand();
+
+        $output = $this->normalized();
+
+        $this->assertStringContainsString('bootstrap App\\AppFront declared' . PHP_EOL, $output);
+        $this->assertStringContainsString('runtime docker declared' . PHP_EOL, $output);
+        $this->assertStringContainsString('service app default' . PHP_EOL, $output);
+    }
+
     public function testTheWholeReportIsRenderedForADeclaredProject(): void
     {
         // Paths are declared out of alphabetical order, so the listing only
@@ -157,6 +173,9 @@ final class ShowCommandTest extends TestCase
             . 'root ' . $this->root . ' crest.php' . PHP_EOL
             . 'flavor mvc declared' . PHP_EOL
             . 'namespace Shop declared' . PHP_EOL
+            . 'bootstrap none default' . PHP_EOL
+            . 'runtime host default' . PHP_EOL
+            . 'service app default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
@@ -175,6 +194,9 @@ final class ShowCommandTest extends TestCase
             . 'root ' . $this->root . ' crest.php' . PHP_EOL
             . 'flavor adr default' . PHP_EOL
             . 'namespace App default' . PHP_EOL
+            . 'bootstrap none default' . PHP_EOL
+            . 'runtime host default' . PHP_EOL
+            . 'service app default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'action ' . $this->root . '/src/Action default' . PHP_EOL

@@ -109,6 +109,23 @@ final class SurveyTest extends TestCase
         $this->assertSame('web', Survey::settings($this->root)->runtime->service);
     }
 
+    public function testANamespaceOutsideThePsr4MapIsRefused(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'Shop' is not in the psr-4 map of composer.json");
+
+        Survey::folder($this->root, 'Shop');
+    }
+
+    public function testANamespaceThatOnlyStartsLikeAPrefixIsRefused(): void
+    {
+        // A prefix counts only as a whole segment: `Apple` is not under `App`.
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'Apple' is not in the psr-4 map of composer.json");
+
+        Survey::folder($this->root, 'Apple');
+    }
+
     public function testAppWinsWhenItIsNotTheFirstService(): void
     {
         file_put_contents(
@@ -117,6 +134,11 @@ final class SurveyTest extends TestCase
         );
 
         $this->assertSame('app', Survey::settings($this->root)->runtime->service);
+    }
+
+    public function testASubNamespaceHasASubFolder(): void
+    {
+        $this->assertSame('src/Api/V1', Survey::folder($this->root, 'App\\Api\\V1'));
     }
 
     public function testATopLevelKeyAfterTheServicesEndsTheBlock(): void
@@ -219,6 +241,89 @@ final class SurveyTest extends TestCase
         $this->assertSame('App', Survey::settings($this->root)->namespace);
     }
 
+    public function testTheFolderOfAListIsTheFirstFolder(): void
+    {
+        file_put_contents($this->root . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":["src/","lib/"]}}}');
+
+        $this->assertSame('src', Survey::folder($this->root, 'App'));
+    }
+
+    public function testTheFolderOfAPrefixIsItsTarget(): void
+    {
+        $this->assertSame('src', Survey::folder($this->root, 'App'));
+    }
+
+    public function testTheFrontControllerFollowsTheFolder(): void
+    {
+        mkdir($this->root . '/src/Api');
+        file_put_contents($this->root . '/src/Api/AppFront.php', "<?php\n");
+
+        $this->assertSame('App\\Api\\AppFront', Survey::bootstrap($this->root, 'App\\Api', 'src/Api'));
+        $this->assertNull(Survey::bootstrap($this->root, 'App', 'src'));
+    }
+
+    public function testTheLongestPrefixWins(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/', 'App\\Api\\' => 'api/']);
+
+        $this->assertSame('api/V1', Survey::folder($this->root, 'App\\Api\\V1'));
+        $this->assertSame('src/Web', Survey::folder($this->root, 'App\\Web'));
+    }
+
+    public function testTheNamespaceOfAFolder(): void
+    {
+        $this->assertSame('App', Survey::namespaceOf($this->root, 'src'));
+        $this->assertSame('App\\Action', Survey::namespaceOf($this->root, 'src/Action'));
+        $this->assertSame('App\\Api\\V1', Survey::namespaceOf($this->root, 'src/Api/V1'));
+        $this->assertNull(Survey::namespaceOf($this->root, 'srcx/Action'));
+        $this->assertNull(Survey::namespaceOf($this->root, 'lib/Action'));
+    }
+
+    public function testTheNamespaceOfAFolderComesFromTheLongestPsr4Folder(): void
+    {
+        // In both orders of composer.json.
+        $this->writeComposerJson(['App\\' => 'src/', 'Lib\\' => 'src/my-lib/']);
+
+        $this->assertSame('Lib\\Action', Survey::namespaceOf($this->root, 'src/my-lib/Action'));
+
+        $this->writeComposerJson(['Lib\\' => 'src/my-lib/', 'App\\' => 'src/']);
+
+        $this->assertSame('Lib\\Action', Survey::namespaceOf($this->root, 'src/my-lib/Action'));
+    }
+
+    public function testTheNamespaceOfAFolderKeepsLookingAfterAShorterFolder(): void
+    {
+        $this->writeComposerJson([
+            'Lib\\'  => 'src/my-lib/',
+            'App\\'  => 'src/',
+            'Deep\\' => 'src/my-lib/deep/',
+        ]);
+
+        $this->assertSame('Deep\\Action', Survey::namespaceOf($this->root, 'src/my-lib/deep/Action'));
+    }
+
+    public function testTheNamespaceOfAFolderKeepsTheFirstOfTwoEqualFolders(): void
+    {
+        // As Config::namespaceFor() does.
+        $this->writeComposerJson(['App\\' => 'src/', 'Shop\\' => 'src/']);
+
+        $this->assertSame('App\\Action', Survey::namespaceOf($this->root, 'src/Action'));
+    }
+
+    public function testTheNamespaceOfAFolderSkipsAFolderThatDoesNotCoverIt(): void
+    {
+        $this->writeComposerJson(['Lib\\' => 'lib/', 'App\\' => 'src/']);
+
+        $this->assertSame('App\\Action', Survey::namespaceOf($this->root, 'src/Action'));
+    }
+
+    public function testTheNamespaceOfAFolderWithAnEmptyPrefix(): void
+    {
+        $this->writeComposerJson(['' => 'src/']);
+
+        $this->assertSame('Action', Survey::namespaceOf($this->root, 'src/Action'));
+    }
+
     public function testTheNestedKeysOfAServiceAreNotServices(): void
     {
         // `app` here is a key of the web service, not a service.
@@ -245,5 +350,10 @@ final class SurveyTest extends TestCase
             ],
             Survey::settings($this->root)->paths
         );
+    }
+
+    public function testThePathsGoIntoTheFolder(): void
+    {
+        $this->assertSame('lib/Shop/Action', Survey::paths('lib/Shop')['action']);
     }
 }
