@@ -16,6 +16,7 @@ namespace Crest\Project;
 use function file_get_contents;
 use function is_array;
 use function is_file;
+use function is_string;
 use function json_decode;
 
 /**
@@ -25,6 +26,19 @@ use function json_decode;
 final class Manifest
 {
     private const FILENAME = 'composer.json';
+
+    /**
+     * A string in the config section, for example `vendor-dir`. Null when the
+     * file, the section or the key is not there, or the value is not a string.
+     */
+    public static function config(string $root, string $key): ?string
+    {
+        /** @var array{config?: array<string, mixed>} $decoded */
+        $decoded = self::read($root);
+        $value   = $decoded['config'][$key] ?? null;
+
+        return true === is_string($value) ? $value : null;
+    }
 
     /**
      * The psr-4 map of the autoload section. Each prefix has one folder: for a

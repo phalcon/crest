@@ -58,13 +58,18 @@ final class InitCommand extends Command
             throw new Exception(sprintf('%s exists; pass --force to overwrite', $file));
         }
 
-        $proposal = Survey::settings($root);
-        $settings = new Settings(
-            Questions::namespace($output, $proposal->namespace),
-            Questions::bootstrap($output, $proposal->bootstrap),
-            $proposal->paths,
-            Questions::runtime($output, $proposal->runtime)
-        );
+        $proposal  = Survey::settings($root);
+        $namespace = Questions::namespace($output, $proposal->namespace, $root);
+        $folder    = Survey::folder($root, $namespace);
+        $bootstrap = Questions::bootstrap($output, Survey::bootstrap($root, $namespace, $folder));
+        $paths     = [];
+
+        // The proposals follow the namespace answer.
+        foreach (Survey::paths($folder) as $key => $path) {
+            $paths[$key] = Questions::path($output, $root, $key, $path);
+        }
+
+        $settings = new Settings($namespace, $bootstrap, $paths, Questions::runtime($output, $proposal->runtime));
 
         ArtifactWriter::write(
             $file,

@@ -47,12 +47,17 @@ final class ShowCommand extends ProjectCommand
         $output->line('Source: ' . $config->source());
         $output->line();
 
+        $runtime = $config->runtime();
+
         $output->table(
             ['ITEM', 'VALUE', 'ORIGIN'],
             [
                 ['root', $config->root(), Locator::FILENAME],
                 ['flavor', $config->flavor()->value, $this->origin($config, 'flavor')],
                 ['namespace', $config->namespace(), $this->origin($config, 'namespace')],
+                ['bootstrap', $config->bootstrap() ?? 'none', $this->origin($config, 'bootstrap')],
+                ['runtime', $runtime->type, $this->origin($config, 'runtime')],
+                ['service', $runtime->service, $this->origin($config, 'runtime.service')],
             ]
         );
 

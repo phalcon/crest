@@ -23,6 +23,7 @@ use Crest\Process\ShellRunner;
 use Crest\Project\Config;
 use Crest\Project\Manifest;
 use Crest\Project\Runtime;
+use Crest\Project\Vendor;
 use Throwable;
 
 use function array_slice;
@@ -44,15 +45,16 @@ use const STDIN;
  *
  * A global crest loads its own autoloader. The project commands need the
  * autoloader, the Phalcon and the crest version of the project. Thus, in a
- * project, a global crest runs vendor/bin/crest of the project with the same
- * arguments, and returns its exit status.
+ * project, a global crest runs <bin-dir>/crest of the project (by default
+ * vendor/bin/crest, see Vendor) with the same arguments, and returns its exit
+ * status.
  *
  * The project is the folder of crest.php, by the root rule of all commands
  * (Config::file()): the file that --config names, or the nearest crest.php
  * above --directory or the working directory.
  *
  * With a docker runtime in crest.php, the crest of the project runs in its
- * compose service: `docker compose exec <service> vendor/bin/crest`. Thus a
+ * compose service: `docker compose exec <service> <bin-dir>/crest`. Thus a
  * v5 project works on a host without ext-phalcon.
  *
  * The host commands (Commands::HOST) and --version stay in the crest that the
@@ -62,16 +64,17 @@ use const STDIN;
 final class HandOff
 {
     /**
-     * Where composer puts the crest of a project that requires it.
-     */
-    public const BINARY = 'vendor/bin/crest';
-
-    /**
      * The version of the hand-off protocol: Commands::HOST, Commands::ON_HOST
      * and the options of Kernel::paths(). The global crest sends it to the
      * crest of the project in VARIABLE. Change it when one of them changes.
      */
     public const PROTOCOL = 1;
+
+    /**
+     * The environment variable that holds the host root of the project, for
+     * the crest in a container (Output::alias() in bin/crest).
+     */
+    public const ROOT_VARIABLE = 'CREST_HOST_ROOT';
 
     /**
      * The environment variable that holds the protocol of the global crest.
@@ -126,28 +129,42 @@ final class HandOff
             return null;
         }
 
-        $root   = dirname($file);
-        $binary = $root . '/' . self::BINARY;
-
-        if (false === is_file($binary)) {
-            $output->error(Commands::NAME . ': ' . $this->missing($root));
-
-            return 1;
-        }
-
-        if (true === $this->isSelf($root)) {
-            return null;
-        }
+        $root = dirname($file);
 
         try {
-            return $this->pass($file, $root, $binary, $tokens, $paths);
+            // Before any read of crest.php: the crest of the project reads it
+            // in its kernel, and a second require can fail.
+            if (true === $this->isSelf($root)) {
+                return null;
+            }
+
+            return $this->pass($file, $root, $tokens, $paths, $output);
         } catch (Throwable $throwable) {
             // As the kernel does: one crest line, not a PHP trace. A broken
-            // crest.php or a missing docker comes here.
+            // crest.php or composer.json, or a missing docker, comes here.
             $output->error(Commands::NAME . ': ' . $throwable->getMessage());
 
             return 1;
         }
+    }
+
+    /**
+     * The bin folder of the project. For a docker runtime, composer runs in
+     * the container: the environment of this process does not count, and an
+     * absolute folder is outside the bind mount.
+     */
+    private function binDir(string $root, bool $docker): string
+    {
+        $bin = Vendor::binDir($root, false === $docker);
+
+        if (
+            true === $docker
+            && (true === Vendor::isAbsolute($bin) || true === Vendor::isAbsolute(Vendor::vendorDir($root, false)))
+        ) {
+            throw new Exception('the docker runtime needs a relative vendor-dir and bin-dir in composer.json');
+        }
+
+        return $bin;
     }
 
     /**
@@ -207,22 +224,26 @@ final class HandOff
 
     /**
      * `docker compose exec` runs the crest of the project in its service.
-     * The working folder of the service is the project root (A7).
+     * The working folder of the service is the project root (A7). The crest
+     * there gets the host root, and shows host paths.
      *
+     * @param string       $binary The crest of the project, relative to the
+     *                             root.
      * @param list<string> $tokens
      *
      * @return non-empty-list<string>
      */
-    private function inContainer(string $service, array $tokens, Extracted $paths): array
+    private function inContainer(string $service, string $root, string $binary, array $tokens, Extracted $paths): array
     {
         return [
             'docker',
             'compose',
             ...Compose::exec(
                 $service,
-                [self::BINARY, ...$this->forContainer($tokens, $paths)],
+                [$binary, ...$this->forContainer($tokens, $paths)],
                 $this->terminal,
-                $this->environment()
+                // The full path: the root can be '.' with a relative --config.
+                [...$this->environment(), self::ROOT_VARIABLE => (string) realpath($root)]
             ),
         ];
     }
@@ -247,14 +268,14 @@ final class HandOff
 
     /**
      * The crest of the project is this crest: it runs with the autoloader in
-     * <root>/vendor. Without this check, the crest of the project passes the
-     * call to itself for ever. The package folder cannot tell: with a
-     * symlinked path repository, a global crest and the crest of the project
-     * have the same package folder.
+     * the vendor folder of the root. Without this check, the crest of the
+     * project passes the call to itself for ever. The package folder cannot
+     * tell: with a symlinked path repository, a global crest and the crest of
+     * the project have the same package folder.
      */
     private function isSelf(string $root): bool
     {
-        return realpath($root . '/vendor') === realpath($this->vendor);
+        return realpath(Vendor::path($root, Vendor::vendorDir($root, true))) === realpath($this->vendor);
     }
 
     /**
@@ -284,19 +305,15 @@ final class HandOff
     }
 
     /**
-     * The project has crest.php but no vendor/bin/crest, so no crest can run
-     * a project command there. A project that requires crest has no vendor/
-     * yet. Another project must require crest first: this crest does not have
-     * the autoloader and the Phalcon of the project.
+     * The project has crest.php but no <bin-dir>/crest, so no crest can run a
+     * project command there. A project that requires crest has no vendor
+     * folder yet. Another project must require crest first: this crest does
+     * not have the autoloader and the Phalcon of the project.
      */
-    private function missing(string $root): string
+    private function missing(string $root, string $binary): string
     {
         if (true === Manifest::requires($root, Commands::PACKAGE)) {
-            return sprintf(
-                "%s has no %s; run 'crest install' or 'composer install' first",
-                $root,
-                self::BINARY
-            );
+            return sprintf("%s has no %s; run 'crest install' or 'composer install' first", $root, $binary);
         }
 
         return sprintf(
@@ -309,22 +326,33 @@ final class HandOff
 
     /**
      * Runs the crest of the project: in its compose service for a docker
-     * runtime, else with the PHP of the host. `serve` always runs on the
-     * host (Commands::ON_HOST).
+     * runtime, else with the PHP of the host. `serve` always runs on the host
+     * (Commands::ON_HOST).
      *
      * Only the runtime key is read (Runtime::fromFile()).
      *
      * @param list<string> $tokens
      */
-    private function pass(string $file, string $root, string $binary, array $tokens, Extracted $paths): int
+    private function pass(string $file, string $root, array $tokens, Extracted $paths, Output $output): int
     {
         $runtime = Runtime::fromFile($file);
+        $docker  = true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', Commands::ON_HOST, true);
+        $binary  = $this->binDir($root, $docker) . '/crest';
 
-        if (true === $runtime->isDocker() && false === in_array($tokens[0] ?? '', Commands::ON_HOST, true)) {
-            return $this->runner->run($this->inContainer($runtime->service, $tokens, $paths), $root);
+        if (false === is_file(Vendor::path($root, $binary))) {
+            $output->error(Commands::NAME . ': ' . $this->missing($root, $binary));
+
+            return 1;
         }
 
-        return $this->runner->run([PHP_BINARY, $binary, ...$tokens], null, $this->environment());
+        if (true === $docker) {
+            return $this->runner->run(
+                $this->inContainer($runtime->service, $root, $binary, $tokens, $paths),
+                $root
+            );
+        }
+
+        return $this->runner->run([PHP_BINARY, Vendor::path($root, $binary), ...$tokens], null, $this->environment());
     }
 
     /**
