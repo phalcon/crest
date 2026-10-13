@@ -124,16 +124,18 @@ final class ProjectCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertMatchesRegularExpression('/^flavor +mvc +declared$/m', $stdout);
         $this->assertMatchesRegularExpression('#^command +\S*/src/Command +default$#m', $stdout);
+        $this->assertMatchesRegularExpression('#^controller +\S*/src/Controllers +default$#m', $stdout);
         $this->assertSame('', $this->readStderr());
     }
 
     public function testStubPublishRunsInAnMvcProject(): void
     {
-        // MVC has no stubs of its own yet. The shared folder gives it
+        // MVC has stubs of its own, and the shared folder gives it
         // command.stub.
         $status = $this->runProjectCommand('stub:publish', PublishCommand::class, []);
 
         $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'controller'));
         $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
         $this->assertSame('', $this->readStderr());
     }

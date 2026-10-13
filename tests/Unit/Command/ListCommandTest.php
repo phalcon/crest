@@ -27,6 +27,7 @@ use PHPUnit\Framework\TestCase;
 
 use function array_keys;
 use function file_put_contents;
+use function in_array;
 use function preg_quote;
 use function strpos;
 
@@ -49,6 +50,11 @@ final class ListCommandTest extends TestCase
         'make:responder',
         'route:list',
     ];
+
+    /**
+     * The commands that have no ADR or CLI version.
+     */
+    private const MVC_ONLY = ['make:controller'];
 
     /**
      * @var array{
@@ -78,7 +84,7 @@ final class ListCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testACliProjectHidesTheAdrOnlyCommands(): void
+    public function testACliProjectHidesTheAdrAndMvcCommands(): void
     {
         $this->writeCrestPhp("['flavor' => 'cli']");
 
@@ -86,7 +92,7 @@ final class ListCommandTest extends TestCase
 
         $output = $this->readStdout();
 
-        foreach (self::ADR_ONLY as $name) {
+        foreach ([...self::ADR_ONLY, ...self::MVC_ONLY] as $name) {
             $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
         }
 
@@ -101,7 +107,7 @@ final class ListCommandTest extends TestCase
         $this->listCommands(['--config', $this->root . '/missing.php']);
     }
 
-    public function testAnAdrProjectListsEveryCommand(): void
+    public function testAnAdrProjectListsEveryCommandButTheMvcOnes(): void
     {
         $this->writeCrestPhp();
 
@@ -110,6 +116,12 @@ final class ListCommandTest extends TestCase
         $output = $this->readStdout();
 
         foreach (array_keys(Commands::registry()->all()) as $name) {
+            if (true === in_array($name, self::MVC_ONLY, true)) {
+                $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
+
+                continue;
+            }
+
             $this->assertMatchesRegularExpression($this->row($name), $output);
         }
     }
@@ -137,9 +149,20 @@ final class ListCommandTest extends TestCase
             $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
         }
 
-        // A command that is not a project command, a package command, and the
-        // project commands for all flavors.
-        foreach (['aaa:first', 'about', 'config:show', 'list', 'make:command', 'new', 'stub:publish'] as $name) {
+        // A command that is not a project command, a package command, the
+        // project commands for all flavors, and the MVC commands.
+        $shown = [
+            'aaa:first',
+            'about',
+            'config:show',
+            'list',
+            'make:command',
+            'new',
+            'stub:publish',
+            ...self::MVC_ONLY,
+        ];
+
+        foreach ($shown as $name) {
             $this->assertMatchesRegularExpression($this->row($name), $output);
         }
     }
