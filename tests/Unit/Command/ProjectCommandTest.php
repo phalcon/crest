@@ -17,13 +17,13 @@ use Crest\Command\Config\ShowCommand;
 use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
 use Crest\Command\Make\ActionCommand;
-use Crest\Command\Make\CommandCommand;
 use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Command\Make\ResponderCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
 use Crest\Command\Stub\PublishCommand;
 use Crest\Console\Command\Command;
+use Crest\Generator\Stub;
 use Crest\Project\Flavor;
 use Crest\Tests\Support\Command\FlavoredCommand;
 use Crest\Tests\Support\GeneratesInAScratchProject;
@@ -67,7 +67,6 @@ final class ProjectCommandTest extends TestCase
         yield 'container:list' => ['container:list', ContainerListCommand::class, []];
         yield 'event:list' => ['event:list', EventListCommand::class, []];
         yield 'make:action' => ['make:action', ActionCommand::class, ['GET', '/albums']];
-        yield 'make:command' => ['make:command', CommandCommand::class, ['Greet']];
         yield 'make:middleware' => ['make:middleware', MiddlewareCommand::class, ['Auth']];
         yield 'make:provider' => ['make:provider', ProviderCommand::class, ['Cache']];
         yield 'make:responder' => ['make:responder', ResponderCommand::class, ['Album']];
@@ -120,19 +119,23 @@ final class ProjectCommandTest extends TestCase
     {
         $status = $this->runProjectCommand('config:show', ShowCommand::class, []);
 
+        $stdout = $this->readStdout();
+
         $this->assertSame(0, $status);
-        $this->assertMatchesRegularExpression('/^flavor +mvc +declared$/m', $this->readStdout());
+        $this->assertMatchesRegularExpression('/^flavor +mvc +declared$/m', $stdout);
+        $this->assertMatchesRegularExpression('#^command +\S*/src/Command +default$#m', $stdout);
         $this->assertSame('', $this->readStderr());
     }
 
-    public function testStubPublishPassesTheCheckInAnMvcProject(): void
+    public function testStubPublishRunsInAnMvcProject(): void
     {
-        // No stubs are packaged for mvc yet. The error is that one, not the
-        // flavor check.
+        // MVC has no stubs of its own yet. The shared folder gives it
+        // command.stub.
         $status = $this->runProjectCommand('stub:publish', PublishCommand::class, []);
 
-        $this->assertSame(1, $status);
-        $this->assertSame("crest: no stubs are packaged for the 'mvc' flavor" . PHP_EOL, $this->readStderr());
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
+        $this->assertSame('', $this->readStderr());
     }
 
     public function testSupportsIsTrueOnlyForTheDeclaredFlavors(): void

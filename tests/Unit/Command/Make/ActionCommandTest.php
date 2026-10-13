@@ -72,7 +72,7 @@ final class ActionCommandTest extends TestCase
 
     public function testANamedStubIsRenderedInsteadOfTheResponderDefault(): void
     {
-        // Resolved through the same two-level chain as everything else, so a
+        // Resolved through the same stub lookup as everything else, so a
         // project that has run stub:publish can generate from its own copy.
         $this->publishStub('minimal', "<?php\n\n// {{ namespace }}\\{{ class }}\n");
 

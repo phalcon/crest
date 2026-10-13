@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command\Stub;
 
+use Crest\Command\Make\CommandCommand;
 use Crest\Command\Stub\PublishCommand;
 use Crest\Generator\Stub;
 use Crest\Paths;
@@ -47,19 +48,17 @@ final class PublishCommandTest extends TestCase
         $this->endScratchProject();
     }
 
-    public function testAFlavorWithNoPackagedStubsIsReported(): void
+    public function testACliProjectPublishesTheSharedStubs(): void
     {
-        // cli ships nothing yet. Publishing silently and printing no lines would
-        // read as success.
+        // cli has no stubs of its own yet. The shared folder still gives it
+        // command.stub.
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
 
         $status = $this->runCommand([]);
 
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString(
-            "no stubs are packaged for the 'cli' flavor",
-            $this->readStderr()
-        );
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
+        $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs/cli');
     }
 
     public function testAnAlreadyPublishedStubIsSkippedNotOverwritten(): void
@@ -79,6 +78,9 @@ final class PublishCommandTest extends TestCase
             'Skipped ' . $published . '; it exists already, pass --force to overwrite',
             $this->readStdout()
         );
+        // The note is only for a shared copy. A flavor copy is the one that
+        // the lookup uses.
+        $this->assertStringNotContainsString('Note:', $this->readStdout());
     }
 
     public function testAProjectStubGoesIntoTheDirectoryOptionAndNotAParentProject(): void
@@ -144,6 +146,24 @@ final class PublishCommandTest extends TestCase
         $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
     }
 
+    public function testAPublishedSharedStubChangesTheOutputOfMakeCommand(): void
+    {
+        $this->runCommand(['command']);
+
+        file_put_contents(
+            Stub::overridePath($this->root, Stub::SHARED, 'command'),
+            "<?php\n// edited {{ class }}\n"
+        );
+
+        $status = $this->runProjectCommand('make:command', CommandCommand::class, ['Greet']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            "<?php\n// edited GreetCommand\n",
+            (string) file_get_contents($this->root . '/src/Command/GreetCommand.php')
+        );
+    }
+
     public function testAPublishedStubIsAByteForByteCopy(): void
     {
         $this->runCommand(['action']);
@@ -172,6 +192,67 @@ final class PublishCommandTest extends TestCase
         $this->assertSame('edited', $stub->render('adr', 'action', []));
     }
 
+    public function testASharedCopyNamesTheFlavorCopyThatWins(): void
+    {
+        // A project that published command.stub before it moved to the shared
+        // folder has a copy in adr/. That copy wins, so an edit of the new
+        // shared copy has no effect. The note tells the user.
+        mkdir($this->root . '/resources/stubs/adr', 0o775, true);
+        file_put_contents(Stub::overridePath($this->root, 'adr', 'command'), 'old copy');
+
+        $status = $this->runCommand(['command']);
+
+        $stdout = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'Published ' . Stub::overridePath($this->root, Stub::SHARED, 'command'),
+            $stdout
+        );
+        $this->assertStringContainsString(
+            'Note: crest uses ' . Stub::overridePath($this->root, 'adr', 'command')
+            . ', because the flavor folder comes first',
+            $stdout
+        );
+    }
+
+    public function testASharedFragmentMayBePublishedByName(): void
+    {
+        $status = $this->runCommand(['fragment-guidance-command']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'fragment-guidance-command'));
+    }
+
+    public function testASharedStubIsPublishedByNameIntoTheSharedFolder(): void
+    {
+        $status = $this->runCommand(['command']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'command'));
+        $this->assertStringNotContainsString('Note:', $this->readStdout());
+    }
+
+    public function testASharedStubIsSkippedNotOverwritten(): void
+    {
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
+        $this->runCommand([]);
+
+        $published = Stub::overridePath($this->root, Stub::SHARED, 'command');
+        file_put_contents($published, 'edited');
+
+        $status = $this->runCommand([]);
+
+        $this->assertSame(0, $status);
+        $this->assertSame('edited', (string) file_get_contents($published));
+        $this->assertStringContainsString(
+            'Skipped ' . $published . '; it exists already, pass --force to overwrite',
+            $this->readStdout()
+        );
+    }
+
     public function testASingleStubMayBePublishedOnItsOwn(): void
     {
         $status = $this->runCommand(['action']);
@@ -179,6 +260,29 @@ final class PublishCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'action'));
         $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'responder'));
+    }
+
+    public function testASkippedSharedCopyAlsoNamesTheFlavorCopyThatWins(): void
+    {
+        mkdir($this->root . '/resources/stubs/adr', 0o775, true);
+        mkdir($this->root . '/resources/stubs/shared', 0o775, true);
+        file_put_contents(Stub::overridePath($this->root, 'adr', 'command'), 'old copy');
+        file_put_contents(Stub::overridePath($this->root, Stub::SHARED, 'command'), 'shared copy');
+
+        $status = $this->runCommand(['command']);
+
+        $stdout = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'Skipped ' . Stub::overridePath($this->root, Stub::SHARED, 'command'),
+            $stdout
+        );
+        $this->assertStringContainsString(
+            'Note: crest uses ' . Stub::overridePath($this->root, 'adr', 'command')
+            . ', because the flavor folder comes first',
+            $stdout
+        );
     }
 
     public function testAStubNameThatIsAPathIsRejected(): void
@@ -204,6 +308,17 @@ final class PublishCommandTest extends TestCase
         $this->assertStringContainsString("'action\n' is not a stub name", $this->readStderr());
     }
 
+    public function testAStubOfAnotherFlavorIsNotPackagedForThisOne(): void
+    {
+        // action is an ADR stub. An MVC project must not get a copy of it.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
+        $status = $this->runCommand(['action']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("stub 'mvc/action' is not packaged", $this->readStderr());
+    }
+
     public function testAStubThatIsNotPackagedIsReported(): void
     {
         $status = $this->runCommand(['nope']);
@@ -226,9 +341,9 @@ final class PublishCommandTest extends TestCase
 
         $this->assertSame(0, $status);
 
-        foreach ($this->packagedStubs() as $name) {
+        foreach ($this->packagedStubs() as $name => $folder) {
             $this->assertFileExists(
-                Stub::overridePath($this->root, 'adr', $name)
+                Stub::overridePath($this->root, $folder, $name)
             );
         }
     }
@@ -254,16 +369,20 @@ final class PublishCommandTest extends TestCase
         // A fragment holds a piece of the framework API or guidance text. A
         // publish with no name must not freeze copies of them in a project
         // without notice. A publish by name still copies one.
-        $fragments = glob(Paths::stubs() . '/adr/' . Stub::FRAGMENT_PREFIX . '*.stub') ?: [];
+        $fragments = [];
 
-        $this->assertNotEmpty($fragments);
+        foreach ((new Stub(Paths::stubs()))->packagedFolders('adr') as $name => $folder) {
+            if (true === str_starts_with($name, Stub::FRAGMENT_PREFIX)) {
+                $fragments[$name] = $folder;
+            }
+        }
+
+        $this->assertArrayHasKey('fragment-guidance-command', $fragments);
 
         $this->runCommand([]);
 
-        foreach ($fragments as $path) {
-            $this->assertFileDoesNotExist(
-                Stub::overridePath($this->root, 'adr', basename($path, '.stub'))
-            );
+        foreach ($fragments as $name => $folder) {
+            $this->assertFileDoesNotExist(Stub::overridePath($this->root, $folder, $name));
         }
     }
 
@@ -298,14 +417,14 @@ final class PublishCommandTest extends TestCase
     {
         // A skipped stub must not end the run. `action-view` sorts before
         // `action`, so with the loop breaking instead of continuing everything
-        // from `command` onwards would silently never be published.
+        // from `middleware` onwards would silently never be published.
         $this->runCommand(['action']);
 
         $this->runCommand([]);
 
-        foreach ($this->packagedStubs() as $name) {
+        foreach ($this->packagedStubs() as $name => $folder) {
             $this->assertFileExists(
-                Stub::overridePath($this->root, 'adr', $name)
+                Stub::overridePath($this->root, $folder, $name)
             );
         }
     }
@@ -327,9 +446,10 @@ final class PublishCommandTest extends TestCase
             setlocale(LC_COLLATE, $previous);
         }
 
-        // Whole file names: without `.stub`, `action` sorts before
-        // `action-view` in byte order too, and the test would prove nothing.
-        preg_match_all('#/([a-z-]+\.stub)$#m', $this->readStdout(), $matches);
+        // The folder and the whole file name: without `.stub`, `action` sorts
+        // before `action-view` in byte order too, and the test would prove
+        // nothing. The ADR stubs come first, then the shared ones.
+        preg_match_all('#/((?:adr|shared)/[a-z-]+\.stub)$#m', $this->readStdout(), $matches);
 
         $published = $matches[1];
         $sorted    = $published;
@@ -340,18 +460,17 @@ final class PublishCommandTest extends TestCase
     }
 
     /**
-     * The stubs a publish with no name copies: every packaged ADR stub except
-     * the project stubs and the fragment stubs.
+     * The stubs a publish with no name copies in an ADR project, name =>
+     * packaged folder: every ADR and shared stub, the ADR one on the same name,
+     * except the project stubs and the fragment stubs.
      *
-     * @return list<string>
+     * @return array<string, string>
      */
     private function packagedStubs(): array
     {
-        $names = [];
+        $stubs = [];
 
-        foreach (glob(Paths::stubs() . '/adr/*.stub') ?: [] as $path) {
-            $name = basename($path, '.stub');
-
+        foreach ((new Stub(Paths::stubs()))->packagedFolders('adr') as $name => $folder) {
             if (
                 true === str_starts_with($name, Stub::PROJECT_PREFIX)
                 || true === str_starts_with($name, Stub::FRAGMENT_PREFIX)
@@ -359,10 +478,10 @@ final class PublishCommandTest extends TestCase
                 continue;
             }
 
-            $names[] = $name;
+            $stubs[$name] = $folder;
         }
 
-        return $names;
+        return $stubs;
     }
 
     /**

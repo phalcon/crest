@@ -31,11 +31,10 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionNamedType;
 
-use function basename;
+use function array_keys;
 use function class_exists;
 use function enum_exists;
 use function extension_loaded;
-use function glob;
 use function interface_exists;
 use function method_exists;
 use function preg_match_all;
@@ -90,12 +89,10 @@ final class StubContractsTest extends TestCase
      */
     public static function fragmentStubs(): iterable
     {
-        $directory = Stub::packagedDirectory(Paths::stubs(), self::FLAVOR);
-
-        foreach (glob($directory . '/' . Stub::FRAGMENT_PREFIX . '*.stub') ?: [] as $file) {
-            $name = basename($file, '.stub');
-
-            yield $name => [$name];
+        foreach (self::packagedNames() as $name) {
+            if (true === str_starts_with($name, Stub::FRAGMENT_PREFIX)) {
+                yield $name => [$name];
+            }
         }
     }
 
@@ -130,11 +127,7 @@ final class StubContractsTest extends TestCase
      */
     public static function packagedStubs(): iterable
     {
-        $directory = Stub::packagedDirectory(Paths::stubs(), self::FLAVOR);
-
-        foreach (glob($directory . '/*.stub') ?: [] as $file) {
-            $name = basename($file, '.stub');
-
+        foreach (self::packagedNames() as $name) {
             // The project stubs render a whole application, not one artifact
             // class. ProjectStubsTest holds their contract. A fragment is not
             // a whole class: fragmentStubs() holds its contract.
@@ -147,6 +140,17 @@ final class StubContractsTest extends TestCase
 
             yield $name => [$name];
         }
+    }
+
+    /**
+     * Every packaged stub that an ADR project renders: the ADR folder and the
+     * shared folder, as the lookup sees them.
+     *
+     * @return list<string>
+     */
+    private static function packagedNames(): array
+    {
+        return array_keys((new Stub(Paths::stubs()))->packagedFolders(self::FLAVOR));
     }
 
     /**
