@@ -57,13 +57,13 @@ final class ListCommand extends Command
      */
     private function keep(Input $input): ?callable
     {
-        $file = Config::file($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'));
+        $config = Config::find($input->optionStringOrNull('directory'), $input->optionStringOrNull('config'));
 
-        if (null === $file) {
+        if (null === $config) {
             return null;
         }
 
-        $flavor = Project::config($input)->flavor();
+        $flavor = $config->flavor();
 
         return static fn (Command $command): bool => false === $command instanceof ProjectCommand
             || true === $command->supports($flavor);

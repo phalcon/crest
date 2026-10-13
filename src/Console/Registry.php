@@ -112,9 +112,9 @@ final class Registry
      * the command's definition, so answering this means constructing each
      * command. Resolution through get()/has() still instantiates nothing.
      *
-     * Lives here rather than in the callers because the kernel prints this
-     * listing when invoked with no arguments and the addressable `list` command
-     * prints the same thing - two copies of the loop that had to be kept in
+     * Lives here rather than in the callers because two callers print this
+     * listing: the kernel, when the tool names no default command, and the
+     * listing command of the tool. Two copies of the loop had to be kept in
      * agreement by hand.
      *
      * @param (callable(Command): bool)|null $keep Keeps a command when it gives

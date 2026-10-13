@@ -98,6 +98,9 @@ final class Config implements ProjectContext
     }
 
     /**
+     * The configuration that find() loads. No crest.php stops the command
+     * with the crest init hint.
+     *
      * @param string|null $directory  Where the walk up starts. Null or empty
      *                                for the working directory.
      * @param string|null $configFile An explicit crest.php, instead of the
@@ -105,12 +108,7 @@ final class Config implements ProjectContext
      */
     public static function discover(?string $directory = null, ?string $configFile = null): self
     {
-        $file = self::required($directory, $configFile);
-
-        /** @var array<string, mixed> $declared */
-        $declared = require $file;
-
-        return self::fromArray($declared, dirname($file), $file);
+        return self::find($directory, $configFile) ?? throw new Exception(self::MISSING);
     }
 
     /**
@@ -131,6 +129,30 @@ final class Config implements ProjectContext
         }
 
         return Locator::locate(Locator::start($directory));
+    }
+
+    /**
+     * The configuration of the crest.php that file() finds, or null when
+     * there is none. A caller that must know if a project exists, and then
+     * read it, walks up one time only.
+     *
+     * @param string|null $directory  Where the walk up starts. Null or empty
+     *                                for the working directory.
+     * @param string|null $configFile An explicit crest.php, instead of the
+     *                                walk up. Null or empty for none.
+     */
+    public static function find(?string $directory = null, ?string $configFile = null): ?self
+    {
+        $file = self::file($directory, $configFile);
+
+        if (null === $file) {
+            return null;
+        }
+
+        /** @var array<string, mixed> $declared */
+        $declared = require $file;
+
+        return self::fromArray($declared, dirname($file), $file);
     }
 
     /**
