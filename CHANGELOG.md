@@ -44,6 +44,11 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `resources/setup.sh`: one command creates, starts and installs a project with docker only: `curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app`. [#30](https://github.com/phalcon/crest/issues/30)
 - Added the `new` key to `crest.php`: the commands that `new` runs in the project after it writes the files, in order, for example `[['crest', 'up'], ['crest', 'install']]`. Add it to a published `project-config` stub. The first command that fails stops the list. Without the key, `new` runs nothing. [#32](https://github.com/phalcon/crest/issues/32)
 - Added `Crest\Project\Steps`: reads and checks the `new` key. [#32](https://github.com/phalcon/crest/issues/32)
+- Added `Crest\Console\Output::alias()` and `Crest\Console\Kernel::alias()`: show a folder as another folder in the output. In a container, crest shows the host paths of the project: the hand-off and `./crest` give it `CREST_HOST_ROOT`. [#42](https://github.com/phalcon/crest/issues/42)
+- Added the path questions to `init`: a folder for each path, with a note if it exists. An answer must be in a psr-4 folder, and its folder names must give a usable namespace. A leading `./` is removed. The answer `none` gives no front controller. [#42](https://github.com/phalcon/crest/issues/42)
+- Added the `bootstrap`, `runtime` and `service` rows to `config:show`. [#42](https://github.com/phalcon/crest/issues/42)
+- Added `Crest\Project\Vendor`: the vendor and bin folders of a project, by the rules of composer. [#34](https://github.com/phalcon/crest/issues/34)
+- Added `--help` to `resources/setup.sh`: it shows the options of `new`. [#42](https://github.com/phalcon/crest/issues/42)
 
 ### Changed
 
@@ -70,6 +75,12 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the `project-config` stub: its placeholders are `namespace`, `bootstrap`, `paths` and `runtime`. `bootstrap` and `paths` give whole lines. A copy that was published before this change stops `new` and `init`; publish it again. [#28](https://github.com/phalcon/crest/issues/28)
 - Reserved the global option `--no-interaction` (`-n`). A contributed command that declares either one fails when it runs. [#28](https://github.com/phalcon/crest/issues/28)
 - Changed `new`: it takes an optional `Runner`. [#32](https://github.com/phalcon/crest/issues/32)
+- Changed the compose file of `new`: `init: true`, so `docker compose down` stops the container at once. For an existing project, add `init: true` to the service. [#42](https://github.com/phalcon/crest/issues/42)
+- Changed the hand-off and `serve`: they use `vendor-dir` and `bin-dir` of `composer.json`, and `COMPOSER_VENDOR_DIR` and `COMPOSER_BIN_DIR`. The hand-off runs `<bin-dir>/crest`. A custom `vendor-dir` or `bin-dir` needs this version both as the global crest and as the crest of the project: an older crest looks only for `vendor/bin/crest`. [#34](https://github.com/phalcon/crest/issues/34)
+- Changed `init`: the namespace must be in the psr-4 map of `composer.json`, and the other proposals follow it. [#42](https://github.com/phalcon/crest/issues/42)
+- Changed the `runtime` key: the host runtime keeps a stated `service`, and `crest install` uses it. A `service` that is not a service name is an error. [#42](https://github.com/phalcon/crest/issues/42)
+- Changed `./crest`: one `crest=` line names the crest of the project, and the crest commands get `CREST_HOST_ROOT`. [#42](https://github.com/phalcon/crest/issues/42)
+- Changed `resources/setup.sh`: the working folder has the same path in the one-off container, so the errors of `new` show host paths. A system folder, for example `/usr`, is refused as the working folder. `APP_PORT` goes into the project `.env`. With rootless docker, it writes `UID=0` and `GID=0`, and does no `chown`. After a failed `up` or `install`, it prints the commands to continue. [#42](https://github.com/phalcon/crest/issues/42)
 
 ### Fixed
 
@@ -80,6 +91,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `container:list` and `event:list` type against Phalcon's published contracts (`Phalcon\Contracts\Container\Service\Collection`, `Enumerable`), not `Container` and `Manager`. [#1](https://github.com/phalcon/crest/issues/1)
 - `route:list` gets the HTTP method from the router, not from the class name. [#1](https://github.com/phalcon/crest/issues/1)
 - `bin/crest` loads the autoloader of its install, not the one in a dev checkout. A global crest from a symlinked path repository passes project commands to the crest of the project. [#33](https://github.com/phalcon/crest/issues/33)
+- The error `no answer; input ended` starts on its own line. [#42](https://github.com/phalcon/crest/issues/42)
 
 ### Removed
 

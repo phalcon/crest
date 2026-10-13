@@ -58,11 +58,16 @@ final class ServeCommandTest extends TestCase
         putenv('APP_PORT');
 
         $this->previousCwd = (string) getcwd();
+
+        // A mutant that ignores --directory then writes into the scratch
+        // folder, not into this repository.
+        chdir($this->root);
     }
 
     protected function tearDown(): void
     {
         putenv('APP_PORT');
+        putenv('COMPOSER_VENDOR_DIR');
         chdir($this->previousCwd);
 
         $this->closeStreams();
@@ -120,6 +125,25 @@ final class ServeCommandTest extends TestCase
         yield 'the highest' => ['65535', '127.0.0.1:65535'];
         yield 'another' => ['9000', '127.0.0.1:9000'];
         yield 'leading zeros' => ['0080', '127.0.0.1:80'];
+    }
+
+    public function testACustomVendorDirHasTheAutoloader(): void
+    {
+        file_put_contents($this->root . '/composer.json', '{"config":{"vendor-dir":"lib"}}');
+
+        $this->assertSame(
+            $this->root . '/lib/autoload.php was not found; run composer install first',
+            $this->refusal(['--directory', $this->root])
+        );
+
+        mkdir($this->root . '/lib');
+        file_put_contents($this->root . '/lib/autoload.php', "<?php\n");
+
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new ServeCommand($runner), ['--directory', $this->root]);
+
+        $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root]], $runner->calls);
     }
 
     public function testAMissingAutoloaderStopsBeforePhpStarts(): void
@@ -357,6 +381,17 @@ final class ServeCommandTest extends TestCase
         $this->handleDirectly(new ServeCommand($runner), ['--directory', $this->root]);
 
         $this->assertSame([[$this->argv('127.0.0.1:9001'), $this->root]], $runner->calls);
+    }
+
+    public function testTheEnvironmentNamesTheVendorDir(): void
+    {
+        // serve runs on the host, where composer reads the variable.
+        putenv('COMPOSER_VENDOR_DIR=lib');
+
+        $this->assertSame(
+            $this->root . '/lib/autoload.php was not found; run composer install first',
+            $this->refusal(['--directory', $this->root])
+        );
     }
 
     public function testTheExitStatusOfTheServerIsReturned(): void

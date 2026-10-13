@@ -150,10 +150,14 @@ final class Config implements ProjectContext
 
         // `namespaces` is deliberately absent: nothing reads its origin yet, and
         // tracking a key no caller asks about is a claim with no way to be wrong.
-        foreach (['flavor', 'namespace', 'paths'] as $key) {
+        foreach (['bootstrap', 'flavor', 'namespace', 'paths', 'runtime'] as $key) {
             if (true === isset($declared[$key])) {
                 $stated[] = $key;
             }
+        }
+
+        if (true === is_array($declared['runtime'] ?? null) && true === isset($declared['runtime']['service'])) {
+            $stated[] = 'runtime.service';
         }
 
         $flavor = Flavor::ADR;
@@ -239,7 +243,8 @@ final class Config implements ProjectContext
 
     /**
      * Whether the config file stated this key, as opposed to it taking a
-     * default. `flavor`, `namespace`, `paths`, or `paths.<name>` for one path.
+     * default. `bootstrap`, `flavor`, `namespace`, `paths`, `paths.<name>` for
+     * one path, `runtime`, or `runtime.service`.
      */
     public function isDeclared(string $key): bool
     {

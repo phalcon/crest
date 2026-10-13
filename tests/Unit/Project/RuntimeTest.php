@@ -32,6 +32,31 @@ final class RuntimeTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function badServices(): iterable
+    {
+        yield 'docker, empty' => [['type' => 'docker', 'service' => '']];
+        yield 'docker, not a string' => [['type' => 'docker', 'service' => 5]];
+        yield 'docker, a bad name' => [['type' => 'docker', 'service' => 'my app']];
+        yield 'host, null' => [['type' => 'host', 'service' => null]];
+        yield 'host, a bad name' => [['type' => 'host', 'service' => '-web']];
+    }
+
+    /**
+     * @dataProvider badServices
+     *
+     * @param array<string, mixed> $declared
+     */
+    public function testABadServiceIsRefused(array $declared): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'runtime' service in crest.php must be a service name, e.g. 'app'");
+
+        Runtime::fromConfig($declared);
+    }
+
     public function testADockerRuntimeNamesItsService(): void
     {
         $runtime = Runtime::fromConfig(['type' => 'docker', 'service' => 'web']);
@@ -46,17 +71,18 @@ final class RuntimeTest extends TestCase
         $this->assertSame('app', Runtime::fromConfig(['type' => 'docker'])->service);
     }
 
+    public function testAHostRuntimeKeepsItsService(): void
+    {
+        // install uses it.
+        $this->assertSame('web', Runtime::fromConfig(['type' => 'host', 'service' => 'web'])->service);
+    }
+
     public function testAMissingTypeIsRefused(): void
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage("'runtime' needs a 'type': host or docker");
 
         Runtime::fromConfig(['service' => 'web']);
-    }
-
-    public function testAnEmptyServiceUsesApp(): void
-    {
-        $this->assertSame('app', Runtime::fromConfig(['type' => 'docker', 'service' => ''])->service);
     }
 
     public function testANonArrayIsRefused(): void
@@ -98,7 +124,12 @@ final class RuntimeTest extends TestCase
         $this->assertFalse(Runtime::fromFile($this->root . '/crest.php')->isDocker());
     }
 
-    public function testHostRendersOnlyItsType(): void
+    public function testHostRendersItsServiceWhenItIsNotApp(): void
+    {
+        $this->assertSame("['type' => 'host', 'service' => 'web']", Runtime::host('web')->render());
+    }
+
+    public function testHostRendersOnlyItsTypeWithApp(): void
     {
         $this->assertSame("['type' => 'host']", Runtime::host()->render());
     }
@@ -116,5 +147,12 @@ final class RuntimeTest extends TestCase
     public function testTheHostTypeIsTheHost(): void
     {
         $this->assertFalse(Runtime::fromConfig(['type' => 'host', 'service' => 'web'])->isDocker());
+    }
+
+    public function testTheServiceNameRule(): void
+    {
+        $this->assertTrue(Runtime::isService('web-1.x_y'));
+        $this->assertFalse(Runtime::isService('-web'));
+        $this->assertFalse(Runtime::isService("web\n"));
     }
 }

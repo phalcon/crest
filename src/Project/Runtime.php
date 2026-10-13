@@ -15,8 +15,10 @@ namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
 
+use function array_key_exists;
 use function is_array;
 use function is_string;
+use function preg_match;
 use function sprintf;
 use function var_export;
 
@@ -26,8 +28,8 @@ use function var_export;
  *
  *   'runtime' => ['type' => 'docker', 'service' => 'app'],
  *
- * No key means the host. The service is also the service of `install`, so a
- * host runtime keeps the default service.
+ * No key means the host. The service is also the service of `install`, with
+ * each runtime.
  */
 final class Runtime
 {
@@ -39,6 +41,12 @@ final class Runtime
      * The service that `crest new` writes into docker-compose.yml.
      */
     public const SERVICE = 'app';
+
+    /**
+     * A docker compose service name: one rule for `new`, `init` and
+     * crest.php.
+     */
+    private const NAME = '/^[A-Za-z0-9][\w.-]*\z/';
 
     private function __construct(
         public readonly string $type,
@@ -66,12 +74,11 @@ final class Runtime
         }
 
         $type    = $declared['type'] ?? null;
-        $service = $declared['service'] ?? null;
-        $service = true === is_string($service) && '' !== $service ? $service : self::SERVICE;
+        $service = self::service($declared);
 
         return match ($type) {
             self::DOCKER => self::docker($service),
-            self::HOST   => self::host(),
+            self::HOST   => self::host($service),
             null         => throw new Exception("'runtime' needs a 'type': host or docker"),
             default      => throw new Exception(
                 sprintf("unknown runtime '%s'; expected host or docker", true === is_string($type) ? $type : '')
@@ -92,9 +99,37 @@ final class Runtime
         return self::fromConfig($declared['runtime'] ?? null);
     }
 
-    public static function host(): self
+    /**
+     * The host runtime. Its service is the service of `crest install`.
+     */
+    public static function host(string $service = self::SERVICE): self
     {
-        return new self(self::HOST, self::SERVICE);
+        return new self(self::HOST, $service);
+    }
+
+    public static function isService(string $name): bool
+    {
+        return 1 === preg_match(self::NAME, $name);
+    }
+
+    /**
+     * The stated service of the key, else app.
+     *
+     * @param array<mixed> $declared
+     */
+    private static function service(array $declared): string
+    {
+        if (false === array_key_exists('service', $declared)) {
+            return self::SERVICE;
+        }
+
+        $service = $declared['service'];
+
+        if (false === is_string($service) || false === self::isService($service)) {
+            throw new Exception("'runtime' service in crest.php must be a service name, e.g. 'app'");
+        }
+
+        return $service;
     }
 
     public function isDocker(): bool
@@ -107,10 +142,14 @@ final class Runtime
      */
     public function render(): string
     {
-        if (false === $this->isDocker()) {
+        if (true === $this->isDocker()) {
+            return sprintf("['type' => 'docker', 'service' => %s]", var_export($this->service, true));
+        }
+
+        if (self::SERVICE === $this->service) {
             return "['type' => 'host']";
         }
 
-        return sprintf("['type' => 'docker', 'service' => %s]", var_export($this->service, true));
+        return sprintf("['type' => 'host', 'service' => %s]", var_export($this->service, true));
     }
 }

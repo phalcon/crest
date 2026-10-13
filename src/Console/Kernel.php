@@ -114,6 +114,16 @@ final class Kernel
     }
 
     /**
+     * Shows the folder $from as $to in the output (Output::alias()).
+     *
+     * @internal Only the tool itself uses it.
+     */
+    public function alias(string $from, string $to): void
+    {
+        $this->output->alias($from, $to);
+    }
+
+    /**
      * @param list<string> $argv
      */
     public function handle(array $argv): int

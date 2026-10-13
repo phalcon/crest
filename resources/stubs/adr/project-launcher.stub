@@ -1,8 +1,12 @@
 #!/bin/sh
 #
 # Runs crest for this project with docker only. PHP on the host is not necessary.
-# up, down and install run docker compose here. All other commands run
-# vendor/bin/crest in the {{ service }} service.
+# up, down and install run docker compose here. All other commands run the
+# crest of the project in the {{ service }} service.
+
+# The crest of this project: <bin-dir>/crest. If you change vendor-dir or
+# bin-dir in composer.json, change this line too.
+crest=vendor/bin/crest
 
 # An empty CDPATH: cd goes only to the folder of this script.
 CDPATH= cd -- "$(dirname -- "$0")" || exit 1
@@ -17,6 +21,8 @@ case "$1" in
     install) shift; exec docker compose exec $tty {{ service }} composer install "$@" ;;
 esac
 
-[ -f vendor/bin/crest ] || { echo "crest: run './crest install' first" >&2; exit 1; }
+[ -f "$crest" ] || { echo "crest: run './crest install' first" >&2; exit 1; }
 
-exec docker compose exec $tty {{ service }} vendor/bin/crest "$@"
+# The host folder of the project: crest then shows host paths, not the paths
+# in the container.
+exec docker compose exec -e CREST_HOST_ROOT="$PWD" $tty {{ service }} "$crest" "$@"

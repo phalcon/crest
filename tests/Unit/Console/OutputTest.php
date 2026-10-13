@@ -35,6 +35,127 @@ final class OutputTest extends TestCase
         $this->closeStreams();
     }
 
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function aliasBoundaries(): iterable
+    {
+        yield 'a file in the folder' => ['/srv/src/A.php', '/home/u/app/src/A.php'];
+        yield 'the folder at the end' => ['root /srv', 'root /home/u/app'];
+        yield 'the folder in quotes' => ["'/srv'", "'/home/u/app'"];
+        yield 'two times' => ['/srv and /srv/a', '/home/u/app and /home/u/app/a'];
+        yield 'a folder with the same start' => ['/srv-old/a', '/srv-old/a'];
+        yield 'a longer name' => ['/srvx', '/srvx'];
+        yield 'a name with a dot' => ['/srv.bak', '/srv.bak'];
+        yield 'a deeper folder' => ['/x/srv/a', '/x/srv/a'];
+        yield 'a non-ASCII folder before it' => ['/x/é/srv', '/x/é/srv'];
+        yield 'a URL' => ['file:///srv/a', 'file:///srv/a'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function noAliasFolders(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'the root folder' => ['/'];
+    }
+
+    public function testAliasChangesEachWrite(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/srv', '/home/u/app');
+
+        $output->line('a /srv/a');
+        $output->success('b /srv/b');
+        $output->write('c /srv/c');
+        $output->error('d /srv/d');
+
+        $this->assertSame(
+            'a /home/u/app/a' . PHP_EOL . 'b /home/u/app/b' . PHP_EOL . 'c /home/u/app/c',
+            $this->readStdout()
+        );
+        $this->assertSame('d /home/u/app/d' . PHP_EOL, $this->readStderr());
+    }
+
+    /**
+     * @dataProvider aliasBoundaries
+     */
+    public function testAliasChangesOnlyTheWholeFolder(string $text, string $expected): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/srv', '/home/u/app');
+
+        $output->line($text);
+
+        $this->assertSame($expected . PHP_EOL, $this->readStdout());
+    }
+
+    public function testAliasChangesThePrompt(): void
+    {
+        $this->answers("\n");
+        $output = $this->interactive();
+        $output->alias('/srv', '/home/u/app');
+
+        $output->ask('Folder', '/srv/a');
+
+        $this->assertSame('Folder [/home/u/app/a]: ', $this->readStderr());
+    }
+
+    public function testAliasKeepsTheTableColumnsInLine(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/srv', '/home/u/app');
+
+        $output->table(
+            ['ITEM', 'VALUE', 'ORIGIN'],
+            [['root', '/srv', 'crest.php'], ['flavor', 'adr', 'declared']]
+        );
+
+        $this->assertSame(
+            'ITEM    VALUE        ORIGIN' . PHP_EOL
+            . 'root    /home/u/app  crest.php' . PHP_EOL
+            . 'flavor  adr          declared' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testAliasLeavesTextThatIsNotUtf8(): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/srv', '/home/u/app');
+
+        $output->write("\xff /srv");
+
+        $this->assertSame("\xff /srv", $this->readStdout());
+    }
+
+    public function testAliasQuotesTheFolder(): void
+    {
+        // The folder is text, not a pattern.
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/a+b', '/h');
+
+        $output->line('/aab /a+b');
+
+        $this->assertSame('/aab /h' . PHP_EOL, $this->readStdout());
+    }
+
+    public function testAliasReplacesOneTime(): void
+    {
+        // The host root contains the container root.
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias('/srv', '/srv/www/app');
+
+        $output->line('/srv/a');
+        $output->table(['A', 'B'], [['x', '/srv/b']]);
+
+        $this->assertSame(
+            '/srv/www/app/a' . PHP_EOL . 'A  B' . PHP_EOL . 'x  /srv/www/app/b' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
     public function testAskAgainAfterAnAnswerThatTheCheckRefuses(): void
     {
         $this->answers("bad\ngood\n");
@@ -74,11 +195,16 @@ final class OutputTest extends TestCase
 
     public function testAskStopsWhenTheInputEnds(): void
     {
-        // Ctrl+D. Nothing is typed, so there is no answer.
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage('no answer; input ended');
+        // Ctrl+D. Nothing is typed, so there is no answer. The error starts
+        // on its own line.
+        try {
+            $this->interactive()->ask('Namespace', 'App');
+            $this->fail('ask() did not stop');
+        } catch (Exception $exception) {
+            $this->assertSame('no answer; input ended', $exception->getMessage());
+        }
 
-        $this->interactive()->ask('Namespace', 'App');
+        $this->assertSame('Namespace [App]: ' . PHP_EOL, $this->readStderr());
     }
 
     public function testAskWithoutInteractionReturnsTheDefaultAndWritesNothing(): void
@@ -224,6 +350,19 @@ final class OutputTest extends TestCase
         $output->line('hello');
 
         $this->assertSame('hello' . PHP_EOL, $this->readStdout());
+    }
+
+    /**
+     * @dataProvider noAliasFolders
+     */
+    public function testNoAliasForAnEmptyOrTheRootFolder(string $from): void
+    {
+        $output = new Output($this->stdout, $this->stderr, false);
+        $output->alias($from, '/h');
+
+        $output->line('/srv /');
+
+        $this->assertSame('/srv /' . PHP_EOL, $this->readStdout());
     }
 
     public function testNoColorEnvironmentVariableDisablesDecoration(): void

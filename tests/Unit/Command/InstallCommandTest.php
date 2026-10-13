@@ -38,6 +38,20 @@ final class InstallCommandTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    public function testAHostRuntimeUsesItsService(): void
+    {
+        $this->writeCrestPhp("['runtime' => ['type' => 'host', 'service' => 'php']]");
+
+        $runner = new FakeRunner();
+
+        $this->handleDirectly(new InstallCommand($runner, true), ['--directory', $this->root]);
+
+        $this->assertSame(
+            [[['docker', 'compose', 'exec', 'php', 'composer', 'install'], $this->root]],
+            $runner->calls
+        );
+    }
+
     public function testAnUnknownFlavorIsLeftToTheProjectCrest(): void
     {
         // install reads only the runtime key. A newer crest can write a

@@ -103,6 +103,18 @@ final class ConfigTest extends TestCase
         $this->assertNull(Config::file('../b'));
     }
 
+    public function testAStringRuntimeIsTheRuntimeError(): void
+    {
+        // The origin of the service does not read a string as an array.
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp("['runtime' => 'docker']");
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'runtime' must be an array, e.g. ['type' => 'docker', 'service' => 'app']");
+
+        Config::discover($this->root);
+    }
+
     public function testCrestPhpMayDeclareTheNamespaceExplicitly(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
@@ -401,6 +413,20 @@ final class ConfigTest extends TestCase
         $this->assertSame('Deepest', Config::discover($this->root)->namespaceFor('action'));
     }
 
+    public function testTheBootstrapAndTheRuntimeAreDeclared(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp(
+            "['bootstrap' => 'App\\\\Front', 'runtime' => ['type' => 'docker', 'service' => 'web']]"
+        );
+
+        $config = Config::discover($this->root);
+
+        $this->assertTrue($config->isDeclared('bootstrap'));
+        $this->assertTrue($config->isDeclared('runtime'));
+        $this->assertTrue($config->isDeclared('runtime.service'));
+    }
+
     public function testTheConfigFileNamesTheRoot(): void
     {
         mkdir($this->root . '/elsewhere');
@@ -482,5 +508,17 @@ final class ConfigTest extends TestCase
         $this->expectExceptionMessage("no crest.php found; run 'crest init'");
 
         Config::discover($this->root);
+    }
+
+    public function testWithoutTheKeysNothingIsDeclared(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp("['runtime' => ['type' => 'docker']]");
+
+        $config = Config::discover($this->root);
+
+        $this->assertFalse($config->isDeclared('bootstrap'));
+        $this->assertTrue($config->isDeclared('runtime'));
+        $this->assertFalse($config->isDeclared('runtime.service'));
     }
 }

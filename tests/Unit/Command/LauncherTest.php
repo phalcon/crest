@@ -38,6 +38,7 @@ use function preg_match_all;
 use function proc_close;
 use function proc_open;
 use function sort;
+use function str_replace;
 use function stream_get_contents;
 
 use const PHP_EOL;
@@ -88,7 +89,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'),
+            $this->crestCall($project, 'app', 'route:list'),
             $stdout
         );
     }
@@ -106,7 +107,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'),
+            $this->crestCall($project, 'app', 'route:list'),
             $stdout
         );
     }
@@ -120,7 +121,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'make:action', 'GET', '/a b'),
+            $this->crestCall($project, 'app', 'make:action', 'GET', '/a b'),
             $stdout
         );
     }
@@ -142,7 +143,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'),
+            $this->crestCall($project, 'app', 'route:list'),
             $stdout
         );
     }
@@ -168,7 +169,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list', '--trace'),
+            $this->crestCall($project, 'app', 'route:list', '--trace'),
             $stdout
         );
     }
@@ -205,7 +206,39 @@ final class LauncherTest extends TestCase
         [$status, $stdout] = $this->launch($project, './crest', []);
 
         $this->assertSame(3, $status);
-        $this->assertSame($this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest'), $stdout);
+        $this->assertSame($this->crestCall($project, 'app'), $stdout);
+    }
+
+    public function testOneLineNamesTheCrestOfTheProject(): void
+    {
+        // For a custom vendor-dir or bin-dir, the user changes one line.
+        $project  = $this->create();
+        $launcher = (string) file_get_contents($project . '/crest');
+
+        file_put_contents(
+            $project . '/crest',
+            str_replace('crest=vendor/bin/crest', 'crest=lib/bin/crest', $launcher)
+        );
+        mkdir($project . '/lib/bin', 0o775, true);
+        file_put_contents($project . '/lib/bin/crest', '');
+
+        [$status, $stdout] = $this->launch($project, 'sh', ['crest', 'route:list']);
+
+        $this->assertSame(3, $status);
+        $this->assertSame(
+            $this->docker(
+                $project,
+                'compose',
+                'exec',
+                '-e',
+                'CREST_HOST_ROOT=' . $project,
+                '-T',
+                'app',
+                'lib/bin/crest',
+                'route:list'
+            ),
+            $stdout
+        );
     }
 
     public function testShRunsTheLauncherWithoutItsMode(): void
@@ -219,7 +252,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'app', 'vendor/bin/crest', 'route:list'),
+            $this->crestCall($project, 'app', 'route:list'),
             $stdout
         );
     }
@@ -272,7 +305,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(3, $status);
         $this->assertSame(
-            $this->docker($project, 'compose', 'exec', '-T', 'web', 'vendor/bin/crest', 'route:list'),
+            $this->crestCall($project, 'web', 'route:list'),
             $stdout
         );
     }
@@ -299,6 +332,25 @@ final class LauncherTest extends TestCase
         $this->runProjectCommand('new', NewCommand::class, ['my-app', ...$options]);
 
         return $this->root . '/my-app';
+    }
+
+    /**
+     * The output of the fake docker for a crest command of the launcher. The
+     * crest in the container gets the host folder of the project.
+     */
+    private function crestCall(string $project, string $service, string ...$arguments): string
+    {
+        return $this->docker(
+            $project,
+            'compose',
+            'exec',
+            '-e',
+            'CREST_HOST_ROOT=' . $project,
+            '-T',
+            $service,
+            'vendor/bin/crest',
+            ...$arguments
+        );
     }
 
     /**

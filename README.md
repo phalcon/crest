@@ -43,12 +43,23 @@ it:
 
 The options of `new` follow the name, for example `--phalcon v6`. `new` asks no questions
 here: the options give the values, else the defaults apply. The project goes into the
-working directory. `--directory` is not supported.
+folder `<name>` in the working directory. `--directory` is not supported, and a system
+folder such as `/usr` is refused as the working directory. `--help` shows the options of
+`new`.
 
 The script runs `crest new` in a one-off `composer:2` container. It writes your user and
 group IDs into the project `.env`, then runs `./crest up` and `./crest install`. Then
 GET / answers on http://localhost:8080/. A v5 project compiles the Phalcon extension in
 `./crest up`. This takes some minutes. On Windows, run it in WSL2.
+
+For another port, set `APP_PORT`. The script writes it into the project `.env`:
+
+    curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
+
+If `./crest up` or `./crest install` fails, for example because the port is in use, the
+project stays. The script prints the commands to run after you fix the problem. With
+rootless docker, the script writes `UID=0` and `GID=0` into `.env`: rootless docker maps
+root in the container to your user.
 
 Do not add a `new` key to a published `project-config` stub for this command. `new` runs
 in a container without docker, so `crest up` fails there. The script runs `./crest up`
@@ -104,7 +115,8 @@ the defaults:
 `./crest down` and `./crest install` run docker compose on the host: they start the
 containers, stop them, and install the dependencies. All other commands run
 `vendor/bin/crest` in the service of the project. Before `./crest install`, they stop
-with a hint. On Windows, run it in WSL2.
+with a hint. On Windows, run it in WSL2. With rootless docker, set `UID=0` and `GID=0` in
+the project `.env`.
 
 By default, `new` runs nothing: it writes the files and prints the next commands. A
 published `project-config` stub can add a `new` key, with commands that `new` runs after
@@ -130,10 +142,12 @@ For an existing project, `crest init` writes `crest.php`:
 ## Configuration
 
 Each project has a `crest.php` at its root. `crest new` writes it. For an existing
-project, `crest init` writes it. `init` proposes the values that it finds in the project:
-the namespace and the folder of the first psr-4 entry whose folder exists, the front
-controller `<namespace>\AppFront` when `AppFront.php` is in that folder, and the docker
-runtime when the project has a compose file. It asks you to confirm each one.
+project, `crest init` writes it. `init` proposes the values that it finds in the project,
+and asks you to confirm each one. First the namespace of the first psr-4 entry whose
+folder exists. Your answer must be in the psr-4 map, and the other proposals follow it:
+the front controller `<namespace>\AppFront` when `AppFront.php` is in the folder of the
+namespace (answer `none` for no front controller), a folder for each path (the question
+says if it exists), and the docker runtime when the project has a compose file.
 `--no-interaction` accepts the proposals. `--force` overwrites an existing `crest.php`.
 
 ```php
@@ -163,7 +177,7 @@ Phalcon is only in the container, for example a v5 project on a host without
 `ext-phalcon`. The containers must be up (`crest up`). The service must mount the project
 folder, with `vendor/` in it, and its `working_dir` must be the project root. The compose
 file of `crest new` does this. `crest install` runs composer in the same service. With the
-host runtime, it uses the service `app`; run `composer install` on the host instead.
+host runtime, it uses the `service` of the key, else `app`.
 `crest serve` always runs on the host: PHP's built-in server must listen there. With
 docker, `crest up` serves the project.
 

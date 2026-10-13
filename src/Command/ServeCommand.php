@@ -22,6 +22,7 @@ use Crest\Process\Runner;
 use Crest\Process\ShellRunner;
 use Crest\Project\Config;
 use Crest\Project\Layout;
+use Crest\Project\Vendor;
 
 use function count;
 use function file_get_contents;
@@ -41,9 +42,9 @@ use const PHP_BINARY;
  *
  * It extends the console Command, not ProjectCommand. It does not read
  * crest.php, it only finds it for the root, and it does not load the
- * project's vendor/: the server runs
- * the project in a child process, where public/index.php loads the project
- * autoloader. Thus a global crest can run it.
+ * project's vendor folder: the server runs the project in a child process,
+ * where public/index.php loads the project autoloader. Thus a global crest
+ * can run it.
  */
 final class ServeCommand extends Command
 {
@@ -99,7 +100,7 @@ final class ServeCommand extends Command
             );
         }
 
-        $autoloader = $root . '/' . Layout::AUTOLOADER;
+        $autoloader = Vendor::path($root, Vendor::vendorDir($root, true)) . '/autoload.php';
 
         if (false === is_file($autoloader)) {
             throw new Exception(sprintf('%s was not found; run composer install first', $autoloader));

@@ -8,6 +8,7 @@ services:
         GID: ${GID:-1000}
     container_name: ${PROJECT_PREFIX:-{{ project }}}-app
     hostname: ${PROJECT_PREFIX:-{{ project }}}-app
+    init: true
     working_dir: /srv
     ports:
       - "${{{ portVariable }}:-{{ port }}}:8080"

@@ -18,11 +18,16 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Generator\ClassName;
 use Crest\Project\Runtime;
+use Crest\Project\Survey;
 
+use function explode;
 use function in_array;
-use function preg_match;
+use function is_dir;
+use function rtrim;
 use function sprintf;
+use function str_starts_with;
 use function strtolower;
+use function substr;
 
 /**
  * The questions that `crest init` and `crest new` share (D07). Each one shows
@@ -32,29 +37,29 @@ use function strtolower;
 final class Questions
 {
     /**
+     * The answer that means no front controller.
+     */
+    private const NONE = 'none';
+
+    /**
      * The runtime types, in the order of the question.
      */
     private const RUNTIMES = [Runtime::HOST, Runtime::DOCKER];
 
     /**
-     * A docker compose service name.
-     */
-    private const SERVICE = '/^[A-Za-z0-9][\w.-]*\z/';
-
-    /**
-     * The front controller class. An empty answer when there is no default
-     * means none.
+     * The front controller class. `none`, in any case, means no front
+     * controller. Without a default, an empty answer also means none.
      */
     public static function bootstrap(Output $output, ?string $default): ?string
     {
         $class  = self::checkWith([ClassName::class, 'namespace']);
         $answer = $output->ask(
-            'Front controller class (empty for none)',
+            'Front controller class (none for no front controller)',
             $default ?? '',
-            static fn (string $answer): ?string => '' === $answer ? null : $class($answer)
+            static fn (string $answer): ?string => true === self::isNone($answer) ? null : $class($answer)
         );
 
-        return '' === $answer ? null : ClassName::namespace($answer);
+        return true === self::isNone($answer) ? null : ClassName::namespace($answer);
     }
 
     /**
@@ -78,10 +83,70 @@ final class Questions
         };
     }
 
-    public static function namespace(Output $output, string $default): string
+    /**
+     * The root namespace. With the root of a project (init), the answer must
+     * be in the psr-4 map of its composer.json, so that the classes that
+     * crest writes autoload.
+     */
+    public static function namespace(Output $output, string $default, ?string $root = null): string
     {
-        return ClassName::namespace(
-            $output->ask('Root namespace', $default, self::checkWith([ClassName::class, 'namespace']))
+        $check = static function (string $answer) use ($root): void {
+            $namespace = ClassName::namespace($answer);
+
+            if (null !== $root) {
+                Survey::folder($root, $namespace);
+            }
+        };
+
+        return ClassName::namespace($output->ask('Root namespace', $default, self::checkWith($check)));
+    }
+
+    /**
+     * The folder of one path key, relative to the root. The question says if
+     * the proposal exists. init writes no `namespaces` key, so the answer must
+     * be in a psr-4 folder, and the namespace that it gives must be usable:
+     * the first make:* writes classes with it. An absolute or an empty folder
+     * is not in a psr-4 folder. A leading `./` is removed.
+     */
+    public static function path(Output $output, string $root, string $key, string $default): string
+    {
+        $state  = true === is_dir($root . '/' . $default) ? 'exists' : 'does not exist yet';
+        $folder = static function (string $answer) use ($root, $default): string {
+            $folder    = rtrim($answer, '/');
+            $folder    = true === str_starts_with($folder, './') ? substr($folder, 2) : $folder;
+            $namespace = true === in_array('..', explode('/', $folder), true)
+                ? null
+                : Survey::namespaceOf($root, $folder);
+
+            if (null === $namespace) {
+                throw new Exception(
+                    sprintf(
+                        "'%s' must be a relative folder in a psr-4 folder of composer.json, e.g. '%s'",
+                        $answer,
+                        $default
+                    )
+                );
+            }
+
+            try {
+                ClassName::namespace($namespace);
+            } catch (Exception) {
+                throw new Exception(
+                    sprintf(
+                        "'%s' gives the namespace '%s', which is not usable; "
+                        . "use folder names that are PHP names, e.g. '%s'",
+                        $answer,
+                        $namespace,
+                        $default
+                    )
+                );
+            }
+
+            return $folder;
+        };
+
+        return $folder(
+            $output->ask(sprintf('%s folder (%s)', $key, $state), $default, self::checkWith($folder))
         );
     }
 
@@ -115,9 +180,14 @@ final class Questions
         );
     }
 
+    private static function isNone(string $answer): bool
+    {
+        return '' === $answer || self::NONE === strtolower($answer);
+    }
+
     private static function service(string $service): void
     {
-        if (0 === preg_match(self::SERVICE, $service)) {
+        if (false === Runtime::isService($service)) {
             throw new Exception(sprintf("'%s' is not a usable service name", $service));
         }
     }

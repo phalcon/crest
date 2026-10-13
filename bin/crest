@@ -40,15 +40,25 @@ if (!class_exists(Kernel::class)) {
 }
 
 $arguments = $_SERVER['argv'] ?? [];
+$output    = new Output();
+$kernel    = new Kernel(Commands::NAME, Commands::registry(), Commands::PACKAGE);
+
+// In the container of a docker runtime, the hand-off and ./crest give the
+// host folder of the project. The output then shows host paths. The working
+// folder in the container is the project root.
+$host = getenv(HandOff::ROOT_VARIABLE);
+
+if (is_string($host) && '' !== $host) {
+    $output->alias((string) getcwd(), $host);
+    $kernel->alias((string) getcwd(), $host);
+}
 
 // In a project, a global crest passes the project commands to the crest of
 // the project. The folder of the autoloader is the vendor folder of this crest.
-$status = (new HandOff(dirname($autoload)))->run($arguments, new Output());
+$status = (new HandOff(dirname($autoload)))->run($arguments, $output);
 
 if (null !== $status) {
     exit($status);
 }
-
-$kernel = new Kernel(Commands::NAME, Commands::registry(), Commands::PACKAGE);
 
 exit($kernel->handle($arguments));

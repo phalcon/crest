@@ -24,7 +24,12 @@ use function is_dir;
 use function is_file;
 use function preg_match;
 use function sprintf;
+use function str_replace;
+use function str_starts_with;
+use function strlen;
+use function substr;
 use function trim;
+use function uksort;
 
 /**
  * What `crest init` proposes for an existing project. It reads the project,
@@ -38,6 +43,93 @@ final class Survey
      */
     private const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 
+    /**
+     * The front controller that `crest new` writes, when the file is in the
+     * folder of the namespace.
+     */
+    public static function bootstrap(string $root, string $namespace, string $folder): ?string
+    {
+        if (false === is_file($root . '/' . $folder . '/' . Layout::FRONT . '.php')) {
+            return null;
+        }
+
+        return $namespace . '\\' . Layout::FRONT;
+    }
+
+    /**
+     * The folder of a namespace, by the longest psr-4 prefix that covers it:
+     * for `App\Api` under `App\ => src/`, `src/Api`. The folder need not
+     * exist.
+     */
+    public static function folder(string $root, string $namespace): string
+    {
+        $map = Manifest::psr4($root);
+
+        uksort($map, static fn (string $first, string $second): int => strlen($second) <=> strlen($first));
+
+        foreach ($map as $prefix => $target) {
+            $prefix = trim($prefix, '\\');
+            $target = trim($target, '/');
+
+            if ($namespace === $prefix) {
+                return $target;
+            }
+
+            if (true === str_starts_with($namespace, $prefix . '\\')) {
+                return $target . '/' . str_replace('\\', '/', substr($namespace, strlen($prefix) + 1));
+            }
+        }
+
+        throw new Exception(sprintf("'%s' is not in the psr-4 map of composer.json", $namespace));
+    }
+
+    /**
+     * The namespace of a folder, by the longest psr-4 folder of
+     * composer.json that covers it: for `src/Action` under `App\ => src/`,
+     * `App\Action`. Null when no psr-4 folder covers it. The namespace is not
+     * checked.
+     */
+    public static function namespaceOf(string $root, string $folder): ?string
+    {
+        $best      = null;
+        $namespace = null;
+
+        foreach (Manifest::psr4($root) as $prefix => $target) {
+            $target = trim($target, '/');
+
+            if ($folder !== $target && false === str_starts_with($folder, $target . '/')) {
+                continue;
+            }
+
+            if (null !== $best && strlen($target) <= strlen($best)) {
+                continue;
+            }
+
+            $rest      = str_replace('/', '\\', substr($folder, strlen($target) + 1));
+            $best      = $target;
+            $namespace = trim(trim($prefix, '\\') . '\\' . $rest, '\\');
+        }
+
+        return $namespace;
+    }
+
+    /**
+     * The ADR default paths, moved into a folder. For `app`, `action` is
+     * `app/Action`.
+     *
+     * @return array<string, string>
+     */
+    public static function paths(string $folder): array
+    {
+        $paths = [];
+
+        foreach (Config::defaultPaths(Flavor::ADR) as $key => $path) {
+            $paths[$key] = $folder . '/' . basename($path);
+        }
+
+        return $paths;
+    }
+
     public static function settings(string $root): Settings
     {
         [$namespace, $directory] = self::namespace($root);
@@ -48,18 +140,6 @@ final class Survey
             self::paths($directory),
             self::runtime($root)
         );
-    }
-
-    /**
-     * The front controller that `crest new` writes, when the file is there.
-     */
-    private static function bootstrap(string $root, string $namespace, string $directory): ?string
-    {
-        if (false === is_file($root . '/' . $directory . '/' . Layout::FRONT . '.php')) {
-            return null;
-        }
-
-        return $namespace . '\\' . Layout::FRONT;
     }
 
     /**
@@ -95,23 +175,6 @@ final class Survey
                 implode(', ', $missing)
             )
         );
-    }
-
-    /**
-     * The ADR default paths, moved into the folder of the namespace. For
-     * `App\ => app/`, `action` is `app/Action`.
-     *
-     * @return array<string, string>
-     */
-    private static function paths(string $directory): array
-    {
-        $paths = [];
-
-        foreach (Config::defaultPaths(Flavor::ADR) as $key => $path) {
-            $paths[$key] = $directory . '/' . basename($path);
-        }
-
-        return $paths;
     }
 
     /**

@@ -180,16 +180,18 @@ final class InitCommandTest extends TestCase
 
     public function testInteractiveAnswersAreWritten(): void
     {
-        // The questions: namespace, front controller, runtime, and the
-        // service for docker.
-        $this->answers("Shop\nShop\\Front\ndocker\nweb\n");
+        // The questions: namespace, front controller, the five paths, runtime,
+        // and the service for docker. The namespace is in the psr-4 map.
+        $this->answers("App\\Shop\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\ndocker\nweb\n");
 
         $status = $this->init([], true);
         $config = Config::discover($this->root);
 
         $this->assertSame(0, $status);
-        $this->assertSame('Shop', $config->namespace());
-        $this->assertSame('Shop\\Front', $config->bootstrap());
+        $this->assertSame('App\\Shop', $config->namespace());
+        $this->assertSame('App\\Shop\\Front', $config->bootstrap());
+        $this->assertSame($this->root . '/src/Shop/Action', $config->path('action'));
+        $this->assertSame($this->root . '/src/Shop/Commands', $config->path('command'));
         $this->assertSame('web', $config->runtime()->service);
     }
 
@@ -201,12 +203,40 @@ final class InitCommandTest extends TestCase
         $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
+    public function testNoneWritesNoFrontController(): void
+    {
+        file_put_contents($this->root . '/src/AppFront.php', "<?php\n");
+        $this->answers("\nnone\n\n\n\n\n\n\n");
+
+        $this->assertSame(0, $this->init([], true));
+        $this->assertNull(Config::discover($this->root)->bootstrap());
+    }
+
     public function testTheEndOfInputWritesNothing(): void
     {
         // Ctrl+D at the first question.
         $this->assertSame(1, $this->init([], true));
         $this->assertStringEndsWith('crest: no answer; input ended' . PHP_EOL, $this->readStderr());
         $this->assertFileDoesNotExist($this->root . '/crest.php');
+    }
+
+    public function testTheQuestionsComeInOrder(): void
+    {
+        $this->answers("\n\n\n\n\n\n\n\n");
+
+        $this->init([], true);
+
+        $this->assertSame(
+            'Root namespace [App]: '
+            . 'Front controller class (none for no front controller): '
+            . 'action folder (exists) [src/Action]: '
+            . 'command folder (does not exist yet) [src/Command]: '
+            . 'middleware folder (does not exist yet) [src/Middleware]: '
+            . 'provider folder (does not exist yet) [src/Provider]: '
+            . 'responder folder (does not exist yet) [src/Responder]: '
+            . 'Runtime (host, docker) [host]: ',
+            $this->readStderr()
+        );
     }
 
     public function testWithoutComposerJsonInitStops(): void

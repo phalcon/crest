@@ -30,6 +30,7 @@ use function file_put_contents;
 use function getcwd;
 use function getenv;
 use function json_encode;
+use function mkdir;
 use function putenv;
 use function unlink;
 
@@ -73,6 +74,8 @@ final class HandOffTest extends TestCase
     protected function tearDown(): void
     {
         putenv(HandOff::VARIABLE);
+        putenv('COMPOSER_BIN_DIR');
+        putenv('COMPOSER_VENDOR_DIR');
         chdir($this->previousCwd);
 
         $this->closeStreams();
@@ -181,7 +184,8 @@ final class HandOffTest extends TestCase
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
                     'vendor/bin/crest', 'route:list', '--config=crest.local.php',
                 ],
                 $this->root . '/app',
@@ -228,6 +232,49 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn(['route:list']);
     }
 
+    public function testACustomBinDirIsFound(): void
+    {
+        $this->composer(['bin-dir' => 'bin']);
+
+        $this->handOff(['route:list']);
+
+        $this->assertSame(
+            [[[PHP_BINARY, $this->root . '/app/bin/crest', 'route:list'], null]],
+            $this->runner->calls
+        );
+    }
+
+    public function testACustomVendorDirFindsItself(): void
+    {
+        $this->composer(['vendor-dir' => 'lib']);
+
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/lib'));
+    }
+
+    public function testACustomVendorDirIsFound(): void
+    {
+        $this->composer(['vendor-dir' => 'lib']);
+
+        $this->handOff(['route:list']);
+
+        $this->assertSame(
+            [[[PHP_BINARY, $this->root . '/app/lib/bin/crest', 'route:list'], null]],
+            $this->runner->calls
+        );
+    }
+
+    public function testACustomVendorDirWithoutTheBinaryIsReported(): void
+    {
+        $this->composer(['vendor-dir' => 'other']);
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame(
+            'crest: ' . $this->root . "/app has no other/bin/crest; run 'crest install' or 'composer install' first"
+            . PHP_EOL,
+            $this->readStderr()
+        );
+    }
+
     public function testADirectoryOptionAfterTheDoubleDashIsAValue(): void
     {
         chdir($this->root . '/other');
@@ -253,7 +300,8 @@ final class HandOffTest extends TestCase
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
                     'vendor/bin/crest', 'route:list', '--trace',
                 ],
                 $this->root . '/app',
@@ -270,7 +318,11 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app', 'vendor/bin/crest', 'route:list'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
+                    'vendor/bin/crest', 'route:list',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -301,7 +353,8 @@ final class HandOffTest extends TestCase
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'web',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'web',
                     'vendor/bin/crest', 'route:list', '--trace',
                 ],
                 $this->root . '/app',
@@ -406,7 +459,8 @@ final class HandOffTest extends TestCase
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
                     'vendor/bin/crest', 'route:list', '--trace',
                 ],
                 $this->root . '/app',
@@ -471,6 +525,15 @@ final class HandOffTest extends TestCase
         $this->assertStringContainsString('the global crest is older', $this->readStderr());
     }
 
+    public function testAProtocolWithALeadingZeroIsAnOlderProtocol(): void
+    {
+        // Only the exact text of the protocol is this protocol.
+        putenv(HandOff::VARIABLE . '=01');
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertStringContainsString('the global crest is older', $this->readStderr());
+    }
+
     public function testARelativeConfigFileReachesTheContainerByName(): void
     {
         // Only the value is a path, not the whole token.
@@ -481,10 +544,12 @@ final class HandOffTest extends TestCase
 
         $this->handOff(['route:list', '--config=crest.local.php']);
 
+        // The root is '.', but the container gets the full path.
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
                     'vendor/bin/crest', 'route:list', '--config=crest.local.php',
                 ],
                 '.',
@@ -522,11 +587,61 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', '-T', 'app', 'vendor/bin/crest', 'route:list'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', '-T', 'app',
+                    'vendor/bin/crest', 'route:list',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
         );
+    }
+
+    public function testDockerIgnoresTheEnvironmentOfTheHost(): void
+    {
+        // composer runs in the container, where the variable is not set. An
+        // absolute folder here would stop a docker runtime.
+        $this->runtime("['type' => 'docker']");
+        putenv('COMPOSER_VENDOR_DIR=/opt/lib');
+
+        $this->handOff(['route:list']);
+
+        $this->assertSame('vendor/bin/crest', $this->runner->calls[0][0][8]);
+    }
+
+    public function testDockerRefusesAnAbsoluteBinDir(): void
+    {
+        $this->runtime("['type' => 'docker']");
+        $this->composer(['bin-dir' => '/opt/bin']);
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame(
+            'crest: the docker runtime needs a relative vendor-dir and bin-dir in composer.json' . PHP_EOL,
+            $this->readStderr()
+        );
+    }
+
+    public function testDockerRefusesAnAbsoluteVendorDir(): void
+    {
+        $this->runtime("['type' => 'docker']");
+        $this->composer(['vendor-dir' => '/opt/vendor', 'bin-dir' => 'vendor/bin']);
+
+        $this->assertSame(1, $this->handOff(['route:list']));
+        $this->assertSame(
+            'crest: the docker runtime needs a relative vendor-dir and bin-dir in composer.json' . PHP_EOL,
+            $this->readStderr()
+        );
+    }
+
+    public function testDockerUsesTheBinDirOfComposerJson(): void
+    {
+        $this->runtime("['type' => 'docker']");
+        $this->composer(['bin-dir' => 'bin']);
+
+        $this->handOff(['route:list']);
+
+        $this->assertSame('bin/crest', $this->runner->calls[0][0][8]);
     }
 
     /**
@@ -555,7 +670,8 @@ final class HandOffTest extends TestCase
         $this->assertSame(
             [[
                 [
-                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app',
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
                     'vendor/bin/crest', 'route:list', '--config=crest.php', '--trace',
                 ],
                 $this->root . '/app',
@@ -607,6 +723,20 @@ final class HandOffTest extends TestCase
         $this->assertPassedOn($tokens);
     }
 
+    public function testTheCrestOfTheProjectDoesNotReadCrestPhp(): void
+    {
+        // The kernel of the project crest reads crest.php. A second require in
+        // the same process fails for a file that declares a function, and a
+        // bad key must not stop the listing or --help here.
+        file_put_contents(
+            $this->root . '/app/crest.php',
+            "<?php\n\nthrow new \\RuntimeException('crest.php was read');\n"
+        );
+
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/vendor'));
+        $this->assertSame('', $this->readStderr());
+    }
+
     public function testTheCrestOfTheProjectFindsItselfByTheComposerPath(): void
     {
         // The composer proxy names vendor/bin/../autoload.php.
@@ -642,6 +772,28 @@ final class HandOffTest extends TestCase
         $this->handOff(['route:list', '--directory=' . $this->root . '/app']);
 
         $this->assertPassedOn(['route:list', '--directory=' . $this->root . '/app']);
+    }
+
+    public function testTheEnvironmentNamesTheVendorDirOfItself(): void
+    {
+        // The crest of the project runs with the autoloader in that folder.
+        putenv('COMPOSER_VENDOR_DIR=lib');
+        $this->composer([]);
+
+        $this->assertStays($this->handOff(['route:list'], 0, $this->root . '/app/lib'));
+    }
+
+    public function testTheEnvironmentNamesTheVendorDirOnTheHost(): void
+    {
+        putenv('COMPOSER_VENDOR_DIR=lib');
+        $this->composer([]);
+
+        $this->handOff(['route:list']);
+
+        $this->assertSame(
+            [[[PHP_BINARY, $this->root . '/app/lib/bin/crest', 'route:list'], null]],
+            $this->runner->calls
+        );
     }
 
     public function testTheLastDirectoryOptionWins(): void
@@ -683,7 +835,49 @@ final class HandOffTest extends TestCase
 
         $this->assertSame(
             [[
-                ['docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1', 'app', 'vendor/bin/crest', '--config=crest.php'],
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
+                    'vendor/bin/crest', '--config=crest.php',
+                ],
+                $this->root . '/app',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testTheListingWithOptionsReachesTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['--config=crest.php', '-q']);
+
+        $this->assertSame(
+            [[
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
+                    'vendor/bin/crest', '--config=crest.php', '-q',
+                ],
+                '.',
+            ]],
+            $this->runner->calls
+        );
+    }
+
+    public function testTheListingWithoutAConfigFileReachesTheContainer(): void
+    {
+        $this->runtime("['type' => 'docker']");
+
+        $this->handOff(['-q']);
+
+        $this->assertSame(
+            [[
+                [
+                    'docker', 'compose', 'exec', '-e', 'CREST_HANDOFF=1',
+                    '-e', 'CREST_HOST_ROOT=' . $this->root . '/app', 'app',
+                    'vendor/bin/crest', '-q',
+                ],
                 $this->root . '/app',
             ]],
             $this->runner->calls
@@ -742,6 +936,8 @@ final class HandOffTest extends TestCase
                     'exec',
                     '-e',
                     'CREST_HANDOFF=1',
+                    '-e',
+                    'CREST_HOST_ROOT=' . $this->root . '/app',
                     'app',
                     'vendor/bin/crest',
                     'make:action',
@@ -772,6 +968,25 @@ final class HandOffTest extends TestCase
     {
         $this->assertNull($status);
         $this->assertSame([], $this->runner->calls);
+    }
+
+    /**
+     * A composer.json that requires crest, with these config values, and the
+     * binaries in app/lib/bin and app/bin.
+     *
+     * @param array<string, string> $config
+     */
+    private function composer(array $config): void
+    {
+        file_put_contents(
+            $this->root . '/app/composer.json',
+            (string) json_encode(['require-dev' => ['phalcon/crest' => 'dev-master'], 'config' => $config])
+        );
+
+        mkdir($this->root . '/app/lib/bin', 0o775, true);
+        mkdir($this->root . '/app/bin', 0o775, true);
+        file_put_contents($this->root . '/app/lib/bin/crest', "<?php\n");
+        file_put_contents($this->root . '/app/bin/crest', "<?php\n");
     }
 
     /**

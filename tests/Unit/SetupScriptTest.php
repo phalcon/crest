@@ -28,6 +28,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function fileperms;
 use function fwrite;
+use function is_executable;
 use function mkdir;
 use function proc_close;
 use function proc_open;
@@ -76,9 +77,10 @@ final class SetupScriptTest extends TestCase
      * Writes each call to the log, on one line: the working folder, then the
      * arguments. The script body after -c shows as <script>. With
      * FAIL=<word>, a call with an argument equal to <word> exits with status
-     * 3. For `run`, the value after -v goes to its own log, so that a value
-     * in two parts shows. Then the part after the image runs here, as in the
-     * container.
+     * 3. `info` prints INFO, else the options of a docker that is not
+     * rootless. For `run`, the value after -v goes to its own log, so that a
+     * value in two parts shows. Then the part after the image runs here, as
+     * in the container.
      */
     private const DOCKER = <<<'SH'
         #!/bin/sh
@@ -100,6 +102,11 @@ final class SetupScriptTest extends TestCase
                 exit 3
             fi
         done
+
+        if [ "$1" = info ]; then
+            printf '%s\n' "${INFO:-[name=seccomp,profile=builtin]}"
+            exit 0
+        fi
 
         if [ "$1" = run ]; then
             while [ "$1" != composer:2 ]; do
@@ -162,12 +169,86 @@ final class SetupScriptTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{string}>
+     */
+    public static function badPorts(): iterable
+    {
+        yield 'a word' => ['abc'];
+        yield 'zero' => ['0'];
+        yield 'a leading zero' => ['080'];
+        yield 'too high' => ['65536'];
+        yield 'too long' => ['123456'];
+        yield 'negative' => ['-1'];
+    }
+
+    /**
      * @return iterable<string, array{list<string>}>
      */
     public static function directories(): iterable
     {
         yield 'a separate value' => [['my-app', '--directory', 'elsewhere']];
         yield 'an equals sign' => [['my-app', '--directory=elsewhere']];
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function helpArguments(): iterable
+    {
+        yield 'first' => [['--help']];
+        yield 'after the name' => [['my-app', '--help']];
+        yield 'short' => [['my-app', '-h']];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function systemFolders(): iterable
+    {
+        yield 'the root folder' => ['/'];
+        yield 'usr' => ['/usr'];
+        yield 'the folder of php' => ['/usr/local/bin'];
+        yield 'etc' => ['/etc'];
+    }
+
+    /**
+     * @dataProvider badPorts
+     */
+    public function testABadPortStopsBeforeDocker(string $port): void
+    {
+        [$status, $stdout, $stderr] = $this->runSetup(['my-app'], ['APP_PORT' => $port]);
+
+        $this->assertSame(1, $status);
+        $this->assertSame('', $stdout);
+        $this->assertSame('crest: APP_PORT must be a number from 1 to 65535' . PHP_EOL, $stderr);
+        $this->assertSame([], $this->log('docker'));
+    }
+
+    public function testAFailedDockerInfoKeepsTheHostIds(): void
+    {
+        // The daemon does not answer: the setup goes on, as without rootless
+        // docker.
+        [$status] = $this->runSetup(['my-app'], ['FAIL' => 'info']);
+
+        $this->assertSame(0, $status);
+        $this->assertMatchesRegularExpression(
+            '/^UID=1234$/m',
+            (string) file_get_contents($this->root . '/my-app/.env')
+        );
+        $this->assertSame(['-R 1234:5678 my-app'], $this->log('chown'));
+    }
+
+    public function testAFailedInstallGivesTheHint(): void
+    {
+        [$status, , $stderr] = $this->runSetup(['my-app'], ['FAIL' => 'exec']);
+
+        $this->assertSame(3, $status);
+        $this->assertSame(
+            "crest: my-app is created, but './crest install' failed. Fix the problem, then run:" . PHP_EOL
+            . '    cd my-app' . PHP_EOL
+            . '    ./crest install' . PHP_EOL,
+            $stderr
+        );
     }
 
     public function testAFailedInstallStopsTheSetup(): void
@@ -179,6 +260,20 @@ final class SetupScriptTest extends TestCase
         $this->assertStringNotContainsString('runs on', $stdout);
     }
 
+    public function testAFailedUpGivesTheHint(): void
+    {
+        [$status, , $stderr] = $this->runSetup(['my-app'], ['FAIL' => 'up']);
+
+        $this->assertSame(3, $status);
+        $this->assertSame(
+            "crest: my-app is created, but './crest up' failed. Fix the problem, then run:" . PHP_EOL
+            . '    cd my-app' . PHP_EOL
+            . '    ./crest up' . PHP_EOL
+            . '    ./crest install' . PHP_EOL,
+            $stderr
+        );
+    }
+
     public function testAFailedUpStopsTheSetup(): void
     {
         [$status, $stdout] = $this->runSetup(['my-app'], ['FAIL' => 'up']);
@@ -186,7 +281,7 @@ final class SetupScriptTest extends TestCase
         $this->assertSame(3, $status);
         $this->assertSame(
             [$this->root . '/my-app: compose up -d'],
-            array_slice($this->log('docker'), 2)
+            array_slice($this->log('docker'), 3)
         );
         $this->assertStringNotContainsString('installing', $stdout);
         $this->assertStringNotContainsString('runs on', $stdout);
@@ -206,7 +301,7 @@ final class SetupScriptTest extends TestCase
                 $this->root . '/my-app: compose up -d',
                 $this->root . '/my-app: compose exec -T app composer install',
             ],
-            array_slice($this->log('docker'), 2)
+            array_slice($this->log('docker'), 3)
         );
         $this->assertStringNotContainsString('elsewhere', $stdout);
     }
@@ -221,6 +316,47 @@ final class SetupScriptTest extends TestCase
         $this->assertSame([], $this->log('docker'));
     }
 
+    /**
+     * @dataProvider systemFolders
+     */
+    public function testASystemFolderIsRefused(string $folder): void
+    {
+        // The one-off container mounts the working folder at the same path. On
+        // a system folder, the mount hides what the container needs.
+        [$status, $stdout, $stderr] = $this->runSetup(['my-app'], [], $folder);
+
+        $this->assertSame(1, $status);
+        $this->assertSame('', $stdout);
+        $this->assertSame(
+            'crest: ' . $folder . ' is a system folder in the one-off container; run the setup in another folder'
+            . PHP_EOL,
+            $stderr
+        );
+        $this->assertSame([], $this->log('docker'));
+    }
+
+    public function testATerminalOnStdinStillGivesNoTerminalToDocker(): void
+    {
+        // The downloaded file, in a terminal: script(1) gives sh a terminal on
+        // stdin. The steps get </dev/null, so the launcher adds -T.
+        if (false === is_executable('/usr/bin/script')) {
+            $this->markTestSkipped('util-linux script is not installed');
+        }
+
+        copy(Paths::root() . '/resources/setup.sh', $this->root . '/crest-setup.sh');
+
+        [$status] = $this->runSetup([], [], null, ['/usr/bin/script', '-qec', 'sh crest-setup.sh my-app', '/dev/null']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            [
+                $this->root . '/my-app: compose up -d',
+                $this->root . '/my-app: compose exec -T app composer install',
+            ],
+            array_slice($this->log('docker'), 3)
+        );
+    }
+
     public function testAWorkingFolderWithASpaceIsNoProblem(): void
     {
         $folder = $this->root . '/my projects';
@@ -230,11 +366,13 @@ final class SetupScriptTest extends TestCase
 
         $this->assertSame(0, $status);
         // One argument: the log of the calls does not show a value in two parts.
-        $this->assertSame([$folder . ':/app'], $this->log('volume'));
+        $this->assertSame([$folder . ':' . $folder], $this->log('volume'));
         $this->assertSame(
             [
                 $folder . ': compose version',
-                $folder . ': run --rm -v ' . $folder . ':/app -w /app -e COMPOSER_HOME=/composer composer:2'
+                $folder . ': info --format {{.SecurityOptions}}',
+                $folder . ': run --rm -v ' . $folder . ':' . $folder . ' -w ' . $folder
+                . ' -e COMPOSER_HOME=/composer -e APP_PORT composer:2'
                 . ' sh -c <script> setup dev-master 1234 5678 my-app',
                 $folder . '/my-app: compose up -d',
                 $folder . '/my-app: compose exec -T app composer install',
@@ -243,13 +381,22 @@ final class SetupScriptTest extends TestCase
         );
     }
 
+    public function testBashInPosixModeRunsTheSetup(): void
+    {
+        // /bin/sh is bash in POSIX mode on Fedora.
+        [$status] = $this->runSetup(['my-app'], [], null, ['/bin/bash', '--posix', '-s', '--']);
+
+        $this->assertSame(0, $status);
+        $this->assertCount(5, $this->log('docker'));
+    }
+
     public function testBashRunsTheSetup(): void
     {
-        // /bin/sh is bash on Fedora and macOS.
+        // curl ... | bash: bash in its default mode.
         [$status, $stdout] = $this->runSetup(['my-app'], [], null, ['/bin/bash', '-s', '--']);
 
         $this->assertSame(0, $status);
-        $this->assertCount(4, $this->log('docker'));
+        $this->assertCount(5, $this->log('docker'));
         $this->assertStringContainsString('crest: my-app runs on http://localhost:8080/' . PHP_EOL, $stdout);
     }
 
@@ -272,6 +419,33 @@ final class SetupScriptTest extends TestCase
         $this->assertSame([], $this->log('docker'));
     }
 
+    /**
+     * @dataProvider helpArguments
+     *
+     * @param list<string> $arguments
+     */
+    public function testHelpShowsTheOptionsOfNew(array $arguments): void
+    {
+        [$status, $stdout, $stderr] = $this->runSetup($arguments);
+
+        $this->assertSame(0, $status);
+        $this->assertStringStartsWith('usage: setup.sh <name> [options of crest new]' . PHP_EOL, $stdout);
+        $this->assertStringContainsString('Usage: crest new', $stdout);
+        $this->assertSame('', $stderr);
+        $this->assertFileDoesNotExist($this->root . '/my-app');
+        $this->assertSame(
+            [
+                $this->root . ': compose version',
+                $this->root . ': run --rm -e COMPOSER_HOME=/composer composer:2 sh -c <script> setup dev-master',
+            ],
+            $this->log('docker')
+        );
+        $this->assertSame(
+            ['global require --quiet --no-interaction phalcon/crest:dev-master'],
+            $this->log('composer')
+        );
+    }
+
     public function testNewRefusesAFolderThatIsNotEmpty(): void
     {
         mkdir($this->root . '/my-app');
@@ -280,7 +454,8 @@ final class SetupScriptTest extends TestCase
         [$status, $stdout, $stderr] = $this->runSetup(['my-app']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('exists and is not empty', $stderr);
+        // The working folder has the same path in the one-off container.
+        $this->assertStringContainsString($this->root . '/my-app exists and is not empty', $stderr);
         $this->assertStoppedAfterNew($stdout);
     }
 
@@ -324,6 +499,18 @@ final class SetupScriptTest extends TestCase
         $this->assertSame('crest: docker is not installed' . PHP_EOL, $stderr);
     }
 
+    public function testRootlessDockerGivesRootAndNoChown(): void
+    {
+        [$status] = $this->runSetup(['my-app'], ['INFO' => '[name=seccomp,profile=builtin name=rootless]']);
+
+        $env = (string) file_get_contents($this->root . '/my-app/.env');
+
+        $this->assertSame(0, $status);
+        $this->assertMatchesRegularExpression('/^UID=0$/m', $env);
+        $this->assertMatchesRegularExpression('/^GID=0$/m', $env);
+        $this->assertSame([], $this->log('chown'));
+    }
+
     public function testTheDownloadedScriptRunsWithSh(): void
     {
         // The documented way to read the script before it runs.
@@ -332,7 +519,7 @@ final class SetupScriptTest extends TestCase
         [$status, $stdout] = $this->runSetup(['my-app'], [], null, ['/bin/sh', 'crest-setup.sh']);
 
         $this->assertSame(0, $status);
-        $this->assertCount(4, $this->log('docker'));
+        $this->assertCount(5, $this->log('docker'));
         $this->assertStringContainsString('crest: my-app runs on http://localhost:8080/' . PHP_EOL, $stdout);
     }
 
@@ -342,6 +529,17 @@ final class SetupScriptTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertStringContainsString('crest: my-app runs on http://localhost:9000/' . PHP_EOL, $stdout);
+    }
+
+    public function testThePortGoesIntoTheEnvFile(): void
+    {
+        [$status] = $this->runSetup(['my-app'], ['APP_PORT' => '9000']);
+
+        $this->assertSame(0, $status);
+        $this->assertMatchesRegularExpression(
+            '/^APP_PORT=9000$/m',
+            (string) file_get_contents($this->root . '/my-app/.env')
+        );
     }
 
     public function testTheProjectGetsTheHostIdsAndTheOptions(): void
@@ -371,7 +569,7 @@ final class SetupScriptTest extends TestCase
                 $this->root . '/my-app: compose up -d',
                 $this->root . '/my-app: compose exec -T web composer install',
             ],
-            array_slice($this->log('docker'), 2)
+            array_slice($this->log('docker'), 3)
         );
     }
 
@@ -401,7 +599,9 @@ final class SetupScriptTest extends TestCase
         $this->assertSame(
             [
                 $this->root . ': compose version',
-                $this->root . ': run --rm -v ' . $this->root . ':/app -w /app -e COMPOSER_HOME=/composer composer:2'
+                $this->root . ': info --format {{.SecurityOptions}}',
+                $this->root . ': run --rm -v ' . $this->root . ':' . $this->root . ' -w ' . $this->root
+                . ' -e COMPOSER_HOME=/composer -e APP_PORT composer:2'
                 . ' sh -c <script> setup dev-master 1234 5678 my-app --phalcon v6',
                 $this->root . '/my-app: compose up -d',
                 $this->root . '/my-app: compose exec -T app composer install',
@@ -417,7 +617,7 @@ final class SetupScriptTest extends TestCase
      */
     private function assertStoppedAfterNew(string $stdout): void
     {
-        $this->assertCount(2, $this->log('docker'));
+        $this->assertCount(3, $this->log('docker'));
         $this->assertSame([], $this->log('chown'));
         $this->assertStringNotContainsString('starting', $stdout);
     }

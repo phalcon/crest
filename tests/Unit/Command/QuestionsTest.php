@@ -18,20 +18,50 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Project\Runtime;
 use Crest\Tests\Support\CapturesOutput;
+use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * The scratch root is a composer project with `App\ => src/` and src/Action,
+ * for the questions of init.
+ */
 final class QuestionsTest extends TestCase
 {
     use CapturesOutput;
+    use ScratchDirectory;
 
     protected function setUp(): void
     {
         $this->captureStreams();
+        $this->makeScratchDirectory('questions', 'src/Action');
+        $this->writeComposerJson(['App\\' => 'src/']);
     }
 
     protected function tearDown(): void
     {
         $this->closeStreams();
+        $this->removeScratchDirectory();
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function badFolders(): iterable
+    {
+        yield 'outside psr-4' => ['lib/Action'];
+        yield 'absolute' => ['/srv/src/Action'];
+        yield 'with ..' => ['src/../lib/Action'];
+        yield 'the root' => ['/'];
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function badNames(): iterable
+    {
+        yield 'a dash' => ['src/my-actions', 'App\\my-actions'];
+        yield 'a digit first' => ['src/1x', 'App\\1x'];
+        yield 'a dot segment' => ['src/./Action', 'App\\.\\Action'];
     }
 
     public function testBootstrapAsksAgainForAnUnusableClass(): void
@@ -47,7 +77,14 @@ final class QuestionsTest extends TestCase
         $this->answers("\n");
 
         $this->assertNull(Questions::bootstrap($this->interactive(), null));
-        $this->assertSame('Front controller class (empty for none): ', $this->readStderr());
+        $this->assertSame('Front controller class (none for no front controller): ', $this->readStderr());
+    }
+
+    public function testBootstrapNoneRefusesTheProposal(): void
+    {
+        $this->answers("NONE\n");
+
+        $this->assertNull(Questions::bootstrap($this->interactive(), 'App\\AppFront'));
     }
 
     public function testBootstrapTakesTheDefault(): void
@@ -94,6 +131,88 @@ final class QuestionsTest extends TestCase
         $this->answers("\\Shop\\\n");
 
         $this->assertSame('Shop', Questions::namespace($this->interactive(), 'App'));
+    }
+
+    public function testNamespaceInAProjectMustBeInThePsr4Map(): void
+    {
+        $this->answers("Shop\nApp\\Shop\n");
+
+        $this->assertSame('App\\Shop', Questions::namespace($this->interactive(), 'App', $this->root));
+        $this->assertStringContainsString("'Shop' is not in the psr-4 map of composer.json", $this->readStderr());
+    }
+
+    /**
+     * @dataProvider badFolders
+     */
+    public function testPathAsksAgainForABadFolder(string $answer): void
+    {
+        $this->answers($answer . "\nsrc/Handlers\n");
+
+        $this->assertSame(
+            'src/Handlers',
+            Questions::path($this->interactive(), $this->root, 'action', 'src/Action')
+        );
+        $this->assertStringContainsString(
+            "'" . $answer . "' must be a relative folder in a psr-4 folder of composer.json, e.g. 'src/Action'",
+            $this->readStderr()
+        );
+    }
+
+    /**
+     * @dataProvider badNames
+     */
+    public function testPathAsksAgainForAFolderThatIsNotAPhpName(string $answer, string $namespace): void
+    {
+        // The first make:* would write a class with this namespace.
+        $this->answers($answer . "\nsrc/Handlers\n");
+
+        $this->assertSame(
+            'src/Handlers',
+            Questions::path($this->interactive(), $this->root, 'action', 'src/Action')
+        );
+        $this->assertStringContainsString(
+            "'" . $answer . "' gives the namespace '" . $namespace . "', which is not usable; "
+            . "use folder names that are PHP names, e.g. 'src/Action'",
+            $this->readStderr()
+        );
+    }
+
+    public function testPathRemovesALeadingDotSlash(): void
+    {
+        $this->answers("./src/Handlers\n");
+
+        $this->assertSame(
+            'src/Handlers',
+            Questions::path($this->interactive(), $this->root, 'action', 'src/Action')
+        );
+    }
+
+    public function testPathRemovesTheSlashAtTheEnd(): void
+    {
+        $this->answers("src/Handlers/\n");
+
+        $this->assertSame(
+            'src/Handlers',
+            Questions::path($this->interactive(), $this->root, 'action', 'src/Action')
+        );
+    }
+
+    public function testPathSaysIfTheFolderExists(): void
+    {
+        $this->answers("\n\n");
+
+        $this->assertSame(
+            'src/Action',
+            Questions::path($this->interactive(), $this->root, 'action', 'src/Action')
+        );
+        $this->assertSame(
+            'src/Command',
+            Questions::path($this->interactive(), $this->root, 'command', 'src/Command')
+        );
+        $this->assertSame(
+            'action folder (exists) [src/Action]: command folder (does not exist yet) [src/Command]: ',
+            $this->readStderr()
+        );
     }
 
     public function testRuntimeAGivenServiceAsksOnlyTheType(): void

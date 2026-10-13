@@ -67,7 +67,14 @@ the host. All other commands run `vendor/bin/crest` in the service of the projec
 or the `--service` of `new`). Before `./crest install`, they stop with
 `crest: run './crest install' first`. Without a terminal (CI, a pipe), the launcher
 adds `-T` to `docker compose exec`. On Windows, run it in WSL2. With a global crest,
-`crest up` and `crest install` do the same.
+`crest up` and `crest install` do the same. With rootless docker, set `UID=0` and `GID=0`
+in `.env`: rootless docker maps root in the container to your user.
+
+The crest commands of the launcher get `CREST_HOST_ROOT`, the host folder of the
+project, so crest shows host paths, not the paths in the container. The hand-off of a
+global crest does the same. The launcher runs `vendor/bin/crest`. If you change
+`vendor-dir` or `bin-dir` in `composer.json`, change the `crest=` line at the top of
+`./crest`.
 
 `crest down` stops and removes the containers. `up --build` rebuilds the image
 first, and `down --volumes` also removes the named volumes.
@@ -82,7 +89,7 @@ as docker compose does: the last `APP_PORT` line wins, and `export`,
 `${...}`. Such a value stops `serve` with an error. `serve` finds the root
 from a subdirectory. A global crest passes it to the crest in `vendor/`, as
 it does the other project commands. It stops before PHP starts if
-`.htrouter.php` or `vendor/autoload.php` is missing.
+`.htrouter.php` or `<vendor-dir>/autoload.php` is missing.
 
 The server uses the PHP that runs crest. PHP options on the command line, for
 example `-d extension=phalcon.so`, do not reach it. Put such settings in
@@ -129,7 +136,8 @@ nearest `crest.php` above the working directory or `--directory`. `up`, `down` a
 
     crest: no crest.php found; run 'crest init'
 
-If the project has no `vendor/bin/crest`, crest stops too:
+If the project has no `<bin-dir>/crest` (by default `vendor/bin/crest`), crest stops
+too:
 
     crest: /path/to/my-app has no vendor/bin/crest; run 'crest install' or 'composer install' first
     crest: /path/to/my-app does not require phalcon/crest; run 'composer require --dev phalcon/crest'
@@ -144,8 +152,16 @@ The docker runtime has two conditions. The service must mount the project folder
 `vendor/` in it: crest looks for `vendor/bin/crest` on the host first. And the
 `working_dir` of the service must be the project root: `vendor/bin/crest` runs there. The
 compose file of `new` does both. `install` runs composer in the service of the docker
-runtime. With the host runtime, it uses the service `app`; run `composer install` on the
-host instead.
+runtime. With the host runtime, it uses the `service` of the key, else `app`.
+
+crest reads `vendor-dir` and `bin-dir` as composer does: `COMPOSER_VENDOR_DIR` and
+`COMPOSER_BIN_DIR`, then `config` in `composer.json`, then `vendor` and
+`<vendor-dir>/bin`. The hand-off runs `<bin-dir>/crest`, and `serve` checks
+`<vendor-dir>/autoload.php`. With the docker runtime, composer runs in the container, so
+crest reads only `composer.json`, and the two folders must be relative. crest does not
+expand `~` or `$VAR` in these values: use a relative or an absolute path. A custom
+`vendor-dir` or `bin-dir` needs this version of crest both as the global crest and in the
+project: an older crest looks only for `vendor/bin/crest`.
 
 The files come from the `project-*` stubs. To change them, publish them by
 name in the directory that the project goes into (the working directory, or
@@ -223,14 +239,27 @@ without docker. There, `crest up` fails. Do not use the key with it.
     composer require --dev phalcon/crest
     crest init
 
-`init` writes `crest.php` in the nearest folder with a `composer.json`. It proposes the
-namespace and the folder of the first psr-4 entry whose folder exists, the front
-controller `<namespace>\AppFront` when that file is there, the ADR paths in that folder,
-and the runtime: docker when the project has `compose.yaml`, `compose.yml`,
-`docker-compose.yaml` or `docker-compose.yml`, with the service `app`, or the first
-service. Press Enter to accept a proposal. `--no-interaction` accepts all of them.
-`--force` overwrites an existing `crest.php`. If the project does not require crest,
-`init` prints the `composer require` line.
+`init` writes `crest.php` in the nearest folder with a `composer.json`. It asks these
+questions, in this order, each with a proposal:
+
+1. The namespace. The proposal is the namespace of the first psr-4 entry whose folder
+   exists. The answer must be in the psr-4 map (`App\Api` under `"App\\": "src/"` is),
+   because the generators get their namespaces from it. The other proposals follow the
+   answer: its folder is the psr-4 folder of the longest prefix, for example `src/Api`.
+2. The front controller: `<namespace>\AppFront` when `AppFront.php` is in that folder.
+   Answer `none` for no front controller.
+3. A folder for each path (`action`, `command`, `middleware`, `provider`, `responder`),
+   in that folder. The question says if the folder exists. An answer must be a relative
+   folder in a psr-4 folder, and its folder names must give a usable namespace:
+   `src/my-actions` gives `App\my-actions`, which PHP cannot use. A leading `./` is
+   removed.
+4. The runtime: docker when the project has `compose.yaml`, `compose.yml`,
+   `docker-compose.yaml` or `docker-compose.yml`, with the service `app`, or the first
+   service. For docker, the service.
+
+Press Enter to accept a proposal. `--no-interaction` accepts all of them. `--force`
+overwrites an existing `crest.php`. If the project does not require crest, `init` prints
+the `composer require` line.
 
 `init` needs a psr-4 entry in `composer.json`, because the generators get their
 namespaces from it. Without one, `init` stops and tells you to add one, for example

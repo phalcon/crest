@@ -18,12 +18,15 @@ use Crest\Console\Parsing\Definition;
 
 use function array_combine;
 use function array_map;
+use function array_slice;
 use function fgets;
 use function fwrite;
 use function getenv;
 use function implode;
 use function max;
 use function mb_strlen;
+use function preg_quote;
+use function preg_replace_callback;
 use function rtrim;
 use function sprintf;
 use function str_pad;
@@ -63,6 +66,13 @@ final class Output
      */
     public const MARK = '⟩⟩⟩';
 
+    /**
+     * The pattern of the folder that alias() changes. Null for no alias.
+     */
+    private ?string $aliasPattern = null;
+
+    private string $aliasTo = '';
+
     private bool $decorated;
 
     private bool $interactive;
@@ -99,6 +109,26 @@ final class Output
     }
 
     /**
+     * Shows the folder $from as $to in each text that this class writes. A
+     * process in a container uses it to show the host path of its folder.
+     * Only a whole folder changes: `/srv` and `/srv/a` do, `/srv-old` and
+     * `/x/srv` do not. An empty $from or the root folder gives no alias.
+     *
+     * @internal Only the tool itself uses it. A command does not.
+     */
+    public function alias(string $from, string $to): void
+    {
+        $this->aliasPattern = null;
+        $this->aliasTo      = $to;
+
+        if ('' === $from || '/' === $from) {
+            return;
+        }
+
+        $this->aliasPattern = '#(?<![\w./-])' . preg_quote($from, '#') . '(?![\w.-])#u';
+    }
+
+    /**
      * Asks for a value and returns the answer. An empty answer gives the
      * default. When the run is not interactive, nothing is asked and the
      * default is the answer. The question goes to stderr, as the errors do:
@@ -116,7 +146,10 @@ final class Output
             $answer = $default;
 
             if (true === $this->interactive) {
-                fwrite($this->stderr, '' === $default ? $question . ': ' : $question . ' [' . $default . ']: ');
+                fwrite(
+                    $this->stderr,
+                    $this->aliased('' === $default ? $question . ': ' : $question . ' [' . $default . ']: ')
+                );
                 $answer = $this->answer($default);
             }
 
@@ -210,17 +243,17 @@ final class Output
 
     public function error(string $text): void
     {
-        fwrite($this->stderr, $this->decorate($text, self::COLOR_RED) . PHP_EOL);
+        fwrite($this->stderr, $this->decorate($this->aliased($text), self::COLOR_RED) . PHP_EOL);
     }
 
     public function line(string $text = ''): void
     {
-        fwrite($this->stdout, $text . PHP_EOL);
+        $this->raw($this->aliased($text));
     }
 
     public function success(string $text): void
     {
-        fwrite($this->stdout, $this->decorate($text, self::COLOR_GREEN) . PHP_EOL);
+        fwrite($this->stdout, $this->decorate($this->aliased($text), self::COLOR_GREEN) . PHP_EOL);
     }
 
     /**
@@ -233,14 +266,20 @@ final class Output
      */
     public function table(array $headers, array $rows, bool $withHeaders = true): void
     {
+        // The alias first: the widths are the widths of the text that shows.
+        $table = array_map(
+            fn (array $row): array => array_map($this->aliased(...), $row),
+            [$headers, ...$rows]
+        );
+
         $widths = [];
-        foreach ([$headers, ...$rows] as $row) {
+        foreach ($table as $row) {
             foreach ($row as $index => $cell) {
                 $widths[$index] = max($widths[$index] ?? 0, mb_strlen($cell));
             }
         }
 
-        $printable = true === $withHeaders ? [$headers, ...$rows] : $rows;
+        $printable = true === $withHeaders ? $table : array_slice($table, 1);
 
         foreach ($printable as $row) {
             $cells = [];
@@ -248,7 +287,8 @@ final class Output
                 $cells[] = str_pad($cell, $widths[$index]);
             }
 
-            $this->line(rtrim(implode('  ', $cells)));
+            // raw(), not line(): the cells have their alias already.
+            $this->raw(rtrim(implode('  ', $cells)));
         }
     }
 
@@ -312,7 +352,22 @@ final class Output
 
     public function write(string $text): void
     {
-        fwrite($this->stdout, $text);
+        fwrite($this->stdout, $this->aliased($text));
+    }
+
+    /**
+     * The text with the folder of alias() changed. Text that is not UTF-8
+     * stays as it is.
+     */
+    private function aliased(string $text): string
+    {
+        if (null === $this->aliasPattern) {
+            return $text;
+        }
+
+        $to = $this->aliasTo;
+
+        return preg_replace_callback($this->aliasPattern, static fn (): string => $to, $text) ?? $text;
     }
 
     /**
@@ -324,6 +379,9 @@ final class Output
         $line = fgets($this->stdin);
 
         if (false === $line) {
+            // The prompt has no line end. The error starts on its own line.
+            fwrite($this->stderr, PHP_EOL);
+
             throw new Exception('no answer; input ended');
         }
 
@@ -351,5 +409,13 @@ final class Output
         }
 
         return stream_isatty($stream);
+    }
+
+    /**
+     * One line on stdout, as it is.
+     */
+    private function raw(string $text): void
+    {
+        fwrite($this->stdout, $text . PHP_EOL);
     }
 }
