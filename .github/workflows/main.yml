@@ -155,8 +155,10 @@ jobs:
       - name: "Unit tests"
         run: composer test
 
-  # Mutation testing is not a job here yet. Infection runs locally for now
-  # (`composer infection`, gated at MSI 100 by resources/infection.json5).
+  # Mutation testing is not a job here yet. Infection runs locally only, and is
+  # not a dependency: `composer require --dev infection/infection`, then
+  # `composer infection` (gated at MSI 100 by resources/infection.json5), then
+  # `composer remove --dev infection/infection`.
   #
   # The blocker is the PHP floor: at ^8.1 composer can only resolve
   # thecodingmachine/safe to dev-master, which eagerly autoloads its function
