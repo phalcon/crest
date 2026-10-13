@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Console;
 
 use Composer\InstalledVersions;
+use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Registry;
 use Crest\Tests\Support\Console\FakeCommand;
@@ -91,6 +92,35 @@ final class RegistryTest extends TestCase
         $registry = (new Registry())->withDiscovery(self::KEY);
 
         $this->assertSame(FakeCommand::class, $registry->get('fake'));
+    }
+
+    public function testDefaultNameIsNullWithoutWithDefault(): void
+    {
+        $this->assertNull((new Registry())->add('fake', FakeCommand::class)->defaultName());
+    }
+
+    public function testDescriptionsKeepAllCommandsWithoutATest(): void
+    {
+        $registry = (new Registry())
+            ->add('fake', FakeCommand::class)
+            ->add('boom', ThrowingCommand::class);
+
+        $this->assertSame(
+            ['boom' => 'A command that always fails', 'fake' => 'A command that exists only for tests'],
+            $registry->descriptions()
+        );
+    }
+
+    public function testDescriptionsKeepOnlyTheCommandsThatPassTheTest(): void
+    {
+        $registry = (new Registry())
+            ->add('fake', FakeCommand::class)
+            ->add('boom', ThrowingCommand::class);
+
+        $this->assertSame(
+            ['fake' => 'A command that exists only for tests'],
+            $registry->descriptions(static fn (Command $command): bool => $command instanceof FakeCommand)
+        );
     }
 
     public function testDiscoveryAddsAContributedCommand(): void
@@ -305,6 +335,16 @@ final class RegistryTest extends TestCase
     public function testStartsEmpty(): void
     {
         $this->assertSame([], (new Registry())->all());
+    }
+
+    public function testWithDefaultRecordsTheNameAndIsChainable(): void
+    {
+        $registry = (new Registry())
+            ->withDefault('fake')
+            ->add('fake', FakeCommand::class);
+
+        $this->assertSame('fake', $registry->defaultName());
+        $this->assertSame(FakeCommand::class, $registry->get('fake'));
     }
 
     public function testWithDiscoveryIsChainableAndSeededNamesStillResolve(): void

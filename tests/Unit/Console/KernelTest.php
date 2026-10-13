@@ -77,6 +77,17 @@ final class KernelTest extends TestCase
         $this->assertSame('Name [default]: ', $this->readStderr());
     }
 
+    public function testAnUnknownOptionWithNoCommandIsAnErrorOfTheDefault(): void
+    {
+        // With no command, all the tokens go to the default command. It does
+        // not know the option, so the binding fails. The kernel's own listing
+        // ignores options.
+        $status = $this->defaultKernel()->handle(['demo', '--bogus']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame("demo: unknown option '--bogus'" . PHP_EOL, $this->readStderr());
+    }
+
     public function testBindingErrorIsAOneLineStderrMessage(): void
     {
         $status = $this->kernel()->handle(['demo', 'fake', 'a', 'b']);
@@ -231,6 +242,28 @@ final class KernelTest extends TestCase
         $this->assertStringStartsWith(Output::MARK . ' demo ', $this->readStdout());
     }
 
+    public function testTheDefaultCommandGetsAllTheTokens(): void
+    {
+        $status = $this->defaultKernel()->handle(['demo', '--help']);
+
+        $output = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('Usage: demo fake', $output);
+        $this->assertStringNotContainsString('hello', $output);
+    }
+
+    public function testTheDefaultCommandGetsTheGlobalFlags(): void
+    {
+        // The default command asks a question. With -n it takes the default
+        // answer; without -n it reads the typed one.
+        $this->answers("typed\n");
+
+        $this->asking(['tool', '-n'], true);
+
+        $this->assertSame('answer: default' . PHP_EOL, $this->readStdout());
+    }
+
     public function testTheShortNoInteractionFlagAsksNoQuestion(): void
     {
         $this->answers("typed\n");
@@ -319,14 +352,29 @@ final class KernelTest extends TestCase
         );
     }
 
+    public function testWithADefaultNoCommandRunsTheDefault(): void
+    {
+        $status = $this->defaultKernel()->handle(['demo']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame('hello world' . PHP_EOL, $this->readStdout());
+    }
+
     /**
      * @param list<string> $argv
+     * @param bool         $default True to make `ask` the default command
      */
-    private function asking(array $argv): void
+    private function asking(array $argv, bool $default = false): void
     {
+        $registry = (new Registry())->add('ask', AskingCommand::class);
+
+        if (true === $default) {
+            $registry->withDefault('ask');
+        }
+
         $kernel = new Kernel(
             'tool',
-            (new Registry())->add('ask', AskingCommand::class),
+            $registry,
             'vendor/package',
             $this->stdout,
             $this->stderr,
@@ -336,6 +384,15 @@ final class KernelTest extends TestCase
         );
 
         $kernel->handle($argv);
+    }
+
+    private function defaultKernel(): Kernel
+    {
+        $registry = (new Registry())
+            ->add('fake', FakeCommand::class)
+            ->withDefault('fake');
+
+        return new Kernel('demo', $registry, 'phalcon/crest', $this->stdout, $this->stderr, false);
     }
 
     private function kernel(): Kernel

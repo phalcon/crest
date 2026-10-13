@@ -109,6 +109,12 @@ final class CommandsTest extends TestCase
         $this->assertSame(ServeCommand::class, Commands::registry()->get('server'));
     }
 
+    public function testTheDefaultCommandIsList(): void
+    {
+        // `crest` and `crest list` are the same listing.
+        $this->assertSame('list', Commands::registry()->defaultName());
+    }
+
     public function testTheHostCommandsAreTheComposeCommandsAndTheWriters(): void
     {
         $this->assertSame(['down', 'install', 'up'], Commands::COMPOSE);
