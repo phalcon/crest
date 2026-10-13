@@ -23,6 +23,7 @@ use Crest\Command\InstallCommand;
 use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
 use Crest\Command\Make\CommandCommand;
+use Crest\Command\Make\ControllerCommand;
 use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Command\Make\ResponderCommand;
@@ -106,6 +107,7 @@ final class Commands
             ->add('list', ListCommand::class, 'commands', 'enumerate')
             ->add('make:action', ActionCommand::class)
             ->add('make:command', CommandCommand::class)
+            ->add('make:controller', ControllerCommand::class)
             ->add('make:middleware', MiddlewareCommand::class)
             ->add('make:provider', ProviderCommand::class)
             ->add('make:responder', ResponderCommand::class)

@@ -86,7 +86,7 @@ final class Config implements ProjectContext
      * directories for artifacts it can never generate. An artifact that is the
      * same class in each flavor is in SHARED_PATHS.
      *
-     * Only ADR has a set of its own. The others get their keys when their
+     * ADR and MVC have sets of their own. CLI gets its keys when its
      * generators land - defaults no command reads would show up in
      * `config:show` as locations that mean nothing.
      *
@@ -106,7 +106,10 @@ final class Config implements ProjectContext
                     'provider'   => Layout::SOURCE . '/Provider',
                     'responder'  => Layout::SOURCE . '/Responder',
                 ],
-                Flavor::CLI, Flavor::MVC => [],
+                Flavor::CLI => [],
+                Flavor::MVC => [
+                    'controller' => Layout::SOURCE . '/Controllers',
+                ],
             },
         ];
 
