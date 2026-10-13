@@ -93,6 +93,11 @@ final class PublishCommand extends ProjectCommand
         return 0;
     }
 
+    protected function flavors(): array
+    {
+        return Flavor::cases();
+    }
+
     /**
      * The packaged stubs this run will copy.
      *

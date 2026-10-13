@@ -89,7 +89,9 @@ final class Commands
 
     /**
      * The registry the binary runs on: crest's own commands, plus anything
-     * installed packages contribute through `extra.crest.commands`.
+     * installed packages contribute through `extra.crest.commands`. `list` runs
+     * when the user names no command, so `crest` and `crest list` are the same
+     * listing.
      */
     public static function registry(): Registry
     {
@@ -112,6 +114,7 @@ final class Commands
             ->add('serve', ServeCommand::class, 'server')
             ->add('stub:publish', StubPublishCommand::class)
             ->add('up', UpCommand::class)
+            ->withDefault('list')
             ->withDiscovery(self::KEY)
             ->withProviders(self::PROVIDERS);
     }

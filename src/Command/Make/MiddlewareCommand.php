@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
+use Crest\Project\Flavor;
+
 /**
  * Generates an ADR Middleware - a wrapper around the handler chain that may
  * pass the request through, decorate the response, short-circuit with its own,
@@ -33,6 +35,11 @@ final class MiddlewareCommand extends NamedArtifactCommand
     protected function example(): string
     {
         return 'Auth';
+    }
+
+    protected function flavors(): array
+    {
+        return [Flavor::ADR];
     }
 
     protected function key(): string

@@ -19,6 +19,7 @@ use Crest\Command\ProjectCommand;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Project\Flavor;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -110,6 +111,12 @@ final class ListCommand extends ProjectCommand
         $output->table(['METHOD', 'PATH', 'ACTION'], array_values($routes));
 
         return 0;
+    }
+
+    protected function flavors(): array
+    {
+        // The routes come from the ADR router.
+        return [Flavor::ADR];
     }
 
     /**

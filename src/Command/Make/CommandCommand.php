@@ -15,6 +15,7 @@ namespace Crest\Command\Make;
 
 use Crest\Commands;
 use Crest\Generator\Placement;
+use Crest\Project\Flavor;
 
 use function str_replace;
 use function strlen;
@@ -48,6 +49,13 @@ final class CommandCommand extends NamedArtifactCommand
     protected function example(): string
     {
         return 'Greet';
+    }
+
+    protected function flavors(): array
+    {
+        // ADR only, until the command path and stub move to a set that all
+        // flavors share.
+        return [Flavor::ADR];
     }
 
     protected function key(): string

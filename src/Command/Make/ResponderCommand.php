@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Crest\Command\Make;
 
+use Crest\Project\Flavor;
+
 /**
  * Generates an ADR Responder - the one layer that speaks HTTP, turning a domain
  * payload into a response.
@@ -35,6 +37,11 @@ final class ResponderCommand extends NamedArtifactCommand
     protected function example(): string
     {
         return 'Album';
+    }
+
+    protected function flavors(): array
+    {
+        return [Flavor::ADR];
     }
 
     protected function key(): string
