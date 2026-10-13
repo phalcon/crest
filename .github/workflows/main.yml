@@ -60,7 +60,7 @@ jobs:
       # what proves the ^8.1 constraint holds - a newer runtime would accept
       # syntax the floor rejects.
       - name: "Setup PHP"
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.1'
           extensions: ${{ env.EXTENSIONS }}
@@ -123,25 +123,33 @@ jobs:
           token: ${{ github.token }}
 
       - name: "Setup PHP"
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.EXTENSIONS }}
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # v5 only, with the same PIE install as resources/docker/Dockerfile.
+      # v5 only, with the PIE install of resources/docker/Dockerfile.
       # PIE writes to the extension directory, so it needs sudo. sudo resets
       # PATH, so "$(which php)" names the PHP that setup-php installed.
       # phalcon/phalcon stays in vendor/, as in the v5 dev container. The
       # extension classes load first, so the package does not replace them.
+      #
+      # PIE enables the extension itself, but on the runner that gives a second
+      # "extension=phalcon", and PHP then prints "Module phalcon is already
+      # loaded" on every start. The tests that read the stderr of a child PHP
+      # process then fail. Thus --skip-enable-extension, and one INI entry here
+      # (as in phalcon/debugbar).
       - name: "Install the Phalcon extension"
         if: matrix.variant == 'v5'
         env:
           PIE_VERSION: '1.5.0'
+          PHP_VERSION: ${{ matrix.php }}
         run: |
           curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
-          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --skip-enable-extension --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          echo "extension=phalcon.so" | sudo tee "/etc/php/${PHP_VERSION}/cli/conf.d/80-phalcon.ini"
           php -m | grep -i phalcon
 
       # No --ignore-platform-reqs: composer.json pins config.platform.php to
@@ -188,7 +196,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: "Setup PHP"
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.1'
           extensions: ${{ env.EXTENSIONS }}
