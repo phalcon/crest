@@ -287,18 +287,31 @@ final class ConfigTest extends TestCase
     public function testFlavorsWithoutGeneratorsGetOnlyTheSharedPaths(): void
     {
         // A crest command is the same class in each flavor, so its path is in
-        // each flavor. The ADR artifacts are not: offering them to the others
-        // would put locations in config:show for artifacts the project has no
-        // command to write.
+        // each flavor. The artifacts of the other flavors are not: offering
+        // them would put locations in config:show for artifacts the project
+        // has no command to write.
         $this->writeComposerJson(['App\\' => 'src/']);
 
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
         $config = Config::discover($this->root);
         $this->assertSame(['command' => $this->root . '/src/Command'], $config->paths());
+    }
 
+    public function testMvcGetsTheControllerPath(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
         $config = Config::discover($this->root);
-        $this->assertSame(['command' => $this->root . '/src/Command'], $config->paths());
+
+        $this->assertSame(
+            [
+                'command'    => $this->root . '/src/Command',
+                'controller' => $this->root . '/src/Controllers',
+            ],
+            $config->paths()
+        );
+        $this->assertSame('App\\Controllers', $config->namespaceFor('controller'));
     }
 
     public function testNamespaceForDerivesFromThePsr4Pairing(): void
@@ -470,7 +483,10 @@ final class ConfigTest extends TestCase
             Config::defaultPaths(Flavor::ADR)
         );
         $this->assertSame(['command' => 'src/Command'], Config::defaultPaths(Flavor::CLI));
-        $this->assertSame(['command' => 'src/Command'], Config::defaultPaths(Flavor::MVC));
+        $this->assertSame(
+            ['command' => 'src/Command', 'controller' => 'src/Controllers'],
+            Config::defaultPaths(Flavor::MVC)
+        );
     }
 
     public function testTheRuntimeComesFromCrestPhp(): void

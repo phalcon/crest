@@ -16,6 +16,7 @@ namespace Crest\Tests\Unit\Generator;
 use Crest\Console\PackageVersion;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Tests\Support\ScratchDirectory;
 use ParseError;
 use Phalcon\Contracts\ADR\Action;
 use Phalcon\Contracts\ADR\Handler;
@@ -27,14 +28,16 @@ use Phalcon\Contracts\Container\Service\Provider;
 use Phalcon\Contracts\Http\AttributeRequest;
 use Phalcon\Http\RequestInterface;
 use Phalcon\Http\ResponseInterface;
+use Phalcon\Mvc\Controller;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionNamedType;
 
-use function array_keys;
 use function class_exists;
 use function enum_exists;
 use function extension_loaded;
+use function file_put_contents;
+use function get_parent_class;
 use function interface_exists;
 use function method_exists;
 use function preg_match_all;
@@ -54,7 +57,13 @@ use const TOKEN_PARSE;
  */
 final class StubContractsTest extends TestCase
 {
-    private const FLAVOR = 'adr';
+    use ScratchDirectory;
+
+    /**
+     * The flavors that have packaged stubs of their own. CLI has only the
+     * shared stubs, and the list of each other flavor has them.
+     */
+    private const FLAVORS = ['adr', 'mvc'];
 
     /**
      * Every placeholder the packaged stubs declare, as one superset. A stub that
@@ -62,16 +71,19 @@ final class StubContractsTest extends TestCase
      * no-placeholder-left assertion rather than quietly emitting `{{ name }}`.
      */
     private const REPLACEMENTS = [
-        'attributes' => '',
-        'class'      => 'GeneratedArtifact',
-        'classJson'  => 'App\\\\Generated\\\\GeneratedArtifact',
-        'command'    => 'generated',
-        'entries'    => '',
-        'extraKey'   => 'crest',
-        'name'       => 'id',
-        'namespace'  => 'App\\Generated',
-        'params'     => '',
-        'template'   => 'generated/index',
+        'attributes'    => '',
+        'base'          => 'GeneratedBase',
+        'baseNamespace' => 'App\\Generated\\Base',
+        'class'         => 'GeneratedArtifact',
+        'classJson'     => 'App\\\\Generated\\\\GeneratedArtifact',
+        'command'       => 'generated',
+        'entries'       => '',
+        'extraKey'      => 'crest',
+        'name'          => 'id',
+        'namespace'     => 'App\\Generated',
+        'params'        => '',
+        'route'         => 'generated',
+        'template'      => 'generated/index',
     ];
 
     protected function setUp(): void
@@ -85,13 +97,13 @@ final class StubContractsTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function fragmentStubs(): iterable
     {
-        foreach (self::packagedNames() as $name) {
+        foreach (self::packagedNames() as $key => [$flavor, $name]) {
             if (true === str_starts_with($name, Stub::FRAGMENT_PREFIX)) {
-                yield $name => [$name];
+                yield $key => [$flavor, $name];
             }
         }
     }
@@ -123,11 +135,11 @@ final class StubContractsTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function packagedStubs(): iterable
     {
-        foreach (self::packagedNames() as $name) {
+        foreach (self::packagedNames() as $key => [$flavor, $name]) {
             // The project stubs render a whole application, not one artifact
             // class. ProjectStubsTest holds their contract. A fragment is not
             // a whole class: fragmentStubs() holds its contract.
@@ -138,28 +150,38 @@ final class StubContractsTest extends TestCase
                 continue;
             }
 
-            yield $name => [$name];
+            yield $key => [$flavor, $name];
         }
     }
 
     /**
-     * Every packaged stub that an ADR project renders: the ADR folder and the
-     * shared folder, as the lookup sees them.
+     * Every packaged stub that a project of one of FLAVORS renders: the flavor
+     * folders and the shared folder, as the lookup sees them. The key is
+     * `<folder>/<name>`, so each stub is in the list one time, also a shared
+     * stub that each flavor finds.
      *
-     * @return list<string>
+     * @return array<string, array{string, string}> The flavor and the name
      */
     private static function packagedNames(): array
     {
-        return array_keys((new Stub(Paths::stubs()))->packagedFolders(self::FLAVOR));
+        $stubs = [];
+
+        foreach (self::FLAVORS as $flavor) {
+            foreach ((new Stub(Paths::stubs()))->packagedFolders($flavor) as $name => $folder) {
+                $stubs[$folder . '/' . $name] = [$flavor, $name];
+            }
+        }
+
+        return $stubs;
     }
 
     /**
      * @dataProvider fragmentStubs
      */
-    public function testAFragmentLeavesNoPlaceholder(string $name): void
+    public function testAFragmentLeavesNoPlaceholder(string $flavor, string $name): void
     {
         $this->assertFalse(
-            str_contains($this->render($name), '{{'),
+            str_contains($this->render($flavor, $name), '{{'),
             sprintf("fragment '%s' left a placeholder unrendered", $name)
         );
     }
@@ -169,17 +191,26 @@ final class StubContractsTest extends TestCase
      * covered: the capture stops before ` as `, so `Middleware as
      * MiddlewareContract` is checked as the class it actually names.
      *
+     * An import in the namespace of the generated code names a class that
+     * crest also generates, for example the base of a controller. It does not
+     * exist here. testTheMvcControllerExtendsTheFrameworkController() holds
+     * its contract.
+     *
      * @dataProvider packagedStubs
      */
-    public function testEveryImportResolves(string $name): void
+    public function testEveryImportResolves(string $flavor, string $name): void
     {
-        $rendered = $this->render($name);
+        $rendered = $this->render($flavor, $name);
 
         preg_match_all('/^use\s+(?!function\s|const\s)([\w\\\\]+)/m', $rendered, $matches);
 
         $this->assertNotEmpty($matches[1], sprintf("stub '%s' imports nothing", $name));
 
         foreach ($matches[1] as $import) {
+            if (true === str_starts_with($import, self::REPLACEMENTS['namespace'] . '\\')) {
+                continue;
+            }
+
             $this->assertTrue(
                 class_exists($import)
                 || interface_exists($import)
@@ -219,10 +250,10 @@ final class StubContractsTest extends TestCase
     /**
      * @dataProvider packagedStubs
      */
-    public function testNoPlaceholderIsLeftUnrendered(string $name): void
+    public function testNoPlaceholderIsLeftUnrendered(string $flavor, string $name): void
     {
         $this->assertFalse(
-            str_contains($this->render($name), '{{'),
+            str_contains($this->render($flavor, $name), '{{'),
             sprintf("stub '%s' left a placeholder unrendered", $name)
         );
     }
@@ -230,9 +261,9 @@ final class StubContractsTest extends TestCase
     /**
      * @dataProvider packagedStubs
      */
-    public function testRendersToParseablePhp(string $name): void
+    public function testRendersToParseablePhp(string $flavor, string $name): void
     {
-        $rendered = $this->render($name);
+        $rendered = $this->render($flavor, $name);
 
         try {
             // TOKEN_PARSE is what makes this a syntax check rather than a
@@ -261,8 +292,60 @@ final class StubContractsTest extends TestCase
         );
     }
 
-    private function render(string $name): string
+    /**
+     * The controller stub imports only its base, a generated class, so no
+     * other test checks what the two classes extend. Both are loaded here: a
+     * rename of Phalcon\Mvc\Controller, or a base stub that no longer extends
+     * it, fails here and not in the project of the developer.
+     */
+    public function testTheMvcControllerExtendsTheFrameworkController(): void
     {
-        return (new Stub(Paths::stubs()))->render(self::FLAVOR, $name, self::REPLACEMENTS);
+        $namespace = 'Crest\\Tests\\Generated\\Mvc';
+        $stub      = new Stub(Paths::stubs());
+
+        $this->makeScratchDirectory('stub-contracts');
+
+        try {
+            file_put_contents(
+                $this->root . '/Base.php',
+                $stub->render(
+                    'mvc',
+                    'controller-base',
+                    ['class' => 'GeneratedBase', 'namespace' => $namespace . '\\Base']
+                )
+            );
+            file_put_contents(
+                $this->root . '/Controller.php',
+                $stub->render(
+                    'mvc',
+                    'controller',
+                    [
+                        'base'          => 'GeneratedBase',
+                        'baseNamespace' => $namespace . '\\Base',
+                        'class'         => 'GeneratedController',
+                        'namespace'     => $namespace,
+                    ]
+                )
+            );
+
+            require $this->root . '/Base.php';
+            require $this->root . '/Controller.php';
+        } finally {
+            $this->removeScratchDirectory();
+        }
+
+        $base       = $namespace . '\\Base\\GeneratedBase';
+        $controller = $namespace . '\\GeneratedController';
+
+        $this->assertSame(Controller::class, get_parent_class($base));
+        $this->assertSame($base, get_parent_class($controller));
+        // ReflectionMethod and not method_exists(): the analyzer folds the
+        // constant class name, and calls method_exists() always false.
+        $this->assertTrue((new ReflectionMethod($controller, 'indexAction'))->isPublic());
+    }
+
+    private function render(string $flavor, string $name): string
+    {
+        return (new Stub(Paths::stubs()))->render($flavor, $name, self::REPLACEMENTS);
     }
 }

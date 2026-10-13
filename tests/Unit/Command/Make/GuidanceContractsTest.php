@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command\Make;
 
+use Crest\Command\Make\ControllerCommand;
 use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Console\PackageVersion;
@@ -20,6 +21,7 @@ use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\ADR\Front\AbstractHttpFront;
 use Phalcon\ADR\Router\Router;
 use Phalcon\Container\Container;
+use Phalcon\Mvc\Dispatcher;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -29,12 +31,13 @@ use function extension_loaded;
 use function sprintf;
 
 /**
- * make:middleware and make:provider print wiring the developer copies into their
- * project, and that wiring names framework members crest holds no other
- * reference to. Nothing otherwise links the printed text to the API it
- * describes, so a rename leaves crest confidently instructing someone to write
- * something that does not work - and the failure lands on the developer, who has
- * no reason to suspect the tool that told them what to type.
+ * make:middleware, make:provider and make:controller print wiring the
+ * developer copies into their project, and that wiring names framework
+ * members crest holds no other reference to. Nothing otherwise links the
+ * printed text to the API it describes, so a rename leaves crest confidently
+ * instructing someone to write something that does not work - and the failure
+ * lands on the developer, who has no reason to suspect the tool that told them
+ * what to type.
  *
  * Both halves are pinned here: the command still prints the call, and the
  * framework still has the member the call names.
@@ -58,6 +61,31 @@ final class GuidanceContractsTest extends TestCase
     protected function tearDown(): void
     {
         $this->endScratchProject();
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function routes(): iterable
+    {
+        yield 'one word' => ['Users', 'users'];
+        yield 'two words' => ['UserProfiles', 'user-profiles'];
+        yield 'an acronym' => ['APIKeys', 'a-p-i-keys'];
+        yield 'a name outside ASCII' => ['Ünits', 'Ünits'];
+    }
+
+    public function testControllerGuidanceNamesADispatcherMethodThatExists(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->runProjectCommand('make:controller', ControllerCommand::class, ['Users']);
+
+        $this->assertStringContainsString(
+            "\$dispatcher->setDefaultNamespace('App\\Controllers');",
+            $this->readStdout()
+        );
+
+        $this->assertSame(['string'], $this->parameterTypes(Dispatcher::class, 'setDefaultNamespace'));
     }
 
     public function testMiddlewareGuidanceNamesARouterMethodThatExists(): void
@@ -93,6 +121,28 @@ final class GuidanceContractsTest extends TestCase
 
         $this->assertFalse($method->isAbstract());
         $this->assertSame(AbstractHttpFront::class, $method->getDeclaringClass()->getName());
+    }
+
+    /**
+     * crest makes the route with its own copy of the rule of the dispatcher.
+     * The real dispatcher must give the class of the controller again from
+     * the route that the guidance prints.
+     *
+     * @dataProvider routes
+     */
+    public function testTheRouteOfTheGuidanceGivesTheControllerAgain(string $name, string $route): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->runProjectCommand('make:controller', ControllerCommand::class, [$name]);
+
+        $this->assertStringContainsString('GET /' . $route . ' runs indexAction()', $this->readStdout());
+
+        $dispatcher = new Dispatcher();
+        $dispatcher->setDefaultNamespace('App\\Controllers');
+        $dispatcher->setControllerName($route);
+
+        $this->assertSame('App\\Controllers\\' . $name . 'Controller', $dispatcher->getHandlerClass());
     }
 
     /**

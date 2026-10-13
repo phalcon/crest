@@ -19,6 +19,7 @@ use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\Placement;
 use Crest\Generator\Stub;
+use Crest\Project\Config;
 
 use function sprintf;
 use function ucfirst;
@@ -31,7 +32,7 @@ use function ucfirst;
  * reads both. A subclass whose stub needs more values overrides replacements().
  *
  * What the developer must do to make the class run is in the stub
- * `fragment-guidance-<key>`: this class prints it after "Created" when the
+ * `fragment-guidance-<key>`: guidance() prints it after "Created" when the
  * project or the package has it.
  *
  * @internal
@@ -54,7 +55,6 @@ abstract class NamedArtifactCommand extends ProjectCommand
     {
         $key       = $this->key();
         $config    = $this->config($input);
-        $flavor    = $config->flavor()->value;
         $placement = $this->placement($config, $input->argumentString('name'), $key, $this->suffix());
         $values    = [
             'namespace' => $placement->namespace,
@@ -65,14 +65,7 @@ abstract class NamedArtifactCommand extends ProjectCommand
 
         $output->success(sprintf('Created %s', $placement->file));
 
-        // A generator with nothing to say has no fragment. A project can add
-        // one, or change the packaged one.
-        $stub     = $this->stub($config);
-        $guidance = Stub::FRAGMENT_PREFIX . 'guidance-' . $key;
-
-        if (true === $stub->has($flavor, $guidance)) {
-            $output->write($stub->render($flavor, $guidance, $values));
-        }
+        $this->guidance($config, $output, $values);
 
         return 0;
     }
@@ -86,6 +79,24 @@ abstract class NamedArtifactCommand extends ProjectCommand
      * An example name for the help text, for example `Auth`.
      */
     abstract protected function example(): string;
+
+    /**
+     * Prints the stub `fragment-guidance-<key>` with the values of the class.
+     * A generator with nothing to say has no fragment. A project can add one,
+     * or change the packaged one.
+     *
+     * @param array<string, string> $values
+     */
+    protected function guidance(Config $config, Output $output, array $values): void
+    {
+        $flavor   = $config->flavor()->value;
+        $stub     = $this->stub($config);
+        $guidance = Stub::FRAGMENT_PREFIX . 'guidance-' . $this->key();
+
+        if (true === $stub->has($flavor, $guidance)) {
+            $output->write($stub->render($flavor, $guidance, $values));
+        }
+    }
 
     /**
      * The configuration key. It selects the configured path, the namespace and

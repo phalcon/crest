@@ -55,6 +55,9 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Project\Config::find()`: the configuration of the project, or null when there is no `crest.php`. `list` reads the project with one walk up. [#44](https://github.com/phalcon/crest/issues/44)
 - Added `resources/stubs/shared/` (`Crest\Generator\Stub::SHARED`): the stubs that all flavors use. Crest looks for a stub in the project (`resources/stubs/<flavor>/`, then `resources/stubs/shared/`), then in the package (the same order). [#45](https://github.com/phalcon/crest/issues/45)
 - Added `Crest\Generator\Stub::packagedFolder()` and `packagedFolders()`: the packaged folder of a stub, and of each stub of a flavor. The flavor folder wins on the same name. [#45](https://github.com/phalcon/crest/issues/45)
+- Added `make:controller` for MVC projects: writes a controller that extends `CrestControllerBase`, a base class in `src/Controllers/Base/` that crest owns. Crest writes the base again when its stub changes, and writes the controller only once: a second run keeps the controller and updates the base. The name must give a class that the dispatcher finds from a URL. [#46](https://github.com/phalcon/crest/issues/46)
+- Added the `controller` default path (`src/Controllers`) for MVC projects, and the MVC stubs `controller`, `controller-base` and `fragment-guidance-controller`. [#46](https://github.com/phalcon/crest/issues/46)
+- Added `Crest\Generator\ArtifactWriter::renderOwned()`, `renderOnce()` and `MARKER`, and `Crest\Generator\Outcome`: the write rules for a generated base class and for a class that the developer owns. [#46](https://github.com/phalcon/crest/issues/46)
 
 ### Changed
 
@@ -63,7 +66,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Renamed `Crest\Adr` to `Crest\ADR`, and the `Flavor` cases to `ADR`, `CLI` and `MVC`. Backed values are unchanged.
 - Renamed `Crest\ADR\CandidateSource` to `ActionResolver`, and `PhalconRouterCandidates` to `PhalconRouterResolver`.
 - Dependencies resolve against PHP 8.1 (`config.platform`).
-- Default `paths` are per flavor. Only `adr` has defaults of its own; `command` is in each flavor ([#45](https://github.com/phalcon/crest/issues/45)). [#5](https://github.com/phalcon/crest/issues/5)
+- Default `paths` are per flavor. `adr` and `mvc` ([#46](https://github.com/phalcon/crest/issues/46)) have defaults of their own; `command` is in each flavor ([#45](https://github.com/phalcon/crest/issues/45)). [#5](https://github.com/phalcon/crest/issues/5)
 - `crest`, `crest list` and `crest --version` show a chevron before the name. No color when piped or with `NO_COLOR`. [#5](https://github.com/phalcon/crest/issues/5)
 - `make:action --responder=view` prints the template name. [#5](https://github.com/phalcon/crest/issues/5)
 - `route:list` and `make:action` take an optional `ActionResolver`. [#5](https://github.com/phalcon/crest/issues/5)

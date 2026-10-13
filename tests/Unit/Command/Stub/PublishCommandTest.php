@@ -83,6 +83,23 @@ final class PublishCommandTest extends TestCase
         $this->assertStringNotContainsString('Note:', $this->readStdout());
     }
 
+    public function testAnMvcProjectPublishesItsStubsAndTheSharedStubs(): void
+    {
+        // A fragment is published by name only, also the guidance of
+        // make:controller.
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
+        $status = $this->runCommand([]);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'controller'));
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'controller-base'));
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
+        $this->assertFileDoesNotExist(
+            Stub::overridePath($this->root, 'mvc', 'fragment-guidance-controller')
+        );
+    }
+
     public function testAProjectStubGoesIntoTheDirectoryOptionAndNotAParentProject(): void
     {
         // `new --directory work` reads the overrides from work/. A crest.php

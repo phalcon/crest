@@ -1,0 +1,5 @@
+The dispatcher finds it only when its default namespace is this namespace:
+
+    $dispatcher->setDefaultNamespace('{{ namespace }}');
+
+With the default routes, GET /{{ route }} runs indexAction(). Its view is {{ route }}/index in your views directory.

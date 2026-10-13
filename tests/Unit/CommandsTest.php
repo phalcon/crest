@@ -37,6 +37,7 @@ final class CommandsTest extends TestCase
                 'list',
                 'make:action',
                 'make:command',
+                'make:controller',
                 'make:middleware',
                 'make:provider',
                 'make:responder',
