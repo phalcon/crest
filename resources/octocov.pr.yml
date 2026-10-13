@@ -8,17 +8,14 @@
 #
 # Paths below are relative to THIS file's directory (resources/), not the
 # repo root - octocov resolves them that way, so everything is prefixed `../`.
+# There is no codeToTestRatio, for the reasons that the note in octocov.yml
+# gives.
 coverage:
   paths:
     - ../tests/_output/coverage.xml
   acceptable: "current >= 95.0% && diff >= 0"
   badge:
     path: ../tests/_output/coverage.svg
-codeToTestRatio:
-  code:
-    - ../src/**/*.php
-  test:
-    - ../tests/**/*.php
 testExecutionTime:
   steps:
     - Tests with coverage

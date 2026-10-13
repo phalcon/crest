@@ -45,7 +45,10 @@
                 // cannot cause.
                 "Crest\\Command\\NewCommand::parent",
                 // Environment branch. See the note on Identical below.
-                "Crest\\Command\\AboutCommand::phalcon"
+                "Crest\\Command\\AboutCommand::phalcon",
+                // The root exists: its crest.php was found. realpath() cannot
+                // fail.
+                "Crest\\HandOff::inContainer"
             ]
         },
         "Identical": {

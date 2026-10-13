@@ -9,6 +9,8 @@ With docker:
     ./crest up
     ./crest install
 
+With rootless docker, set `UID=0` and `GID=0` in `.env` first.
+
 With PHP and composer on the host:
 
     composer install
