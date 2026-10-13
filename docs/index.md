@@ -31,10 +31,11 @@ the commands for the flavor of the project.
 | `stub:publish` | copy packaged stubs into the project for editing |
 | `up` | start the project containers |
 
-Only the `adr` flavor has generators. These commands are for ADR projects only:
-`make:action`, `make:command`, `make:middleware`, `make:provider`,
-`make:responder`, `route:list`, `container:list` and `event:list`. In a project
-of a different flavor, they stop with an error:
+`make:command` works in each flavor. The other generators are for the `adr`
+flavor. These commands are for ADR projects only: `make:action`,
+`make:middleware`, `make:provider`, `make:responder`, `route:list`,
+`container:list` and `event:list`. In a project of a different flavor, they stop
+with an error:
 
     crest: make:responder does not support the 'mvc' flavor of this project; it supports: adr
 

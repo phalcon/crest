@@ -36,7 +36,7 @@ use function trim;
  * working on a project that does not currently run.
  *
  * `--responder` picks between the two packaged shapes; `--stub` names any stub
- * instead, resolved through the same two-level chain, so a project that has run
+ * instead, resolved through the same stub lookup, so a project that has run
  * stub:publish can generate from its own edited copy. An empty `--stub=` counts
  * as absent, which is how optionString() reads every other option.
  */

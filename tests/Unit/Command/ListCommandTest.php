@@ -44,7 +44,6 @@ final class ListCommandTest extends TestCase
         'container:list',
         'event:list',
         'make:action',
-        'make:command',
         'make:middleware',
         'make:provider',
         'make:responder',
@@ -140,7 +139,7 @@ final class ListCommandTest extends TestCase
 
         // A command that is not a project command, a package command, and the
         // project commands for all flavors.
-        foreach (['aaa:first', 'about', 'config:show', 'list', 'new', 'stub:publish'] as $name) {
+        foreach (['aaa:first', 'about', 'config:show', 'list', 'make:command', 'new', 'stub:publish'] as $name) {
             $this->assertMatchesRegularExpression($this->row($name), $output);
         }
     }

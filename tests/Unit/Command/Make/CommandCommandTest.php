@@ -18,11 +18,43 @@ use Crest\Commands;
 use Crest\Tests\Support\NamedArtifactCommandTestCase;
 
 use function file_get_contents;
+use function file_put_contents;
+use function mkdir;
 
 use const PHP_EOL;
 
 final class CommandCommandTest extends NamedArtifactCommandTestCase
 {
+    public function testACopyInTheAdrFolderOfTheProjectStillWins(): void
+    {
+        // A project that published command.stub before it moved to the shared
+        // folder keeps its copy: the project flavor folder is the first level.
+        mkdir($this->root . '/resources/stubs/adr', 0o775, true);
+        file_put_contents($this->root . '/resources/stubs/adr/command.stub', "<?php\n// old copy {{ class }}\n");
+
+        $status = $this->runCommand(['Greet']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            "<?php\n// old copy GreetCommand\n",
+            (string) file_get_contents($this->root . '/src/Command/GreetCommand.php')
+        );
+    }
+
+    public function testAnMvcProjectGetsTheCommandAndItsGuidance(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $status = $this->runCommand(['Greet']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'namespace App\Command;',
+            (string) file_get_contents($this->root . '/src/Command/GreetCommand.php')
+        );
+        $this->assertStringContainsString('Nothing lists it yet.', $this->readStdout());
+    }
+
     public function testTheExtraBlockIsPrintedWithEscapedBackslashes(): void
     {
         // The registry has no other way in, so the block is the deliverable.

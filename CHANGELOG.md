@@ -53,6 +53,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Console\Registry::withDefault()` and `defaultName()`: the command that the kernel runs when the user names none. Crest runs `list`. [#44](https://github.com/phalcon/crest/issues/44)
 - Added an optional filter to `Crest\Console\Registry::descriptions()`: it keeps only the commands that pass it. [#44](https://github.com/phalcon/crest/issues/44)
 - Added `Crest\Project\Config::find()`: the configuration of the project, or null when there is no `crest.php`. `list` reads the project with one walk up. [#44](https://github.com/phalcon/crest/issues/44)
+- Added `resources/stubs/shared/` (`Crest\Generator\Stub::SHARED`): the stubs that all flavors use. Crest looks for a stub in the project (`resources/stubs/<flavor>/`, then `resources/stubs/shared/`), then in the package (the same order). [#45](https://github.com/phalcon/crest/issues/45)
+- Added `Crest\Generator\Stub::packagedFolder()` and `packagedFolders()`: the packaged folder of a stub, and of each stub of a flavor. The flavor folder wins on the same name. [#45](https://github.com/phalcon/crest/issues/45)
 
 ### Changed
 
@@ -61,7 +63,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Renamed `Crest\Adr` to `Crest\ADR`, and the `Flavor` cases to `ADR`, `CLI` and `MVC`. Backed values are unchanged.
 - Renamed `Crest\ADR\CandidateSource` to `ActionResolver`, and `PhalconRouterCandidates` to `PhalconRouterResolver`.
 - Dependencies resolve against PHP 8.1 (`config.platform`).
-- Default `paths` are per flavor. Only `adr` has defaults. [#5](https://github.com/phalcon/crest/issues/5)
+- Default `paths` are per flavor. Only `adr` has defaults of its own; `command` is in each flavor ([#45](https://github.com/phalcon/crest/issues/45)). [#5](https://github.com/phalcon/crest/issues/5)
 - `crest`, `crest list` and `crest --version` show a chevron before the name. No color when piped or with `NO_COLOR`. [#5](https://github.com/phalcon/crest/issues/5)
 - `make:action --responder=view` prints the template name. [#5](https://github.com/phalcon/crest/issues/5)
 - `route:list` and `make:action` take an optional `ActionResolver`. [#5](https://github.com/phalcon/crest/issues/5)
@@ -86,6 +88,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `./crest`: one `crest=` line names the crest of the project, and the crest commands get `CREST_HOST_ROOT`. [#42](https://github.com/phalcon/crest/issues/42)
 - Changed `resources/setup.sh`: the working folder has the same path in the one-off container, so the errors of `new` show host paths. A system folder, for example `/usr`, is refused as the working folder. `APP_PORT` goes into the project `.env`. With rootless docker, it writes `UID=0` and `GID=0`, and does no `chown`. After a failed `up` or `install`, it prints the commands to continue. [#42](https://github.com/phalcon/crest/issues/42)
 - Changed the listing: in a project, `crest` and `crest list` show only the commands for the flavor of the project. `crest --help` shows the help of `list`. An unknown option with no command, and a `crest.php` that is not valid, stop the listing with an error. [#44](https://github.com/phalcon/crest/issues/44)
+- Changed `make:command`: it runs in each flavor, and the `command` default path is in each flavor. `command.stub` and `fragment-guidance-command.stub` moved to `resources/stubs/shared/`. [#45](https://github.com/phalcon/crest/issues/45)
+- Changed `stub:publish`: it also publishes the shared stubs, into `resources/stubs/shared/`. When the flavor folder of the project has a copy with the same name, that copy wins, and a note names it. [#45](https://github.com/phalcon/crest/issues/45)
 
 ### Fixed
 
@@ -103,6 +107,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Removed the shadowed-action warning from `make:action`.
 - Removed the `phalcon/cli-options-parser` requirement.
 - Removed the inference of the namespace and paths from `composer.json` when there is no `crest.php`. [#28](https://github.com/phalcon/crest/issues/28)
+- Removed the error `no stubs are packaged for the '<flavor>' flavor` of `stub:publish`: each flavor has the shared stubs. [#45](https://github.com/phalcon/crest/issues/45)
 
 [keep_a_changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic_versioning]: https://semver.org/spec/v2.0.0.html

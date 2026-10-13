@@ -53,9 +53,7 @@ final class CommandCommand extends NamedArtifactCommand
 
     protected function flavors(): array
     {
-        // ADR only, until the command path and stub move to a set that all
-        // flavors share.
-        return [Flavor::ADR];
+        return Flavor::cases();
     }
 
     protected function key(): string

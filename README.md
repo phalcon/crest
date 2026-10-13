@@ -215,7 +215,11 @@ filesystem and keeps working on a project that does not currently run.
 ## Custom stubs
 
 Copy a stub into `resources/stubs/<flavor>/` in your project and crest uses yours instead
-of the packaged one.
+of the packaged one. A stub that all flavors use, for example `command.stub`, is in
+`resources/stubs/shared/`. Crest looks for a stub in this order: your
+`resources/stubs/<flavor>/`, your `resources/stubs/shared/`, then the same two folders in
+the package. `crest stub:publish` copies each stub into the folder where crest looks for
+it.
 
 The `project-*` stubs that `new` renders are published by name only. See
 [docs/index.md](docs/index.md#creating-a-project).
