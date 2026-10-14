@@ -1,0 +1,67 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ providerNamespace }}\DispatcherProvider;
+use {{ providerNamespace }}\ViewProvider;
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\FactoryDefault;
+use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Http\ResponseInterface;
+use Phalcon\Mvc\Application;
+
+/**
+ * The front controller. {{ documentRoot }}/index.php runs it for every request,
+ * and crest.php names it, so that crest can boot it.
+ *
+ * Add a service with a provider in providers().
+ */
+final class {{ front }}
+{
+    public function __construct(private readonly string $projectRoot)
+    {
+    }
+
+    /**
+     * The container with the services of the application.
+     */
+    public function boot(): DiInterface
+    {
+        $container = new FactoryDefault();
+
+        foreach ($this->providers() as $provider) {
+            $container->register($provider);
+        }
+
+        return $container;
+    }
+
+    /**
+     * Handles the request, and sends the response. The return value is the
+     * exit status of {{ documentRoot }}/index.php.
+     */
+    public function run(): int
+    {
+        $uri      = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        $response = (new Application($this->boot()))->handle($uri);
+
+        if ($response instanceof ResponseInterface) {
+            $response->send();
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return list<ServiceProviderInterface>
+     */
+    private function providers(): array
+    {
+        return [
+            new DispatcherProvider(),
+            new ViewProvider($this->projectRoot . '/{{ viewsPath }}'),
+        ];
+    }
+}

@@ -17,6 +17,7 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Generator\ArtifactWriter;
+use Crest\Generator\ControllerBase;
 use Crest\Generator\Outcome;
 use Crest\Project\Flavor;
 
@@ -33,12 +34,13 @@ use function substr;
 /**
  * Generates an MVC controller with the Generation Gap pattern.
  *
- * The controller extends BASE, a class that crest owns, in the BASE_FOLDER
- * subfolder of the `controller` path. crest writes the base again when its
- * stub changes (ArtifactWriter::renderOwned()), and writes the controller one
- * time (ArtifactWriter::renderOnce()). So a new version of the base stub
- * reaches each controller, and the code of the developer does not change. A
- * second run on an existing controller is the upgrade.
+ * The controller extends the base that crest owns (ControllerBase), in its
+ * subfolder of the `controller` path. `new` writes the same base for an MVC
+ * project. crest writes the base again when its stub changes
+ * (ArtifactWriter::renderOwned()), and writes the controller one time
+ * (ArtifactWriter::renderOnce()). So a new version of the base stub reaches
+ * each controller, and the code of the developer does not change. A second
+ * run on an existing controller is the upgrade.
  *
  * The name must give a class that the dispatcher can find from a URL
  * (route()), because no URL reaches a controller that it cannot find.
@@ -48,27 +50,15 @@ use function substr;
  */
 final class ControllerCommand extends NamedArtifactCommand
 {
-    /**
-     * The base class that crest owns. The name does not end in the suffix, so
-     * no generated controller can have it, and the import needs no alias.
-     */
-    public const BASE = 'CrestControllerBase';
-
-    /**
-     * The subfolder of the `controller` path that holds the base, and the
-     * last part of the namespace of the base.
-     */
-    public const BASE_FOLDER = 'Base';
-
     public function handle(Input $input, Output $output): int
     {
         $config        = $this->config($input);
         $name          = $input->argumentString('name');
         $placement     = $this->placement($config, $name, $this->key(), $this->suffix());
-        $baseNamespace = $placement->namespace . '\\' . self::BASE_FOLDER;
-        $base          = $config->path($this->key()) . '/' . self::BASE_FOLDER . '/' . self::BASE . '.php';
+        $baseNamespace = ControllerBase::namespace($placement->namespace);
+        $base          = ControllerBase::file($config->path($this->key()));
         $values        = [
-            'base'          => self::BASE,
+            'base'          => ControllerBase::NAME,
             'baseNamespace' => $baseNamespace,
             'class'         => $placement->class,
             'namespace'     => $placement->namespace,
@@ -79,7 +69,11 @@ final class ControllerCommand extends NamedArtifactCommand
         // The base first: a controller never exists without its base.
         $this->reportBase(
             $output,
-            $writer->renderOwned($base, 'controller-base', ['class' => self::BASE, 'namespace' => $baseNamespace]),
+            $writer->renderOwned(
+                $base,
+                'controller-base',
+                ['class' => ControllerBase::NAME, 'namespace' => $baseNamespace]
+            ),
             $base
         );
 

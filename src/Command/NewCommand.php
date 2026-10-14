@@ -21,6 +21,8 @@ use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
+use Crest\Generator\Project\Answers;
+use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Process\Runner;
@@ -50,12 +52,15 @@ use function sprintf;
 use function str_contains;
 use function str_replace;
 use function strtolower;
+use function var_export;
 use function version_compare;
 
 use const PHP_BINARY;
 
 /**
- * Creates a new ADR project from stubs.
+ * Creates a new project from stubs. The parts of each flavor - its files, its
+ * values and its first artifacts - are in its skeleton
+ * (Crest\Generator\Project\Skeleton).
  *
  * This command runs where no project exists yet: no crest.php, no
  * composer.json, no vendor/. Thus it extends the console Command, not
@@ -81,8 +86,9 @@ final class NewCommand extends Command
     private const CREST = 'dev-master';
 
     /**
-     * Stub name => path in the new project. The seed action is not here: it
-     * uses the action stub with its own placeholders.
+     * Stub name => path in the new project: the files of each flavor. Each
+     * flavor has its own project-front and project-readme, and the stub
+     * lookup finds them. The other files of a flavor come from its skeleton.
      */
     private const FILES = [
         Stub::PROJECT_PREFIX . 'composer'   => 'composer.json',
@@ -136,14 +142,6 @@ final class NewCommand extends Command
      */
     private const PHP_FLOOR = '8.1';
 
-    /**
-     * The class of the seed action, which answers GET /. This is a copy of the
-     * framework routing rule, because there is no vendor/ to ask yet.
-     * GeneratedProjectTest sends GET / through the generated application to
-     * make sure that the copy is correct.
-     */
-    private const SEED = 'Get';
-
     private readonly Runner $runner;
 
     /**
@@ -178,8 +176,10 @@ final class NewCommand extends Command
 
     public function define(): Definition
     {
-        return Definition::for('new', 'Create an ADR project')
+        return Definition::for('new', 'Create an ADR or MVC project')
             ->argument('name', true, 'Project directory, e.g. my-app')
+            ->option('flavor=s', 'Flavor: adr or mvc', 'adr')
+            ->option('template-engine=s', 'The view engine of an MVC project: phtml. Default: phtml')
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
             ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
@@ -199,6 +199,19 @@ final class NewCommand extends Command
 
         // An option answers its question. Each question shows the default of
         // its option. Without interaction, the default is the answer.
+        //
+        // The flavor first: its skeleton has the files, the values and the
+        // first artifacts of the project.
+        $skeleton = Skeletons::for(
+            true === $input->hasOption('flavor')
+                ? $input->optionString('flavor')
+                : $output->choice('Flavor', Skeletons::flavors(), $input->optionString('flavor'))
+        );
+        $flavor   = $skeleton->flavor();
+
+        // Before the other questions: a refused engine asks nothing more.
+        $engine = $skeleton->engines()->choose($output, $input->optionStringOrNull('template-engine'));
+
         $namespace = true === $input->hasOption('namespace')
             ? ClassName::namespace($input->optionString('namespace'))
             : Questions::namespace($output, $input->optionString('namespace'));
@@ -230,29 +243,25 @@ final class NewCommand extends Command
             $input->optionStringOrNull('service')
         );
 
+        $answers = new Answers($name, $flavor, $namespace, $php, $variant, $runtime, $engine);
+
         // Overrides come from the directory that the project goes into. A
         // team that publishes the project stubs there gets its own
         // conventions in each project that it creates there.
-        $stub   = new Stub(Paths::stubs(), $parent);
-        $flavor = Flavor::ADR->value;
-
-        // Where the actions go, relative to the project root. The seed action
-        // and the front controller use it.
-        $actionPath = Config::defaultPaths(Flavor::ADR)['action'];
+        $stub = new Stub(Paths::stubs(), $parent);
 
         // crest.php holds the decisions of the user. `crest init` writes it
         // through the same stub and the same Settings.
         $settings = new Settings(
+            $flavor,
             $namespace,
             $namespace . '\\' . Layout::FRONT,
-            Config::defaultPaths(Flavor::ADR),
+            Config::defaultPaths($flavor),
             $runtime
         );
 
         $replacements = [
             ...$settings->replacements(),
-            'actionNamespace'   => $namespace . '\\Action',
-            'actionPath'        => $actionPath,
             'autoloader'        => Layout::AUTOLOADER,
             'crestConstraint'   => self::CREST,
             'documentRoot'      => Layout::DOCUMENT_ROOT,
@@ -269,40 +278,30 @@ final class NewCommand extends Command
             'portVariable'        => Layout::PORT_VARIABLE,
             'project'             => $name,
             'router'              => Layout::ROUTER,
-            'seed'                => self::SEED,
             'service'             => $settings->runtime->service,
             'source'              => Layout::SOURCE,
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',
+            ...$skeleton->values($answers),
         ];
 
         // All files render before the first write. A published stub that does
         // not render then stops the command before it writes a file.
         $files = [];
 
-        foreach (self::FILES as $stubName => $path) {
+        foreach ([...self::FILES, ...$skeleton->files($answers)] as $stubName => $path) {
             // crest.php gets only the values of Settings, as for `crest init`.
             // Thus an old published copy stops here, and does not drop a key.
             $files[$path] = $stub->render(
-                $flavor,
+                $flavor->value,
                 $stubName,
                 Stub::PROJECT_PREFIX . 'config' === $stubName ? $settings->replacements() : $replacements
             );
         }
 
-        // The seed action uses the usual action stub. Convention cannot name
-        // it, because Convention asks the router, and there is no vendor/ yet.
-        $files[$actionPath . '/' . self::SEED . '.php'] = $stub->render(
-            $flavor,
-            'action',
-            [
-                'attributes' => '',
-                'class'      => self::SEED,
-                'namespace'  => $namespace . '\\Action',
-                'params'     => '',
-            ]
-        );
+        // The first artifacts of the flavor, from the stubs of its generators.
+        $files = [...$files, ...$skeleton->seed($stub, $answers)];
 
         // guard() has refused a directory that is not empty, unless --force
         // is given. Thus a file that exists here can be overwritten.
@@ -319,15 +318,38 @@ final class NewCommand extends Command
         $output->success(sprintf('Created %s/', $shown));
         $output->line();
 
-        $steps = $this->steps($target, $shown, $parent);
+        $steps = $this->steps($target, $shown, $stub, $flavor->value);
 
         if ([] === $steps) {
-            $this->report($output, $shown, $actionPath);
+            $this->report($output, $shown, $skeleton->entry());
 
             return 0;
         }
 
         return $this->runSteps($output, $steps, $target, $shown);
+    }
+
+    /**
+     * The written crest.php must have the flavor of the project. A published
+     * project-config copy with a fixed flavor gives another one, and the
+     * commands of crest then treat the project as that flavor. No key is adr,
+     * as Config reads it.
+     */
+    private function checkFlavor(string $file, string $flavor): void
+    {
+        /** @var array<string, mixed> $declared */
+        $declared = require $file;
+        $written  = $declared['flavor'] ?? Flavor::ADR->value;
+
+        if ($flavor !== $written) {
+            throw new Exception(
+                sprintf(
+                    "the flavor is %s, not '%s'; keep 'flavor' => '{{ flavor }}' in the stub",
+                    var_export($written, true),
+                    $flavor
+                )
+            );
+        }
     }
 
     /**
@@ -437,7 +459,7 @@ final class NewCommand extends Command
      * on every host. Only this text names the two ways, so nothing here
      * examines the environment.
      */
-    private function report(Output $output, string $shown, string $actionPath): void
+    private function report(Output $output, string $shown, string $entry): void
     {
         // Quoted when the path has a space, so that the line works when pasted.
         $cd = '    cd ' . $this->quote($shown);
@@ -454,7 +476,7 @@ final class NewCommand extends Command
         $output->line('    composer install');
         $output->line('    crest serve');
         $output->line();
-        $output->line(sprintf('Then GET / answers from %s/%s.php', $actionPath, self::SEED));
+        $output->line(sprintf('Then GET / answers from %s', $entry));
     }
 
     /**
@@ -501,16 +523,19 @@ final class NewCommand extends Command
      * The `new` key of the crest.php that this command has just written. A
      * bad key, or a file that PHP cannot parse, comes from a published
      * project-config stub: the packaged stub has no key. A change to the
-     * written crest.php does nothing, so the error names the stub. The files
+     * written crest.php does nothing, so the error names the stub that `new`
+     * used: a copy in the flavor folder or in the shared folder. The files
      * stay, and nothing runs.
      *
      * @return list<non-empty-list<string>>
      */
-    private function steps(string $target, string $shown, string $parent): array
+    private function steps(string $target, string $shown, Stub $stub, string $flavor): array
     {
         $file = self::FILES[Stub::PROJECT_PREFIX . 'config'];
 
         try {
+            $this->checkFlavor($target . '/' . $file, $flavor);
+
             return Steps::fromFile($target . '/' . $file);
         } catch (Throwable $throwable) {
             throw new Exception(
@@ -520,7 +545,7 @@ final class NewCommand extends Command
                     $file,
                     $throwable->getMessage(),
                     $shown,
-                    Stub::overridePath($parent, Flavor::ADR->value, Stub::PROJECT_PREFIX . 'config')
+                    $stub->resolve($flavor, Stub::PROJECT_PREFIX . 'config')
                 )
             );
         }

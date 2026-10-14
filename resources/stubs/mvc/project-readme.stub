@@ -1,0 +1,45 @@
+# {{ project }}
+
+A Phalcon MVC application.
+
+## Run it
+
+With docker:
+
+    ./crest up
+    ./crest install
+
+With rootless docker, set `UID=0` and `GID=0` in `.env` first.
+
+With PHP and composer on the host:
+
+    composer install
+    crest serve
+
+Then open http://localhost:{{ port }}/.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `{{ documentRoot }}/index.php` | The web entry point |
+| `{{ source }}/{{ front }}.php` | The front controller: container, providers, application. Add a provider in `providers()` |
+| `{{ providerPath }}/` | The providers of the services |
+| `{{ controllerPath }}/` | The controllers. `GET /` is `{{ controllerPath }}/{{ seed }}.php` |
+| `{{ controllerPath }}/{{ baseFolder }}/` | The base of the controllers. crest writes it; do not edit it |
+| `{{ viewsPath }}/` | The views. `GET /` shows the view `index/index` in the layout `index` |
+| `crest.php` | The crest configuration |
+
+## Next steps
+
+These commands use the crest in `vendor/`, with the autoloader and the
+Phalcon of this project. On the host, a global crest passes them to it. With
+the docker runtime in `crest.php` (the default of `crest new`), it runs them
+in the `{{ service }}` container:
+
+    crest make:controller Users
+
+Without a global crest, use `./crest`. It needs docker only, and it runs them
+in the `{{ service }}` container:
+
+    ./crest make:controller Users

@@ -58,6 +58,11 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `make:controller` for MVC projects: writes a controller that extends `CrestControllerBase`, a base class in `src/Controllers/Base/` that crest owns. Crest writes the base again when its stub changes, and writes the controller only once: a second run keeps the controller and updates the base. The name must give a class that the dispatcher finds from a URL. [#46](https://github.com/phalcon/crest/issues/46)
 - Added the `controller` default path (`src/Controllers`) for MVC projects, and the MVC stubs `controller`, `controller-base` and `fragment-guidance-controller`. [#46](https://github.com/phalcon/crest/issues/46)
 - Added `Crest\Generator\ArtifactWriter::renderOwned()`, `renderOnce()` and `MARKER`, and `Crest\Generator\Outcome`: the write rules for a generated base class and for a class that the developer owns. [#46](https://github.com/phalcon/crest/issues/46)
+- Added `new --flavor=adr|mvc`: `crest new my-app --flavor=mvc` writes an MVC project that runs: `AppFront` with `Phalcon\Mvc\Application`, a dispatcher provider and a view provider in `src/Providers/`, `IndexController` and its base in `src/Controllers/`, and the views in `themes/default/`. `new` asks for the flavor first. [#47](https://github.com/phalcon/crest/issues/47)
+- Added `new --template-engine`: the view engine of an MVC project. It accepts `phtml`, the default. An ADR project has no views, so the option stops `new`. [#47](https://github.com/phalcon/crest/issues/47)
+- Added `stub:publish --flavor`: the flavor of a project stub before the project exists, `adr` by default. When the flavor does not have the project stub and another flavor does, the error says which: `pass --flavor=mvc`. [#47](https://github.com/phalcon/crest/issues/47)
+- Added the MVC default paths `provider` (`src/Providers`) and `views` (`themes/default`), and the MVC project stubs `project-front`, `project-readme`, `project-provider-dispatcher`, `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`. [#47](https://github.com/phalcon/crest/issues/47)
+- Added `Crest\Generator\Project`: `Skeleton` (the files, the values and the first artifacts of the project of a flavor), `AdrSkeleton`, `MvcSkeleton`, `Skeletons`, `Answers` and `TemplateEngines`, and `Crest\Generator\ControllerBase`. [#47](https://github.com/phalcon/crest/issues/47)
 
 ### Changed
 
@@ -93,6 +98,11 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the listing: in a project, `crest` and `crest list` show only the commands for the flavor of the project. `crest --help` shows the help of `list`. An unknown option with no command, and a `crest.php` that is not valid, stop the listing with an error. [#44](https://github.com/phalcon/crest/issues/44)
 - Changed `make:command`: it runs in each flavor, and the `command` default path is in each flavor. `command.stub` and `fragment-guidance-command.stub` moved to `resources/stubs/shared/`. [#45](https://github.com/phalcon/crest/issues/45)
 - Changed `stub:publish`: it also publishes the shared stubs, into `resources/stubs/shared/`. When the flavor folder of the project has a copy with the same name, that copy wins, and a note names it. [#45](https://github.com/phalcon/crest/issues/45)
+- Changed the project stubs: `project-compose`, `project-composer`, `project-config`, `project-dockerfile`, `project-env`, `project-gitignore`, `project-htrouter`, `project-index` and `project-launcher` are the same in both flavors, and moved to `resources/stubs/shared/`. A copy that was published into `resources/stubs/adr/` still wins for ADR projects, and has no effect on MVC projects. To use one copy for both flavors, publish it again. [#47](https://github.com/phalcon/crest/issues/47)
+- Changed the `project-config` stub: `'flavor' => '{{ flavor }}'`. `Crest\Project\Settings` has the flavor as its first value. [#47](https://github.com/phalcon/crest/issues/47)
+- Changed the error of the `new` key: it names the published `project-config` that `new` used. [#47](https://github.com/phalcon/crest/issues/47)
+- Changed `new`: it checks that the written `crest.php` has the chosen flavor. A published `project-config` with a fixed flavor stops it, with an error that names the stub. [#47](https://github.com/phalcon/crest/issues/47)
+- Moved `Crest\Command\Make\ControllerCommand::BASE` and `BASE_FOLDER` to `Crest\Generator\ControllerBase::NAME` and `FOLDER`. [#47](https://github.com/phalcon/crest/issues/47)
 
 ### Fixed
 

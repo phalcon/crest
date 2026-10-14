@@ -20,6 +20,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
+use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Flavor;
@@ -45,6 +46,11 @@ use function str_starts_with;
  * folder of the project has a copy with the same name, that copy wins, and the
  * command prints a note that names it: an edit of the shared copy has no
  * effect then.
+ *
+ * A project stub goes into the directory that `new` reads. That directory is
+ * not a project yet, so --flavor gives the flavor of the stub, as it does for
+ * `new`; the default is adr. In a project, the flavor comes from crest.php,
+ * and --flavor is an error.
  */
 final class PublishCommand extends ProjectCommand
 {
@@ -57,6 +63,7 @@ final class PublishCommand extends ProjectCommand
     {
         return Definition::for('stub:publish', 'Copy packaged stubs into the project for editing')
             ->argument('name', false, 'A single stub, e.g. action. Omit to publish them all')
+            ->option('flavor=s', 'The flavor of a project stub, before the project exists. Default: adr')
             ->option('force', 'Overwrite stubs the project has already published');
     }
 
@@ -64,12 +71,18 @@ final class PublishCommand extends ProjectCommand
     {
         $name  = $input->argumentString('name');
         $force = true === $input->option('force');
+        $given = $input->optionStringOrNull('flavor');
 
         // A project stub has an effect only where `new` reads it. That
-        // directory is not a project, and `new` creates only ADR projects.
+        // directory is not a project, so --flavor gives the flavor, as it
+        // does for `new`.
         if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
             $root   = NewCommand::parent($input);
-            $flavor = Flavor::ADR->value;
+            $flavor = Skeletons::for($given ?? Flavor::ADR->value)->flavor()->value;
+        } elseif (null !== $given) {
+            throw new Exception(
+                '--flavor is only for a project stub; in a project, the flavor comes from crest.php'
+            );
         } else {
             $config = $this->config($input);
             $root   = $config->root();
@@ -110,6 +123,28 @@ final class PublishCommand extends ProjectCommand
     }
 
     /**
+     * The end of the error for a stub that the flavor does not have. A project
+     * stub gets its flavor from --flavor, so the error names the flavor that
+     * has the stub. The given flavor does not have it, so the first flavor
+     * that has it is another one. An artifact stub gets its flavor from
+     * crest.php, and gets no hint.
+     */
+    private function hint(Stub $packaged, string $name): string
+    {
+        if (false === str_starts_with($name, Stub::PROJECT_PREFIX)) {
+            return '';
+        }
+
+        foreach (Skeletons::flavors() as $other) {
+            if (null !== $packaged->packagedFolder($other, $name)) {
+                return sprintf('; the %s flavor has it: pass --flavor=%s', $other, $other);
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * The packaged stubs this run will copy, name => packaged folder. A stub
      * goes into the project folder with the same name, where the lookup finds
      * it.
@@ -134,7 +169,9 @@ final class PublishCommand extends ProjectCommand
             }
 
             $folder = $packaged->packagedFolder($flavor, $name)
-                ?? throw new Exception(sprintf("stub '%s/%s' is not packaged", $flavor, $name));
+                ?? throw new Exception(
+                    sprintf("stub '%s/%s' is not packaged%s", $flavor, $name, $this->hint($packaged, $name))
+                );
 
             return [$name => $folder];
         }

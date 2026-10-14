@@ -109,6 +109,10 @@ final class Config implements ProjectContext
                 Flavor::CLI => [],
                 Flavor::MVC => [
                     'controller' => Layout::SOURCE . '/Controllers',
+                    'provider'   => Layout::SOURCE . '/Providers',
+                    // The layout of the Phalcon sample applications (vokuro,
+                    // invo), with one fixed theme.
+                    'views'      => 'themes/default',
                 ],
             },
         ];

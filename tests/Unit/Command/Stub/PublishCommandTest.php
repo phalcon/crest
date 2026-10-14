@@ -20,11 +20,10 @@ use Crest\Paths;
 use Crest\Tests\Support\GeneratesInAScratchProject;
 use PHPUnit\Framework\TestCase;
 
-use function basename;
 use function chdir;
+use function dirname;
 use function file_get_contents;
 use function file_put_contents;
-use function glob;
 use function mkdir;
 use function preg_match_all;
 use function setlocale;
@@ -33,6 +32,7 @@ use function str_starts_with;
 use function unlink;
 
 use const LC_COLLATE;
+use const PHP_EOL;
 
 final class PublishCommandTest extends TestCase
 {
@@ -59,6 +59,30 @@ final class PublishCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'command'));
         $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs/cli');
+    }
+
+    public function testAFlavorForAnArtifactStubIsRejected(): void
+    {
+        $status = $this->runCommand(['action', '--flavor', 'mvc']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            '--flavor is only for a project stub; in a project, the flavor comes from crest.php',
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs');
+    }
+
+    public function testAFlavorWithNoNameIsRejected(): void
+    {
+        $status = $this->runCommand(['--flavor', 'mvc']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            '--flavor is only for a project stub; in a project, the flavor comes from crest.php',
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs');
     }
 
     public function testAnAlreadyPublishedStubIsSkippedNotOverwritten(): void
@@ -100,6 +124,15 @@ final class PublishCommandTest extends TestCase
         );
     }
 
+    public function testAnUnknownFlavorForAProjectStubIsRejected(): void
+    {
+        $status = $this->runCommand(['project-front', '--flavor', 'cli']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("unknown flavor 'cli'; expected adr or mvc", $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs');
+    }
+
     public function testAProjectStubGoesIntoTheDirectoryOptionAndNotAParentProject(): void
     {
         // `new --directory work` reads the overrides from work/. A crest.php
@@ -135,7 +168,8 @@ final class PublishCommandTest extends TestCase
 
     public function testAProjectStubIgnoresTheConfiguredFlavor(): void
     {
-        // `new` creates only ADR projects, so it reads only ADR overrides.
+        // The flavor of a project stub is --flavor, adr by default, not the
+        // flavor of crest.php: new reads the overrides before a project exists.
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
 
         $status = $this->runCommand(['project-front']);
@@ -161,6 +195,40 @@ final class PublishCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
+    public function testAProjectStubOfTheMvcFlavorGoesIntoTheMvcFolder(): void
+    {
+        $status = $this->runCommand(['project-front', '--flavor', 'mvc']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            (string) file_get_contents(Stub::packagedPath(Paths::stubs(), 'mvc', 'project-front')),
+            (string) file_get_contents(Stub::overridePath($this->root, 'mvc', 'project-front'))
+        );
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-front'));
+    }
+
+    public function testAProjectStubThatNoFlavorHasGetsNoHint(): void
+    {
+        $status = $this->runCommand(['project-nope']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame("crest: stub 'adr/project-nope' is not packaged" . PHP_EOL, $this->readStderr());
+    }
+
+    public function testAProjectStubThatTheFlavorDoesNotHaveIsNotPackaged(): void
+    {
+        // adr is the default, and only mvc has the views. The flavor of a
+        // project stub comes from --flavor, so the error names the option.
+        $status = $this->runCommand(['project-phtml-layout']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: stub 'adr/project-phtml-layout' is not packaged; the mvc flavor has it: pass --flavor=mvc"
+            . PHP_EOL,
+            $this->readStderr()
+        );
     }
 
     public function testAPublishedSharedStubChangesTheOutputOfMakeCommand(): void
@@ -239,6 +307,16 @@ final class PublishCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'fragment-guidance-command'));
+    }
+
+    public function testASharedProjectStubGoesIntoTheSharedFolder(): void
+    {
+        // The compose file is the same in each flavor, so its stub is shared.
+        $status = $this->runCommand(['project-compose']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists(Stub::overridePath($this->root, Stub::SHARED, 'project-compose'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-compose'));
     }
 
     public function testASharedStubIsPublishedByNameIntoTheSharedFolder(): void
@@ -328,12 +406,13 @@ final class PublishCommandTest extends TestCase
     public function testAStubOfAnotherFlavorIsNotPackagedForThisOne(): void
     {
         // action is an ADR stub. An MVC project must not get a copy of it.
+        // The flavor comes from crest.php, so the error has no --flavor hint.
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
 
         $status = $this->runCommand(['action']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("stub 'mvc/action' is not packaged", $this->readStderr());
+        $this->assertSame("crest: stub 'mvc/action' is not packaged" . PHP_EOL, $this->readStderr());
     }
 
     public function testAStubThatIsNotPackagedIsReported(): void
@@ -406,17 +485,21 @@ final class PublishCommandTest extends TestCase
     public function testProjectStubsAreNotPublishedInBulk(): void
     {
         // They have an effect only in the directory that `crest new` puts the
-        // project into. In a project they do nothing.
-        $projectStubs = glob(Paths::stubs() . '/adr/' . Stub::PROJECT_PREFIX . '*.stub') ?: [];
+        // project into. In a project they do nothing. The shared ones too.
+        $projectStubs = [];
 
-        $this->assertNotEmpty($projectStubs);
+        foreach ((new Stub(Paths::stubs()))->packagedFolders('adr') as $name => $folder) {
+            if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
+                $projectStubs[$name] = $folder;
+            }
+        }
+
+        $this->assertArrayHasKey('project-compose', $projectStubs);
 
         $this->runCommand([]);
 
-        foreach ($projectStubs as $path) {
-            $this->assertFileDoesNotExist(
-                Stub::overridePath($this->root, 'adr', basename($path, '.stub'))
-            );
+        foreach ($projectStubs as $name => $folder) {
+            $this->assertFileDoesNotExist(Stub::overridePath($this->root, $folder, $name));
         }
     }
 
@@ -474,6 +557,24 @@ final class PublishCommandTest extends TestCase
 
         $this->assertNotEmpty($published);
         $this->assertSame($sorted, $published);
+    }
+
+    public function testTheNoteForASharedProjectStubUsesTheFlavorOption(): void
+    {
+        // For an MVC project, a copy in the mvc folder wins over the shared
+        // copy, so the note names it.
+        $winner = Stub::overridePath($this->root, 'mvc', 'project-compose');
+
+        mkdir(dirname($winner), 0o775, true);
+        file_put_contents($winner, 'old copy');
+
+        $status = $this->runCommand(['project-compose', '--flavor', 'mvc']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            'Note: crest uses ' . $winner . ', because the flavor folder comes first',
+            $this->readStdout()
+        );
     }
 
     /**

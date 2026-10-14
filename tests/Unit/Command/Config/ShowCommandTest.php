@@ -158,8 +158,8 @@ final class ShowCommandTest extends TestCase
         // reads correctly because it is sorted rather than merged-and-printed.
         //
         // The flavor is mvc, which has the shared default path (`command`) and
-        // its own (`controller`), so they appear between the two declared keys
-        // - `action` belongs to ADR alone.
+        // its own (`controller`, `provider`), so they appear between the two
+        // declared keys - `action` belongs to ADR alone.
         file_put_contents(
             $this->root . '/crest.php',
             "<?php\n\nreturn ['flavor' => 'mvc', 'namespace' => 'Shop', "
@@ -182,6 +182,7 @@ final class ShowCommandTest extends TestCase
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
             . 'controller ' . $this->root . '/src/Controllers default' . PHP_EOL
+            . 'provider ' . $this->root . '/src/Providers default' . PHP_EOL
             . 'views ' . $this->root . '/templates declared' . PHP_EOL;
 
         $this->assertSame($expected, $this->normalized());

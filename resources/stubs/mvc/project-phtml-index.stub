@@ -1,0 +1,2 @@
+<h1>{{ project }}</h1>
+<p>{{ controllerPath }}/{{ seed }}.php answers GET /, and {{ viewsPath }}/index/index.phtml is its view.</p>

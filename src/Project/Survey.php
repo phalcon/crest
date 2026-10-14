@@ -134,7 +134,9 @@ final class Survey
     {
         [$namespace, $directory] = self::namespace($root);
 
+        // init writes an ADR project until it asks for the flavor (#48).
         return new Settings(
+            Flavor::ADR,
             $namespace,
             self::bootstrap($root, $namespace, $directory),
             self::paths($directory),

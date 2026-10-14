@@ -69,7 +69,14 @@ final class InitCommand extends Command
             $paths[$key] = Questions::path($output, $root, $key, $path);
         }
 
-        $settings = new Settings($namespace, $bootstrap, $paths, Questions::runtime($output, $proposal->runtime));
+        // init writes an ADR project until it asks for the flavor (#48).
+        $settings = new Settings(
+            Flavor::ADR,
+            $namespace,
+            $bootstrap,
+            $paths,
+            Questions::runtime($output, $proposal->runtime)
+        );
 
         ArtifactWriter::write(
             $file,

@@ -308,10 +308,13 @@ final class ConfigTest extends TestCase
             [
                 'command'    => $this->root . '/src/Command',
                 'controller' => $this->root . '/src/Controllers',
+                'provider'   => $this->root . '/src/Providers',
+                'views'      => $this->root . '/themes/default',
             ],
             $config->paths()
         );
         $this->assertSame('App\\Controllers', $config->namespaceFor('controller'));
+        $this->assertSame('App\\Providers', $config->namespaceFor('provider'));
     }
 
     public function testNamespaceForDerivesFromThePsr4Pairing(): void
@@ -484,7 +487,12 @@ final class ConfigTest extends TestCase
         );
         $this->assertSame(['command' => 'src/Command'], Config::defaultPaths(Flavor::CLI));
         $this->assertSame(
-            ['command' => 'src/Command', 'controller' => 'src/Controllers'],
+            [
+                'command'    => 'src/Command',
+                'controller' => 'src/Controllers',
+                'provider'   => 'src/Providers',
+                'views'      => 'themes/default',
+            ],
             Config::defaultPaths(Flavor::MVC)
         );
     }

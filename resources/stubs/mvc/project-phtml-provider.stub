@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ providerNamespace }};
+
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Mvc\View;
+use Phalcon\Mvc\View\Engine\Php;
+
+/**
+ * The view, with the phtml engine. The views are in {{ viewsPath }}/.
+ */
+final class ViewProvider implements ServiceProviderInterface
+{
+    public function __construct(private readonly string $viewsDir)
+    {
+    }
+
+    public function register(DiInterface $di): void
+    {
+        $viewsDir = $this->viewsDir;
+
+        // Not a static closure: the container binds each closure to itself,
+        // and a static closure gives a warning there. Thus $this in the
+        // closure is the container, and the folder comes in with use.
+        $di->setShared('view', function () use ($viewsDir): View {
+            $view = new View();
+            $view->setViewsDir($viewsDir . '/');
+            $view->registerEngines(['.phtml' => Php::class]);
+
+            return $view;
+        });
+    }
+}
