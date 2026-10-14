@@ -22,9 +22,10 @@ use function strlen;
 use function var_export;
 
 /**
- * The decisions of the user that crest.php holds: the root namespace, the
- * front controller, the paths and the runtime (D07). `crest new` and
- * `crest init` write crest.php from them through the project-config stub.
+ * The decisions of the user that crest.php holds: the flavor, the root
+ * namespace, the front controller, the paths and the runtime (D07).
+ * `crest new` and `crest init` write crest.php from them through the
+ * project-config stub.
  */
 final class Settings
 {
@@ -32,6 +33,7 @@ final class Settings
      * @param array<string, string> $paths
      */
     public function __construct(
+        public readonly Flavor $flavor,
         public readonly string $namespace,
         public readonly ?string $bootstrap,
         public readonly array $paths,
@@ -51,6 +53,7 @@ final class Settings
             'bootstrap' => null === $this->bootstrap
                 ? ''
                 : sprintf("    'bootstrap' => %s::class,\n", $this->bootstrap),
+            'flavor'    => $this->flavor->value,
             'namespace' => $this->namespace,
             'paths'     => $this->pathLines(),
             'runtime'   => $this->runtime->render(),
