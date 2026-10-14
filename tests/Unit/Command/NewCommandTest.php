@@ -36,8 +36,11 @@ use function fileperms;
 use function json_decode;
 use function mkdir;
 use function preg_match;
+use function sort;
 use function sprintf;
 use function str_replace;
+use function strlen;
+use function substr;
 use function var_export;
 
 use const JSON_THROW_ON_ERROR;
@@ -80,6 +83,21 @@ final class NewCommandTest extends TestCase
         yield 'v6' => ['v6'];
     }
 
+    public function testABadNewKeyInASharedCopyNamesTheSharedCopy(): void
+    {
+        // stub:publish puts project-config into the shared folder. The error
+        // names the copy that new used, not a copy in the adr folder.
+        $this->publishSteps(['composer install'], Stub::SHARED);
+
+        $status = $this->runCommand(['my-app']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            'fix ' . Stub::overridePath($this->root, Stub::SHARED, 'project-config') . ' and run new again',
+            $this->readStderr()
+        );
+    }
+
     public function testABadNewKeyStopsBeforeTheFirstCommand(): void
     {
         // Entry 1 names a program that does not exist. If it ran, the error
@@ -101,6 +119,43 @@ final class NewCommandTest extends TestCase
             $this->readStderr()
         );
         $this->assertFileExists($target . '/composer.json');
+    }
+
+    public function testAConfigCopyWithAFixedFlavorStopsNewAfterTheWrite(): void
+    {
+        // A shared copy that a team edited: the flavor is fixed, not the
+        // placeholder. The written crest.php then names the wrong flavor.
+        $override = $this->publishConfig(Stub::SHARED, "'{{ flavor }}'", "'adr'");
+
+        $status = $this->runCommand(['my-app', '--flavor', 'mvc']);
+        $target = $this->root . '/my-app';
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            'crest: ' . $target . "/crest.php: the flavor is 'adr', not 'mvc'; keep 'flavor' => '{{ flavor }}' "
+            . 'in the stub; the files in ' . $target . '/ stay; fix ' . $override
+            . ' and run new again with --force' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileExists($target . '/crest.php');
+    }
+
+    public function testAConfigCopyWithoutAFlavorKeyIsAnAdrProject(): void
+    {
+        // crest reads a crest.php with no flavor key as adr. An ADR copy from
+        // before the key still works.
+        $this->publishConfig('adr', "    'flavor'    => '{{ flavor }}',\n", '');
+
+        $this->assertSame(0, $this->runCommand(['my-app']));
+        $this->assertStringNotContainsString("'flavor'", $this->read('crest.php'));
+    }
+
+    public function testACorrectSharedConfigCopyGivesTheChosenFlavor(): void
+    {
+        $this->publishConfig(Stub::SHARED, '', '');
+
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'mvc']));
+        $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
     }
 
     public function testACrestPhpThatDoesNotParseStopsAfterTheWrite(): void
@@ -183,6 +238,48 @@ final class NewCommandTest extends TestCase
         $this->assertFileExists($this->root . '/my-app/composer.json');
     }
 
+    public function testAnMvcProjectGetsEveryFile(): void
+    {
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'mvc']));
+
+        $prefix = $this->root . '/my-app/';
+        $files  = [];
+
+        /** @var SplFileInfo $file */
+        foreach (
+            new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($prefix, FilesystemIterator::SKIP_DOTS)
+            ) as $file
+        ) {
+            $files[] = substr($file->getPathname(), strlen($prefix));
+        }
+
+        sort($files);
+
+        $this->assertSame(
+            [
+                '.env',
+                '.gitignore',
+                '.htrouter.php',
+                'README.md',
+                'composer.json',
+                'crest',
+                'crest.php',
+                'docker-compose.yml',
+                'public/index.php',
+                'resources/docker/Dockerfile',
+                'src/AppFront.php',
+                'src/Controllers/Base/CrestControllerBase.php',
+                'src/Controllers/IndexController.php',
+                'src/Providers/DispatcherProvider.php',
+                'src/Providers/ViewProvider.php',
+                'themes/default/index.phtml',
+                'themes/default/index/index.phtml',
+            ],
+            $files
+        );
+    }
+
     public function testAnOldPublishedConfigStubStopsBeforeAnyWrite(): void
     {
         // A copy from before the runtime key. Without the stop, crest.php
@@ -223,7 +320,10 @@ final class NewCommandTest extends TestCase
         // No runtime option is given, so only the runtime questions are asked.
         $this->answers("docker\nweb\n");
 
-        $status = $this->runCommand(['my-app', '--namespace', 'Acme', '--php', '8.2', '--phalcon', 'v6'], true);
+        $status = $this->runCommand(
+            ['my-app', '--flavor', 'adr', '--namespace', 'Acme', '--php', '8.2', '--phalcon', 'v6'],
+            true
+        );
 
         $this->assertSame(0, $status);
         $this->assertStringNotContainsString('Root namespace', $this->readStderr());
@@ -232,6 +332,15 @@ final class NewCommandTest extends TestCase
             $this->read('crest.php')
         );
         $this->assertStringContainsString("\n  web:\n", $this->read('docker-compose.yml'));
+    }
+
+    public function testAnUnknownFlavorIsRejected(): void
+    {
+        $status = $this->runCommand(['my-app', '--flavor', 'cli']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("unknown flavor 'cli'; expected adr or mvc", $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
     public function testAnUnknownPhalconVersionIsRejected(): void
@@ -255,9 +364,21 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
+    public function testAnUnknownTemplateEngineIsRejected(): void
+    {
+        $status = $this->runCommand(['my-app', '--flavor', 'mvc', '--template-engine', 'volt']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "unknown template engine 'volt'; expected phtml",
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
     public function testAnUnusableAnswerIsAskedAgain(): void
     {
-        $this->answers("1bad\nShop\n\n\n\n\n");
+        $this->answers("\n1bad\nShop\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString("'1bad' is not a usable namespace", $this->readStderr());
@@ -462,6 +583,31 @@ final class NewCommandTest extends TestCase
         );
     }
 
+    public function testATemplateEngineErrorComesBeforeTheOtherQuestions(): void
+    {
+        // The flavor and the engine come first: a refused engine asks no
+        // more questions.
+        $this->answers("\n\n\n\n\n\n");
+
+        $status = $this->runCommand(['my-app', '--template-engine', 'phtml'], true);
+
+        $this->assertSame(1, $status);
+        $this->assertStringStartsWith('Flavor (adr, mvc) [adr]: ', $this->readStderr());
+        $this->assertStringNotContainsString('Root namespace', $this->readStderr());
+    }
+
+    public function testATemplateEngineForAnAdrProjectIsRejected(): void
+    {
+        $status = $this->runCommand(['my-app', '--template-engine', 'phtml']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString(
+            "the 'adr' flavor has no views; remove --template-engine",
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
     public function testAV6DockerfileKeepsTheV5ConstraintInItsComments(): void
     {
         // The v5 lines are comments in a v6 project. They must still name the
@@ -507,6 +653,11 @@ final class NewCommandTest extends TestCase
             ['php' => '>=8.4', 'phalcon/phalcon' => '^6.0@RC'],
             $this->composer()['require']
         );
+    }
+
+    public function testDefinitionDescribesBothFlavors(): void
+    {
+        $this->assertSame('Create an ADR or MVC project', (new NewCommand())->define()->getDescription());
     }
 
     public function testDefinitionNamesItselfNew(): void
@@ -585,6 +736,23 @@ final class NewCommandTest extends TestCase
         $this->assertSame('project', $this->composer()['type']);
     }
 
+    public function testForceReplacesTheBaseOfAnMvcProject(): void
+    {
+        // --force overwrites the files with the same names, also a base
+        // without the marker. make:controller keeps such a base; new does not.
+        $this->runCommand(['my-app', '--flavor', 'mvc']);
+        file_put_contents(
+            $this->root . '/my-app/src/Controllers/Base/CrestControllerBase.php',
+            "<?php\n// mine\n"
+        );
+
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'mvc', '--force']));
+        $this->assertStringContainsString(
+            'Generated by crest.',
+            $this->read('src/Controllers/Base/CrestControllerBase.php')
+        );
+    }
+
     public function testForceRunsTheListOfTheNewCrestPhp(): void
     {
         // The second run overwrites crest.php. new must read the new file,
@@ -635,6 +803,16 @@ final class NewCommandTest extends TestCase
     /**
      * @dataProvider variants
      */
+    public function testNoPlaceholderIsLeftInAnMvcProject(string $variant): void
+    {
+        $this->runCommand(['my-app', '--flavor', 'mvc', '--phalcon', $variant]);
+
+        $this->assertNoPlaceholderIn($this->root . '/my-app');
+    }
+
+    /**
+     * @dataProvider variants
+     */
     public function testNoPlaceholderIsLeftInAnyWrittenFile(string $variant): void
     {
         // ProjectStubsTest renders the stubs with its own values. This test
@@ -642,24 +820,7 @@ final class NewCommandTest extends TestCase
         // does not supply fails here.
         $this->runCommand(['my-app', '--phalcon', $variant]);
 
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($this->root . '/my-app', FilesystemIterator::SKIP_DOTS)
-        );
-
-        $scanned = 0;
-
-        /** @var SplFileInfo $file */
-        foreach ($files as $file) {
-            $scanned++;
-
-            $this->assertStringNotContainsString(
-                '{{',
-                (string) file_get_contents($file->getPathname()),
-                sprintf('%s still has a placeholder', $file->getPathname())
-            );
-        }
-
-        $this->assertGreaterThan(0, $scanned);
+        $this->assertNoPlaceholderIn($this->root . '/my-app');
     }
 
     public function testOneCommandIsCountedInTheSingular(): void
@@ -818,6 +979,25 @@ final class NewCommandTest extends TestCase
         $this->assertFileExists($this->root . '/my-app/composer.json');
     }
 
+    public function testTheFlavorIsCaseInsensitive(): void
+    {
+        $this->runCommand(['my-app', '--flavor', 'MVC']);
+
+        $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
+    }
+
+    public function testTheFlavorIsTheFirstQuestion(): void
+    {
+        // Flavor, namespace, PHP version, Phalcon version, runtime, service.
+        // MVC has one engine, so there is no engine question.
+        $this->answers("mvc\n\n\n\n\n\n");
+
+        $this->assertSame(0, $this->runCommand(['my-app'], true));
+        $this->assertStringStartsWith('Flavor (adr, mvc) [adr]: Root namespace [App]: ', $this->readStderr());
+        $this->assertStringNotContainsString('Template engine', $this->readStderr());
+        $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
+    }
+
     public function testTheFrontControllerIsRendered(): void
     {
         // Asserted whole: this is generated code nobody reviews.
@@ -902,6 +1082,161 @@ final class NewCommandTest extends TestCase
         $this->assertSame(0o755, fileperms($this->root . '/my-app/crest') & 0o777);
     }
 
+    public function testTheMvcConfigStatesEveryKey(): void
+    {
+        $this->runCommand(['my-app', '--flavor', 'mvc']);
+
+        $this->assertSame(
+            "<?php\n"
+            . "\n"
+            . "/**\n"
+            . " * Crest configuration. Run `crest config:show` to see every value and where\n"
+            . " * it came from.\n"
+            . " */\n"
+            . "\n"
+            . "declare(strict_types=1);\n"
+            . "\n"
+            . "return [\n"
+            . "    'flavor'    => 'mvc',\n"
+            . "    'namespace' => 'App',\n"
+            . "    'bootstrap' => App\\AppFront::class,\n"
+            . "    'paths'     => [\n"
+            . "        'command'    => 'src/Command',\n"
+            . "        'controller' => 'src/Controllers',\n"
+            . "        'provider'   => 'src/Providers',\n"
+            . "        'views'      => 'themes/default',\n"
+            . "    ],\n"
+            . "    'runtime'   => ['type' => 'docker', 'service' => 'app'],\n"
+            . "];\n",
+            $this->read('crest.php')
+        );
+    }
+
+    public function testTheMvcFrontControllerIsRendered(): void
+    {
+        // Asserted whole: this is generated code nobody reviews.
+        $this->runCommand(['my-app', '--flavor', 'mvc']);
+
+        $this->assertSame(
+            "<?php\n"
+            . "\n"
+            . "declare(strict_types=1);\n"
+            . "\n"
+            . "namespace App;\n"
+            . "\n"
+            . "use App\\Providers\\DispatcherProvider;\n"
+            . "use App\\Providers\\ViewProvider;\n"
+            . "use Phalcon\\Di\\DiInterface;\n"
+            . "use Phalcon\\Di\\FactoryDefault;\n"
+            . "use Phalcon\\Di\\ServiceProviderInterface;\n"
+            . "use Phalcon\\Http\\ResponseInterface;\n"
+            . "use Phalcon\\Mvc\\Application;\n"
+            . "\n"
+            . "/**\n"
+            . " * The front controller. public/index.php runs it for every request,\n"
+            . " * and crest.php names it, so that crest can boot it.\n"
+            . " *\n"
+            . " * Add a service with a provider in providers().\n"
+            . " */\n"
+            . "final class AppFront\n"
+            . "{\n"
+            . "    public function __construct(private readonly string \$projectRoot)\n"
+            . "    {\n"
+            . "    }\n"
+            . "\n"
+            . "    /**\n"
+            . "     * The container with the services of the application.\n"
+            . "     */\n"
+            . "    public function boot(): DiInterface\n"
+            . "    {\n"
+            . "        \$container = new FactoryDefault();\n"
+            . "\n"
+            . "        foreach (\$this->providers() as \$provider) {\n"
+            . "            \$container->register(\$provider);\n"
+            . "        }\n"
+            . "\n"
+            . "        return \$container;\n"
+            . "    }\n"
+            . "\n"
+            . "    /**\n"
+            . "     * Handles the request, and sends the response. The return value is the\n"
+            . "     * exit status of public/index.php.\n"
+            . "     */\n"
+            . "    public function run(): int\n"
+            . "    {\n"
+            . "        \$uri      = (string) (\$_SERVER['REQUEST_URI'] ?? '/');\n"
+            . "        \$response = (new Application(\$this->boot()))->handle(\$uri);\n"
+            . "\n"
+            . "        if (\$response instanceof ResponseInterface) {\n"
+            . "            \$response->send();\n"
+            . "        }\n"
+            . "\n"
+            . "        return 0;\n"
+            . "    }\n"
+            . "\n"
+            . "    /**\n"
+            . "     * @return list<ServiceProviderInterface>\n"
+            . "     */\n"
+            . "    private function providers(): array\n"
+            . "    {\n"
+            . "        return [\n"
+            . "            new DispatcherProvider(),\n"
+            . "            new ViewProvider(\$this->projectRoot . '/themes/default'),\n"
+            . "        ];\n"
+            . "    }\n"
+            . "}\n",
+            $this->read('src/AppFront.php')
+        );
+    }
+
+    public function testTheMvcReportNamesTheIndexController(): void
+    {
+        $this->runCommand(['my-app', '--flavor', 'mvc']);
+
+        $this->assertStringEndsWith(
+            PHP_EOL . 'Then GET / answers from src/Controllers/IndexController.php' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testTheMvcSeedComesFromTheControllerStubs(): void
+    {
+        // The packaged controller stubs, as make:controller renders them.
+        $this->runCommand(['my-app', '--flavor', 'mvc', '--namespace', 'Shop']);
+
+        $stub = new Stub(Paths::stubs());
+
+        $this->assertSame(
+            $stub->render(
+                'mvc',
+                'controller-base',
+                ['class' => 'CrestControllerBase', 'namespace' => 'Shop\\Controllers\\Base']
+            ),
+            $this->read('src/Controllers/Base/CrestControllerBase.php')
+        );
+        $this->assertSame(
+            $stub->render(
+                'mvc',
+                'controller',
+                [
+                    'base'          => 'CrestControllerBase',
+                    'baseNamespace' => 'Shop\\Controllers\\Base',
+                    'class'         => 'IndexController',
+                    'namespace'     => 'Shop\\Controllers',
+                ]
+            ),
+            $this->read('src/Controllers/IndexController.php')
+        );
+    }
+
+    public function testTheMvcViewsCarryTheProjectName(): void
+    {
+        $this->runCommand(['my-app', '--flavor', 'mvc']);
+
+        $this->assertStringContainsString('<title>my-app</title>', $this->read('themes/default/index.phtml'));
+        $this->assertStringContainsString('<h1>my-app</h1>', $this->read('themes/default/index/index.phtml'));
+    }
+
     public function testTheNewKeyRunsEachCommandInTheProject(): void
     {
         $this->publishSteps([['composer', 'install'], ['composer', 'test']]);
@@ -959,12 +1294,13 @@ final class NewCommandTest extends TestCase
 
     public function testTheQuestionsFillTheValuesThatNoOptionGives(): void
     {
-        // Namespace, PHP version, Phalcon version, runtime.
-        $this->answers("Shop\n8.3\nv6\nhost\n");
+        // Flavor, namespace, PHP version, Phalcon version, runtime.
+        $this->answers("adr\nShop\n8.3\nv6\nhost\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString(
-            'Root namespace [App]: PHP version [8.4]: Phalcon version (v5, v6) [v5]: Runtime (host, docker) [docker]: ',
+            'Flavor (adr, mvc) [adr]: Root namespace [App]: PHP version [8.4]: '
+            . 'Phalcon version (v5, v6) [v5]: Runtime (host, docker) [docker]: ',
             $this->readStderr()
         );
         $this->assertSame(['php' => '>=8.3', 'phalcon/phalcon' => '^6.0@RC'], $this->composer()['require']);
@@ -1005,6 +1341,8 @@ final class NewCommandTest extends TestCase
         $status = $this->runCommand(
             [
                 'my-app',
+                '--flavor',
+                'adr',
                 '--namespace',
                 'Acme',
                 '--php',
@@ -1108,6 +1446,28 @@ final class NewCommandTest extends TestCase
         $this->assertStringContainsString('    cd my-app' . PHP_EOL, $this->readStdout());
     }
 
+    private function assertNoPlaceholderIn(string $directory): void
+    {
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS)
+        );
+
+        $scanned = 0;
+
+        /** @var SplFileInfo $file */
+        foreach ($files as $file) {
+            $scanned++;
+
+            $this->assertStringNotContainsString(
+                '{{',
+                (string) file_get_contents($file->getPathname()),
+                sprintf('%s still has a placeholder', $file->getPathname())
+            );
+        }
+
+        $this->assertGreaterThan(0, $scanned);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1120,12 +1480,34 @@ final class NewCommandTest extends TestCase
     }
 
     /**
-     * Publishes the packaged project-config stub with a `new` key, where new
-     * reads its overrides.
+     * Publishes the packaged project-config stub into a folder of the
+     * overrides, with one text replaced. Gives the path of the copy.
      */
-    private function publishSteps(mixed $steps): void
+    private function publishConfig(string $folder, string $search, string $replace): string
     {
-        $override = Stub::overridePath($this->root, 'adr', 'project-config');
+        $override = Stub::overridePath($this->root, $folder, 'project-config');
+
+        mkdir(dirname($override), 0o775, true);
+        file_put_contents(
+            $override,
+            str_replace(
+                $search,
+                $replace,
+                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), Stub::SHARED, 'project-config'))
+            )
+        );
+
+        return $override;
+    }
+
+    /**
+     * Publishes the packaged project-config stub with a `new` key, where new
+     * reads its overrides: the adr folder by default, or the shared folder,
+     * where stub:publish puts it.
+     */
+    private function publishSteps(mixed $steps, string $folder = 'adr'): void
+    {
+        $override = Stub::overridePath($this->root, $folder, 'project-config');
 
         mkdir(dirname($override), 0o775, true);
         file_put_contents(
@@ -1133,7 +1515,7 @@ final class NewCommandTest extends TestCase
             str_replace(
                 "\n];\n",
                 "\n    'new'       => " . var_export($steps, true) . ",\n];\n",
-                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), 'adr', 'project-config'))
+                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), Stub::SHARED, 'project-config'))
             )
         );
     }

@@ -264,7 +264,7 @@ final class LauncherTest extends TestCase
         preg_match_all(
             '/^\s+(\w+)\)/m',
             (string) file_get_contents(
-                Stub::packagedPath(Paths::stubs(), 'adr', Stub::PROJECT_PREFIX . 'launcher')
+                Stub::packagedPath(Paths::stubs(), Stub::SHARED, Stub::PROJECT_PREFIX . 'launcher')
             ),
             $matches
         );

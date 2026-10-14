@@ -40,24 +40,38 @@ final class SettingsTest extends TestCase
 
     public function testABootstrapIsOneLine(): void
     {
-        $settings = new Settings('App', 'App\\AppFront', [], Runtime::host());
+        $settings = new Settings(Flavor::ADR, 'App', 'App\\AppFront', [], Runtime::host());
 
         $this->assertSame("    'bootstrap' => App\\AppFront::class,\n", $settings->replacements()['bootstrap']);
     }
 
     public function testNoBootstrapIsNoLine(): void
     {
-        $this->assertSame('', (new Settings('App', null, [], Runtime::host()))->replacements()['bootstrap']);
+        $this->assertSame(
+            '',
+            (new Settings(Flavor::ADR, 'App', null, [], Runtime::host()))->replacements()['bootstrap']
+        );
     }
 
     public function testNoPathsIsNoLines(): void
     {
-        $this->assertSame('', (new Settings('App', null, [], Runtime::host()))->replacements()['paths']);
+        $this->assertSame(
+            '',
+            (new Settings(Flavor::ADR, 'App', null, [], Runtime::host()))->replacements()['paths']
+        );
+    }
+
+    public function testTheFlavorIsPassedOn(): void
+    {
+        $this->assertSame(
+            'mvc',
+            (new Settings(Flavor::MVC, 'App', null, [], Runtime::host()))->replacements()['flavor']
+        );
     }
 
     public function testTheNamespaceAndTheRuntimeArePassedOn(): void
     {
-        $replacements = (new Settings('Shop', null, [], Runtime::docker('web')))->replacements();
+        $replacements = (new Settings(Flavor::ADR, 'Shop', null, [], Runtime::docker('web')))->replacements();
 
         $this->assertSame('Shop', $replacements['namespace']);
         $this->assertSame("['type' => 'docker', 'service' => 'web']", $replacements['runtime']);
@@ -66,6 +80,7 @@ final class SettingsTest extends TestCase
     public function testThePathsLineUp(): void
     {
         $settings = new Settings(
+            Flavor::ADR,
             'App',
             null,
             ['action' => 'src/Action', 'middleware' => 'src/Middleware'],
@@ -79,12 +94,27 @@ final class SettingsTest extends TestCase
         );
     }
 
+    public function testTheRenderedConfigGivesTheFlavorBack(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $settings = new Settings(Flavor::MVC, 'App', null, [], Runtime::host());
+
+        file_put_contents(
+            $this->root . '/crest.php',
+            (new Stub(Paths::stubs()))->render('mvc', 'project-config', $settings->replacements())
+        );
+
+        $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
+    }
+
     public function testTheRenderedConfigReadsBack(): void
     {
         // The written crest.php gives back each value.
         $this->writeComposerJson(['Shop\\' => 'src/']);
 
         $settings = new Settings(
+            Flavor::ADR,
             'Shop',
             'Shop\\AppFront',
             Config::defaultPaths(Flavor::ADR),
