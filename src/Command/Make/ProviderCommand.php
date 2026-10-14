@@ -19,15 +19,16 @@ use Crest\Project\Flavor;
  * Generates a service provider for the flavor's container.
  *
  * Under ADR that means Phalcon\Container and the Provider contract, whose
- * provide() takes a service Collection. MVC will register against DI, which has
- * its own contract and its own registration call - which is why this generator
- * is flavor-scoped rather than shared.
+ * provide() takes a service Collection. Under MVC it means Phalcon\Di and
+ * ServiceProviderInterface, whose register() takes the DI container. Each
+ * flavor has its own contract and its own registration call, so each flavor
+ * has its own stub and its own guidance.
  *
  * Like make:middleware, the generated class is inert until something calls it,
  * and crest does not edit the project's front controller. It prints the call
- * instead (the stub fragment-guidance-provider holds the text), including the
- * parent:: line - omitting that one is a silent failure that takes the ADR
- * services down with it.
+ * instead (the stub fragment-guidance-provider holds the text). For ADR, the
+ * call includes the parent:: line - omitting that one is a silent failure that
+ * takes the ADR services down with it.
  */
 final class ProviderCommand extends NamedArtifactCommand
 {
@@ -43,8 +44,8 @@ final class ProviderCommand extends NamedArtifactCommand
 
     protected function flavors(): array
     {
-        // ADR only, until the MVC provider registers with DI.
-        return [Flavor::ADR];
+        // A stub for each flavor: ADR registers with Phalcon\Container, MVC with DI.
+        return [Flavor::ADR, Flavor::MVC];
     }
 
     protected function key(): string
