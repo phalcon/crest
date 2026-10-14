@@ -1,0 +1,6 @@
+Nothing registers it yet. Add it to providers() in your front controller:
+
+    new \{{ namespace }}\{{ class }}(),
+
+In a project with another front controller, register it with
+$di->register(new \{{ namespace }}\{{ class }}()).
