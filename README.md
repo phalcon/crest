@@ -98,12 +98,15 @@ To create a project, use the global crest. The new project requires `phalcon/cre
 after `composer install` it has its own `vendor/bin/crest`:
 
     crest new my-app                      create an ADR project
+    crest new my-app --flavor=mvc         create an MVC project
 
 In a terminal, `new` asks for each value that no option gives. `--no-interaction` takes
 the defaults:
 
 | Option | Purpose |
 |---|---|
+| `--flavor=adr\|mvc` | the flavor of the project; defaults to `adr` |
+| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |

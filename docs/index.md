@@ -42,12 +42,15 @@ with an error:
 
 ## Creating a project
 
-`new` writes an ADR project that runs:
+`new` writes an ADR or an MVC project that runs:
 
     crest new my-app
+    crest new my-app --flavor=mvc
 
 | Option | Purpose |
 |---|---|
+| `--flavor=adr\|mvc` | the flavor of the project; defaults to `adr` |
+| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
@@ -55,10 +58,11 @@ with an error:
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
-In a terminal, `new` asks for each value that no option gives: the namespace, the PHP
-version, the Phalcon version, and the runtime (`docker` with the service `app`, or
-`host`). An empty answer takes the default. `--no-interaction`, or a run without a
-terminal (CI, a pipe), asks nothing and takes the defaults. The options stay, for CI.
+In a terminal, `new` asks for each value that no option gives: the flavor, the
+namespace, the PHP version, the Phalcon version, and the runtime (`docker` with the
+service `app`, or `host`). There is no question for the view engine while there is only
+one. An empty answer takes the default. `--no-interaction`, or a run without a terminal
+(CI, a pipe), asks nothing and takes the defaults. The options stay, for CI.
 
 The project goes into the working directory, or into `--directory` if you give
 one. By default, `new` runs nothing: no composer, no docker, no network. It
@@ -176,7 +180,16 @@ name in the directory that the project goes into (the working directory, or
 
     crest stub:publish project-front
 
-A project stub needs no `crest.php`, and it always uses the `adr` flavor. A
+A project stub needs no `crest.php`. `--flavor` gives its flavor, as for `new`;
+the default is `adr`:
+
+    crest stub:publish project-front --flavor=mvc
+
+The project stubs that are the same in both flavors are in
+`resources/stubs/shared/`, and a publish puts them there. A copy in
+`resources/stubs/<flavor>/` wins over the shared copy for that flavor. When the
+flavor does not have the stub and another flavor does, the error names the
+option to use, for example `pass --flavor=mvc`. A
 publish with no name leaves the project stubs out, because they do nothing
 inside a project. It also leaves the fragment stubs (`fragment-*`) out: they
 hold pieces of the framework API and the guidance text that the generators
@@ -193,6 +206,35 @@ each other on the namespace. `new` decides where each file goes: a stub
 cannot move its file. A published copy must use only the placeholders of the
 packaged copy. If a placeholder has no value, `new` stops before it writes a
 file.
+
+In an MVC project, `{{ controllerNamespace }}`, `{{ controllerPath }}`,
+`{{ providerNamespace }}`, `{{ providerPath }}` and `{{ viewsPath }}` come from
+the default paths of the flavor. A stub that depends on the view engine has the
+engine name in its name: `project-phtml-provider`, `project-phtml-layout` and
+`project-phtml-index`.
+
+### The MVC project
+
+`crest new my-app --flavor=mvc` writes the layout of the Phalcon sample
+applications (vokuro, invo):
+
+| Path | Contents |
+|---|---|
+| `public/index.php` | the web entry point, as in an ADR project |
+| `src/AppFront.php` | the front controller: `FactoryDefault`, the providers and `Phalcon\Mvc\Application` |
+| `src/Providers/` | `DispatcherProvider` (the default namespace of the controllers) and `ViewProvider` (the views folder and the phtml engine) |
+| `src/Controllers/` | `IndexController`, which answers `GET /` |
+| `src/Controllers/Base/` | `CrestControllerBase`, the base that crest owns (see "Generated bases") |
+| `themes/default/` | the layout `index.phtml` and the view `index/index.phtml` |
+
+`crest.php` has `'flavor' => 'mvc'` and the paths `controller`, `provider` and
+`views`. To add a service, write a provider that implements
+`Phalcon\Di\ServiceProviderInterface`, and add it to `AppFront::providers()`.
+
+A URL with no controller stops in the dispatcher ("handler class cannot be
+loaded"). With `display_errors` off, PHP answers 500. With it on, PHP shows the
+error in the page, with status 200. Add a not-found page if your project needs
+one, for example a dispatcher listener such as the `NotFoundPlugin` of invo.
 
 ### Commands after `new`
 
@@ -229,10 +271,14 @@ A program that is not in the `PATH` also stops the list, with exit status 1:
 `new` reads the key from the `crest.php` that it writes. Thus it checks the key after it
 writes the files. If the key is not a list of commands, or if PHP cannot parse the file,
 `new` stops before the first command, and the files stay. The error names the published
-stub. Change the stub, not the `crest.php` of the project, then run `new` again with
-`--force`:
+stub that `new` used. Change the stub, not the `crest.php` of the project, then run `new`
+again with `--force`:
 
-    crest: my-app/crest.php: 'new' entry 2 in crest.php must be a list of strings, e.g. ['crest', 'up']; the files in my-app/ stay; fix /path/to/resources/stubs/adr/project-config.stub and run new again with --force
+    crest: my-app/crest.php: 'new' entry 2 in crest.php must be a list of strings, e.g. ['crest', 'up']; the files in my-app/ stay; fix /path/to/resources/stubs/shared/project-config.stub and run new again with --force
+
+`new` also checks that the written `crest.php` has the flavor of the project. Keep
+`'flavor' => '{{ flavor }}'` in a published `project-config`: a copy with a fixed
+flavor stops `new` in the same way, before the first command.
 
 The key stays in the `crest.php` of the project. No other command reads it, and
 `config:show` does not show it. `init` uses the same stub: it writes the key, but runs
@@ -364,6 +410,9 @@ it extends:
 what the dispatcher needs: its default namespace, the URL of `indexAction()`
 with the default routes (`GET /users`), and the name of its view
 (`users/index`). The views folder and the engine belong to your project.
+
+A project from `crest new --flavor=mvc` already has `CrestControllerBase` and
+`IndexController`, and its dispatcher has the default namespace.
 
 The name must give a class that the dispatcher can find from a URL. Crest stops
 on `users` (the URL `/users` looks for `UsersController`), on `User_Profiles`,
