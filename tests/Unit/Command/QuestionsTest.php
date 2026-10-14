@@ -64,6 +64,19 @@ final class QuestionsTest extends TestCase
         yield 'a dot segment' => ['src/./Action', 'App\\.\\Action'];
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function badViewFolders(): iterable
+    {
+        yield 'the file system root' => ['/'];
+        yield 'absolute' => ['/srv/themes'];
+        yield 'with ..' => ['themes/../site'];
+        yield 'an empty part' => ['themes//site'];
+        yield 'a dot part' => ['themes/./site'];
+        yield 'the project root' => ['.'];
+    }
+
     public function testBootstrapAsksAgainForAnUnusableClass(): void
     {
         $this->answers("not a class\nApp\\Front\n");
@@ -290,6 +303,44 @@ final class QuestionsTest extends TestCase
 
         $this->assertFalse(Questions::runtime($this->interactive(), Runtime::docker())->isDocker());
         $this->assertSame('Runtime (host, docker) [docker]: ', $this->readStderr());
+    }
+
+    /**
+     * @dataProvider badViewFolders
+     */
+    public function testViewsAsksAgainForABadFolder(string $answer): void
+    {
+        $this->answers($answer . "\nthemes/site\n");
+
+        $this->assertSame(
+            'themes/site',
+            Questions::path($this->interactive(), $this->root, 'views', 'themes/default')
+        );
+        $this->assertStringContainsString(
+            "'" . $answer . "' must be a relative folder in the project, e.g. 'themes/default'",
+            $this->readStderr()
+        );
+    }
+
+    public function testViewsNeedsNoPsr4Folder(): void
+    {
+        // The views hold no classes, so no psr-4 folder covers them.
+        $this->answers("themes/vokuro\n");
+
+        $this->assertSame(
+            'themes/vokuro',
+            Questions::path($this->interactive(), $this->root, 'views', 'themes/default')
+        );
+    }
+
+    public function testViewsRemovesALeadingDotSlashAndTheSlashAtTheEnd(): void
+    {
+        $this->answers("./themes/vokuro/\n");
+
+        $this->assertSame(
+            'themes/vokuro',
+            Questions::path($this->interactive(), $this->root, 'views', 'themes/default')
+        );
     }
 
     public function testWithoutInteractionTheProposalsAreTheAnswers(): void
