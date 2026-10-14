@@ -17,9 +17,11 @@ use Closure;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Generator\ClassName;
+use Crest\Project\Config;
 use Crest\Project\Runtime;
 use Crest\Project\Survey;
 
+use function array_intersect;
 use function explode;
 use function in_array;
 use function is_dir;
@@ -103,20 +105,36 @@ final class Questions
 
     /**
      * The folder of one path key, relative to the root. The question says if
-     * the proposal exists. init writes no `namespaces` key, so the answer must
-     * be in a psr-4 folder, and the namespace that it gives must be usable:
-     * the first make:* writes classes with it. An absolute or an empty folder
-     * is not in a psr-4 folder. A leading `./` is removed.
+     * the proposal exists. init writes no `namespaces` key, so the answer for
+     * a class folder must be in a psr-4 folder, and the namespace that it
+     * gives must be usable: the first make:* writes classes with it. An
+     * absolute or an empty folder is not in a psr-4 folder. A folder with no
+     * classes (Config::NO_CLASS_PATHS, `views`) must only be a relative folder
+     * in the project, with a name in each part. A leading `./` is removed.
      */
     public static function path(Output $output, string $root, string $key, string $default): string
     {
         $state  = true === is_dir($root . '/' . $default) ? 'exists' : 'does not exist yet';
-        $folder = static function (string $answer) use ($root, $default): string {
-            $folder    = rtrim($answer, '/');
-            $folder    = true === str_starts_with($folder, './') ? substr($folder, 2) : $folder;
-            $namespace = true === in_array('..', explode('/', $folder), true)
-                ? null
-                : Survey::namespaceOf($root, $folder);
+        $folder = static function (string $answer) use ($root, $key, $default): string {
+            $folder = rtrim($answer, '/');
+            $folder = true === str_starts_with($folder, './') ? substr($folder, 2) : $folder;
+            $parts  = explode('/', $folder);
+            $up     = true === in_array('..', $parts, true);
+
+            // A folder with no classes needs no psr-4 folder and no namespace.
+            // Each part must be a name: an empty part is an empty answer, an
+            // absolute folder or `//`.
+            if (true === in_array($key, Config::NO_CLASS_PATHS, true)) {
+                if ([] !== array_intersect($parts, ['', '.', '..'])) {
+                    throw new Exception(
+                        sprintf("'%s' must be a relative folder in the project, e.g. '%s'", $answer, $default)
+                    );
+                }
+
+                return $folder;
+            }
+
+            $namespace = true === $up ? null : Survey::namespaceOf($root, $folder);
 
             if (null === $namespace) {
                 throw new Exception(
