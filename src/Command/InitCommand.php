@@ -20,6 +20,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
+use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Flavor;
@@ -28,6 +29,7 @@ use Crest\Project\Manifest;
 use Crest\Project\Settings;
 use Crest\Project\Survey;
 
+use function array_map;
 use function is_file;
 use function sprintf;
 
@@ -45,6 +47,7 @@ final class InitCommand extends Command
     public function define(): Definition
     {
         return Definition::for('init', 'Write crest.php for an existing project')
+            ->option('flavor=s', 'The flavor of the project: adr or mvc. Default: what init finds')
             ->option('force', 'Overwrite an existing crest.php');
     }
 
@@ -58,30 +61,42 @@ final class InitCommand extends Command
             throw new Exception(sprintf('%s exists; pass --force to overwrite', $file));
         }
 
-        $proposal  = Survey::settings($root);
+        // Before the questions: a refused flavor asks nothing.
+        $given  = $input->optionStringOrNull('flavor');
+        $chosen = null === $given ? null : Skeletons::for($given)->flavor();
+
+        $flavors   = array_map(Flavor::from(...), Skeletons::flavors());
+        $proposal  = Survey::settings($root, $flavors);
         $namespace = Questions::namespace($output, $proposal->namespace, $root);
         $folder    = Survey::folder($root, $namespace);
+
+        // The proposals follow the namespace answer: the flavor, the front
+        // controller and the paths come from its folder.
+        $flavor = $chosen ?? Flavor::from(
+            $output->choice('Flavor', Skeletons::flavors(), Survey::flavor($root, $folder, $flavors)->value)
+        );
+
         $bootstrap = Questions::bootstrap($output, Survey::bootstrap($root, $namespace, $folder));
         $paths     = [];
 
-        // The proposals follow the namespace answer.
-        foreach (Survey::paths($folder) as $key => $path) {
+        foreach (Survey::paths($root, $folder, $flavor) as $key => $path) {
             $paths[$key] = Questions::path($output, $root, $key, $path);
         }
 
-        // init writes an ADR project until it asks for the flavor (#48).
         $settings = new Settings(
-            Flavor::ADR,
+            $flavor,
             $namespace,
             $bootstrap,
             $paths,
             Questions::runtime($output, $proposal->runtime)
         );
 
+        // The lookup uses the flavor: a copy in the mvc/ folder of the
+        // project wins for an MVC project, as for `crest new`.
         ArtifactWriter::write(
             $file,
             (new Stub(Paths::stubs(), $root))->render(
-                Flavor::ADR->value,
+                $flavor->value,
                 Stub::PROJECT_PREFIX . 'config',
                 $settings->replacements()
             )

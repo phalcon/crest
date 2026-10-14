@@ -14,16 +14,23 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Project;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Project\Flavor;
 use Crest\Project\Survey;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
+use function chmod;
 use function file_put_contents;
 use function mkdir;
 
 final class SurveyTest extends TestCase
 {
     use ScratchDirectory;
+
+    /**
+     * The flavors that init compares, in the order of Skeletons::flavors().
+     */
+    private const FLAVORS = [Flavor::ADR, Flavor::MVC];
 
     /**
      * The services of vokuro-adr: app, mysql, mailpit.
@@ -65,14 +72,14 @@ final class SurveyTest extends TestCase
     {
         file_put_contents($this->root . '/docker-compose.yml', "services: # the project\n  web:\n");
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testACommentInTheBlockIsNotAService(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "services:\n  # the web: service\n  app:\n");
 
-        $this->assertSame('app', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('app', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testAComposeFileWithoutAnAppServiceUsesTheFirstService(): void
@@ -82,31 +89,47 @@ final class SurveyTest extends TestCase
             "services:\n  web:\n    image: php\n  db:\n    image: mysql\n"
         );
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testAComposeFileWithoutServicesUsesApp(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "volumes:\n  data:\n");
 
-        $runtime = Survey::settings($this->root)->runtime;
+        $runtime = Survey::settings($this->root, self::FLAVORS)->runtime;
 
         $this->assertTrue($runtime->isDocker());
         $this->assertSame('app', $runtime->service);
+    }
+
+    public function testAFileInThemesIsNotAFolder(): void
+    {
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+        file_put_contents($this->root . '/themes/readme.md', "Themes\n");
+
+        $this->assertSame('themes/vokuro', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
     public function testAFourSpaceIndentIsRead(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "services:\n    web:\n        image: php\n");
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
+    }
+
+    public function testAHiddenFolderInThemesDoesNotCount(): void
+    {
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+        mkdir($this->root . '/themes/.git');
+
+        $this->assertSame('themes/vokuro', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
     public function testAKeyThatEndsInServicesIsNotTheBlock(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "x-services:\n  app:\nservices:\n  web:\n");
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testANamespaceOutsideThePsr4MapIsRefused(): void
@@ -126,6 +149,30 @@ final class SurveyTest extends TestCase
         Survey::folder($this->root, 'Apple');
     }
 
+    public function testAnExistingDefaultThemeWins(): void
+    {
+        mkdir($this->root . '/themes/default', 0o775, true);
+        mkdir($this->root . '/themes/vokuro');
+
+        $this->assertSame('themes/default', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
+    }
+
+    public function testAnUnreadableThemesFolderGivesTheDefault(): void
+    {
+        // No PHP warning: PHPUnit fails a test that causes one.
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+        chmod($this->root . '/themes', 0o000);
+
+        try {
+            $views = Survey::paths($this->root, 'src', Flavor::MVC)['views'];
+        } finally {
+            // The scratch folder can be removed only with its mode back.
+            chmod($this->root . '/themes', 0o775);
+        }
+
+        $this->assertSame('themes/default', $views);
+    }
+
     public function testAppWinsWhenItIsNotTheFirstService(): void
     {
         file_put_contents(
@@ -133,12 +180,28 @@ final class SurveyTest extends TestCase
             "services:\n  db:\n    image: mysql\n  app:\n    build: .\n"
         );
 
-        $this->assertSame('app', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('app', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testASubNamespaceHasASubFolder(): void
     {
         $this->assertSame('src/Api/V1', Survey::folder($this->root, 'App\\Api\\V1'));
+    }
+
+    public function testAThemesFileGivesTheDefault(): void
+    {
+        file_put_contents($this->root . '/themes', "not a folder\n");
+
+        $this->assertSame('themes/default', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
+    }
+
+    public function testATieGivesTheFirstFlavor(): void
+    {
+        mkdir($this->root . '/src/Action');
+        mkdir($this->root . '/src/Controllers');
+
+        $this->assertSame(Flavor::ADR, Survey::flavor($this->root, 'src', self::FLAVORS));
+        $this->assertSame(Flavor::MVC, Survey::flavor($this->root, 'src', [Flavor::MVC, Flavor::ADR]));
     }
 
     public function testATopLevelKeyAfterTheServicesEndsTheBlock(): void
@@ -148,14 +211,14 @@ final class SurveyTest extends TestCase
             "services:\n  web:\n    image: php\n# a comment\nvolumes:\n  app:\n"
         );
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testAVersionLineBeforeTheServicesIsRead(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "version: '3.8'\nservices:\n  web:\n");
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
     }
 
     public function testAVokuroLikeProject(): void
@@ -164,7 +227,7 @@ final class SurveyTest extends TestCase
         file_put_contents($this->root . '/src/AppFront.php', "<?php\n");
         file_put_contents($this->root . '/docker-compose.yml', self::VOKURO_COMPOSE);
 
-        $settings = Survey::settings($this->root);
+        $settings = Survey::settings($this->root, self::FLAVORS);
 
         $this->assertSame('Vokuro', $settings->namespace);
         $this->assertSame('Vokuro\\AppFront', $settings->bootstrap);
@@ -180,19 +243,28 @@ final class SurveyTest extends TestCase
     {
         file_put_contents($this->root . '/' . $name, "services:\n  app:\n");
 
-        $this->assertTrue(Survey::settings($this->root)->runtime->isDocker());
+        $this->assertTrue(Survey::settings($this->root, self::FLAVORS)->runtime->isDocker());
     }
 
     public function testLinesBeforeTheServicesBlockAreNotServices(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "# header\n  app:\nservices:\n  web:\n");
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
+    }
+
+    public function testMoreFoldersWin(): void
+    {
+        mkdir($this->root . '/src/Action');
+        mkdir($this->root . '/src/Controllers');
+        mkdir($this->root . '/src/Providers');
+
+        $this->assertSame(Flavor::MVC, Survey::flavor($this->root, 'src', self::FLAVORS));
     }
 
     public function testNoComposeFileIsTheHost(): void
     {
-        $this->assertFalse(Survey::settings($this->root)->runtime->isDocker());
+        $this->assertFalse(Survey::settings($this->root, self::FLAVORS)->runtime->isDocker());
     }
 
     public function testNoComposerJsonStops(): void
@@ -203,12 +275,22 @@ final class SurveyTest extends TestCase
             . "run 'composer dump-autoload', then run 'crest init'"
         );
 
-        Survey::settings($this->root . '/src');
+        Survey::settings($this->root . '/src', self::FLAVORS);
     }
 
     public function testNoFrontControllerFileGivesNoBootstrap(): void
     {
-        $this->assertNull(Survey::settings($this->root)->bootstrap);
+        $this->assertNull(Survey::settings($this->root, self::FLAVORS)->bootstrap);
+    }
+
+    public function testNoSignsGiveAdr(): void
+    {
+        $this->assertSame(Flavor::ADR, Survey::flavor($this->root, 'src', self::FLAVORS));
+    }
+
+    public function testNoThemesFolderGivesTheDefault(): void
+    {
+        $this->assertSame('themes/default', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
     public function testNoUsablePsr4EntryNamesEveryMissingDirectory(): void
@@ -221,14 +303,21 @@ final class SurveyTest extends TestCase
             . "these psr-4 directories do not exist: 'missing', 'lib'"
         );
 
-        Survey::settings($this->root);
+        Survey::settings($this->root, self::FLAVORS);
+    }
+
+    public function testOnlyAHiddenFolderInThemesGivesTheDefault(): void
+    {
+        mkdir($this->root . '/themes/.cache', 0o775, true);
+
+        $this->assertSame('themes/default', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
     public function testSurroundingSlashesAreIgnored(): void
     {
         file_put_contents($this->root . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"/src/"}}}');
 
-        $settings = Survey::settings($this->root);
+        $settings = Survey::settings($this->root, self::FLAVORS);
 
         $this->assertSame('App', $settings->namespace);
         $this->assertSame('src/Action', $settings->paths['action']);
@@ -238,7 +327,7 @@ final class SurveyTest extends TestCase
     {
         $this->writeComposerJson(['Ghost\\' => 'missing/', 'App\\' => 'src/']);
 
-        $this->assertSame('App', Survey::settings($this->root)->namespace);
+        $this->assertSame('App', Survey::settings($this->root, self::FLAVORS)->namespace);
     }
 
     public function testTheFolderOfAListIsTheFirstFolder(): void
@@ -268,6 +357,19 @@ final class SurveyTest extends TestCase
 
         $this->assertSame('api/V1', Survey::folder($this->root, 'App\\Api\\V1'));
         $this->assertSame('src/Web', Survey::folder($this->root, 'App\\Web'));
+    }
+
+    public function testTheMvcPathsGoIntoTheFolderAndTheViewsStayAtTheRoot(): void
+    {
+        $this->assertSame(
+            [
+                'command'    => 'lib/Shop/Command',
+                'controller' => 'lib/Shop/Controllers',
+                'provider'   => 'lib/Shop/Providers',
+                'views'      => 'themes/default',
+            ],
+            Survey::paths($this->root, 'lib/Shop', Flavor::MVC)
+        );
     }
 
     public function testTheNamespaceOfAFolder(): void
@@ -332,7 +434,15 @@ final class SurveyTest extends TestCase
             "services:\n  web:\n    environment:\n      app: x\n"
         );
 
-        $this->assertSame('web', Survey::settings($this->root)->runtime->service);
+        $this->assertSame('web', Survey::settings($this->root, self::FLAVORS)->runtime->service);
+    }
+
+    public function testTheOnlyThemeFolderIsTheViewsProposal(): void
+    {
+        // vokuro keeps its views in themes/vokuro.
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+
+        $this->assertSame('themes/vokuro', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
     public function testThePathsFollowTheNamespaceFolder(): void
@@ -348,12 +458,61 @@ final class SurveyTest extends TestCase
                 'provider'   => 'app/Provider',
                 'responder'  => 'app/Responder',
             ],
-            Survey::settings($this->root)->paths
+            Survey::settings($this->root, self::FLAVORS)->paths
         );
     }
 
     public function testThePathsGoIntoTheFolder(): void
     {
-        $this->assertSame('lib/Shop/Action', Survey::paths('lib/Shop')['action']);
+        $this->assertSame('lib/Shop/Action', Survey::paths($this->root, 'lib/Shop', Flavor::ADR)['action']);
+    }
+
+    public function testTheSettingsOfAnMvcProjectLikeVokuro(): void
+    {
+        $this->writeComposerJson(['Vokuro\\' => 'src/']);
+        mkdir($this->root . '/src/Controllers');
+        mkdir($this->root . '/src/Providers');
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+        file_put_contents($this->root . '/src/Application.php', "<?php\n");
+
+        $settings = Survey::settings($this->root, self::FLAVORS);
+
+        $this->assertSame(Flavor::MVC, $settings->flavor);
+        $this->assertSame(
+            [
+                'command'    => 'src/Command',
+                'controller' => 'src/Controllers',
+                'provider'   => 'src/Providers',
+                'views'      => 'themes/vokuro',
+            ],
+            $settings->paths
+        );
+        $this->assertNull($settings->bootstrap);
+    }
+
+    public function testTheVokuroAdrLayoutIsAdr(): void
+    {
+        mkdir($this->root . '/src/Action');
+        mkdir($this->root . '/src/Middleware');
+        mkdir($this->root . '/src/Responder');
+
+        $this->assertSame(Flavor::ADR, Survey::flavor($this->root, 'src', self::FLAVORS));
+    }
+
+    public function testTheVokuroLayoutIsMvc(): void
+    {
+        mkdir($this->root . '/src/Controllers');
+        mkdir($this->root . '/src/Providers');
+        mkdir($this->root . '/themes/vokuro', 0o775, true);
+
+        $this->assertSame(Flavor::MVC, Survey::flavor($this->root, 'src', self::FLAVORS));
+    }
+
+    public function testTwoThemeFoldersGiveTheDefault(): void
+    {
+        mkdir($this->root . '/themes/one', 0o775, true);
+        mkdir($this->root . '/themes/two');
+
+        $this->assertSame('themes/default', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 }

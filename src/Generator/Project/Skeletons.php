@@ -37,7 +37,7 @@ final class Skeletons
     ];
 
     /**
-     * @return list<string>
+     * @return non-empty-list<string>
      */
     public static function flavors(): array
     {

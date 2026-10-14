@@ -46,6 +46,12 @@ final class Config implements ProjectContext
     public const MISSING = "no crest.php found; run 'crest init'";
 
     /**
+     * The path keys of folders that hold no classes. They have no namespace,
+     * so their folder need not be in a psr-4 folder of composer.json.
+     */
+    public const NO_CLASS_PATHS = ['views'];
+
+    /**
      * The default paths that all flavors share: an artifact that is the same
      * class in each flavor, for example a crest command.
      */

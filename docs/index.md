@@ -299,14 +299,25 @@ questions, in this order, each with a proposal:
    exists. The answer must be in the psr-4 map (`App\Api` under `"App\\": "src/"` is),
    because the generators get their namespaces from it. The other proposals follow the
    answer: its folder is the psr-4 folder of the longest prefix, for example `src/Api`.
-2. The front controller: `<namespace>\AppFront` when `AppFront.php` is in that folder.
+2. The flavor: `adr` or `mvc`. For each flavor, `init` counts the default folders of
+   that flavor (item 4) that the project has, and proposes the flavor with the most. A
+   tie gives `adr`. A project with `src/Controllers`, `src/Providers` and
+   `themes/vokuro` gets `mvc`. `--flavor` answers the question.
+3. The front controller: `<namespace>\AppFront` when `AppFront.php` is in that folder.
    Answer `none` for no front controller.
-3. A folder for each path (`action`, `command`, `middleware`, `provider`, `responder`),
-   in that folder. The question says if the folder exists. An answer must be a relative
-   folder in a psr-4 folder, and its folder names must give a usable namespace:
-   `src/my-actions` gives `App\my-actions`, which PHP cannot use. A leading `./` is
-   removed.
-4. The runtime: docker when the project has `compose.yaml`, `compose.yml`,
+4. A folder for each path of the flavor: `action`, `command`, `middleware`, `provider`
+   and `responder` for ADR; `command`, `controller`, `provider` and `views` for MVC. The
+   question says if the folder exists. A class folder is in the folder of the namespace.
+   An answer must be a relative folder in a psr-4 folder, and its folder names must give
+   a usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use. A
+   leading `./` is removed.
+
+   `views` holds no classes. It is a relative folder in the project, with no psr-4
+   check. Each part of the answer must be a folder name, so `init` refuses an absolute
+   folder, an empty part (`//`), `.` and `..`. The proposal is `themes/default`; when
+   that folder does not exist and `themes/` has one folder only, `init` proposes that
+   folder (`themes/vokuro` in vokuro).
+5. The runtime: docker when the project has `compose.yaml`, `compose.yml`,
    `docker-compose.yaml` or `docker-compose.yml`, with the service `app`, or the first
    service. For docker, the service.
 

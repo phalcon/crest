@@ -148,10 +148,12 @@ Each project has a `crest.php` at its root. `crest new` writes it. For an existi
 project, `crest init` writes it. `init` proposes the values that it finds in the project,
 and asks you to confirm each one. First the namespace of the first psr-4 entry whose
 folder exists. Your answer must be in the psr-4 map, and the other proposals follow it:
-the front controller `<namespace>\AppFront` when `AppFront.php` is in the folder of the
-namespace (answer `none` for no front controller), a folder for each path (the question
-says if it exists), and the docker runtime when the project has a compose file.
-`--no-interaction` accepts the proposals. `--force` overwrites an existing `crest.php`.
+the flavor (`adr` or `mvc`, from the default folders of each flavor that the project
+has; `--flavor` answers it), the front controller `<namespace>\AppFront` when
+`AppFront.php` is in the folder of the namespace (answer `none` for no front
+controller), a folder for each path of the flavor (the question says if it exists), and
+the docker runtime when the project has a compose file. `--no-interaction` accepts the
+proposals. `--force` overwrites an existing `crest.php`.
 
 ```php
 return [

@@ -63,6 +63,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `stub:publish --flavor`: the flavor of a project stub before the project exists, `adr` by default. When the flavor does not have the project stub and another flavor does, the error says which: `pass --flavor=mvc`. [#47](https://github.com/phalcon/crest/issues/47)
 - Added the MVC default paths `provider` (`src/Providers`) and `views` (`themes/default`), and the MVC project stubs `project-front`, `project-readme`, `project-provider-dispatcher`, `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`. [#47](https://github.com/phalcon/crest/issues/47)
 - Added `Crest\Generator\Project`: `Skeleton` (the files, the values and the first artifacts of the project of a flavor), `AdrSkeleton`, `MvcSkeleton`, `Skeletons`, `Answers` and `TemplateEngines`, and `Crest\Generator\ControllerBase`. [#47](https://github.com/phalcon/crest/issues/47)
+- Added the flavor question of `init`, and `init --flavor`: `init` proposes `adr` or `mvc` from the default folders of each flavor that the project has, and asks for it after the namespace. A tie gives `adr`. [#48](https://github.com/phalcon/crest/issues/48)
+- Added `Crest\Project\Config::NO_CLASS_PATHS` (`views`), the path keys of folders with no classes, and `Crest\Project\Survey::flavor()`. [#48](https://github.com/phalcon/crest/issues/48)
 
 ### Changed
 
@@ -103,6 +105,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the error of the `new` key: it names the published `project-config` that `new` used. [#47](https://github.com/phalcon/crest/issues/47)
 - Changed `new`: it checks that the written `crest.php` has the chosen flavor. A published `project-config` with a fixed flavor stops it, with an error that names the stub. [#47](https://github.com/phalcon/crest/issues/47)
 - Moved `Crest\Command\Make\ControllerCommand::BASE` and `BASE_FOLDER` to `Crest\Generator\ControllerBase::NAME` and `FOLDER`. [#47](https://github.com/phalcon/crest/issues/47)
+- Changed `init`: it asks one more question, the flavor, after the namespace, so a script that sends answers to `init` needs one more line. For an MVC project, it asks for the MVC paths. `views` is a folder in the project, with no psr-4 check; its proposal is the only folder in `themes/` when `themes/default` does not exist. [#48](https://github.com/phalcon/crest/issues/48)
+- Changed `Crest\Project\Survey::paths()` and `settings()`: `paths()` takes the root, the folder and the flavor; `settings()` takes the root and the flavors to compare. [#48](https://github.com/phalcon/crest/issues/48)
 
 ### Fixed
 

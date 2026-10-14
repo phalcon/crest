@@ -15,7 +15,10 @@ namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
 
+use function array_filter;
 use function basename;
+use function count;
+use function dirname;
 use function explode;
 use function file_get_contents;
 use function implode;
@@ -23,6 +26,7 @@ use function in_array;
 use function is_dir;
 use function is_file;
 use function preg_match;
+use function scandir;
 use function sprintf;
 use function str_replace;
 use function str_starts_with;
@@ -33,8 +37,9 @@ use function uksort;
 
 /**
  * What `crest init` proposes for an existing project. It reads the project,
- * not crest.php: composer.json for the namespace and its folder, the files
- * for the front controller, and the compose file for the runtime.
+ * not crest.php: composer.json for the namespace and its folder, the folders
+ * for the paths, the files for the front controller, and the compose file for
+ * the runtime.
  */
 final class Survey
 {
@@ -54,6 +59,38 @@ final class Survey
         }
 
         return $namespace . '\\' . Layout::FRONT;
+    }
+
+    /**
+     * The flavor whose default folders the project has most of. A tie gives
+     * the earlier flavor of the list. A folder that all flavors share adds
+     * one to each flavor, so it changes no result.
+     *
+     * @param non-empty-list<Flavor> $flavors
+     */
+    public static function flavor(string $root, string $folder, array $flavors): Flavor
+    {
+        $found = [];
+
+        foreach ($flavors as $flavor) {
+            $found[] = count(
+                array_filter(
+                    self::paths($root, $folder, $flavor),
+                    static fn (string $path): bool => is_dir($root . '/' . $path)
+                )
+            );
+        }
+
+        $best = 0;
+
+        foreach ($found as $index => $count) {
+            // Only more folders win, so a tie keeps the earlier flavor.
+            if ($count > $found[$best]) {
+                $best = $index;
+            }
+        }
+
+        return $flavors[$best];
     }
 
     /**
@@ -114,32 +151,40 @@ final class Survey
     }
 
     /**
-     * The ADR default paths, moved into a folder. For `app`, `action` is
-     * `app/Action`.
+     * The default paths of a flavor, for a project. A class folder goes into
+     * the folder of the namespace: for `app`, `action` is `app/Action`. A
+     * folder with no classes (Config::NO_CLASS_PATHS) stays relative to the
+     * root.
      *
      * @return array<string, string>
      */
-    public static function paths(string $folder): array
+    public static function paths(string $root, string $folder, Flavor $flavor): array
     {
         $paths = [];
 
-        foreach (Config::defaultPaths(Flavor::ADR) as $key => $path) {
-            $paths[$key] = $folder . '/' . basename($path);
+        foreach (Config::defaultPaths($flavor) as $key => $path) {
+            $paths[$key] = true === in_array($key, Config::NO_CLASS_PATHS, true)
+                ? self::noClassFolder($root, $path)
+                : $folder . '/' . basename($path);
         }
 
         return $paths;
     }
 
-    public static function settings(string $root): Settings
+    /**
+     * @param non-empty-list<Flavor> $flavors The flavors to compare, in order
+     */
+    public static function settings(string $root, array $flavors): Settings
     {
         [$namespace, $directory] = self::namespace($root);
 
-        // init writes an ADR project until it asks for the flavor (#48).
+        $flavor = self::flavor($root, $directory, $flavors);
+
         return new Settings(
-            Flavor::ADR,
+            $flavor,
             $namespace,
             self::bootstrap($root, $namespace, $directory),
-            self::paths($directory),
+            self::paths($root, $directory, $flavor),
             self::runtime($root)
         );
     }
@@ -177,6 +222,32 @@ final class Survey
                 implode(', ', $missing)
             )
         );
+    }
+
+    /**
+     * A folder with no classes: the only folder next to the default, or the
+     * default. For `views`, vokuro gets `themes/vokuro`. An existing default
+     * is one of the folders, so it stays the proposal. The default must have
+     * a parent folder, as `themes/default` does: for a default of one part,
+     * the parent is the project root.
+     */
+    private static function noClassFolder(string $root, string $path): string
+    {
+        $parent  = dirname($path);
+        $folders = [];
+
+        // Suppressed: a parent that does not exist, is a file, or that crest
+        // cannot read gives no folders, so the proposal is the default, with
+        // no PHP warning among the questions.
+        foreach (@scandir($root . '/' . $parent) ?: [] as $name) {
+            // A hidden folder (git, an editor, a cache) is never a theme. The
+            // check also skips `.` and `..`.
+            if (false === str_starts_with($name, '.') && true === is_dir($root . '/' . $parent . '/' . $name)) {
+                $folders[] = $parent . '/' . $name;
+            }
+        }
+
+        return 1 === count($folders) ? $folders[0] : $path;
     }
 
     /**
