@@ -18,7 +18,6 @@ use Crest\Command\Container\ListCommand as ContainerListCommand;
 use Crest\Command\Event\ListCommand as EventListCommand;
 use Crest\Command\Make\ActionCommand;
 use Crest\Command\Make\MiddlewareCommand;
-use Crest\Command\Make\ProviderCommand;
 use Crest\Command\Make\ResponderCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
 use Crest\Command\Stub\PublishCommand;
@@ -68,7 +67,6 @@ final class ProjectCommandTest extends TestCase
         yield 'event:list' => ['event:list', EventListCommand::class, []];
         yield 'make:action' => ['make:action', ActionCommand::class, ['GET', '/albums']];
         yield 'make:middleware' => ['make:middleware', MiddlewareCommand::class, ['Auth']];
-        yield 'make:provider' => ['make:provider', ProviderCommand::class, ['Cache']];
         yield 'make:responder' => ['make:responder', ResponderCommand::class, ['Album']];
         yield 'route:list' => ['route:list', RouteListCommand::class, []];
     }

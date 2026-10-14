@@ -39,6 +39,12 @@ final class ListCommandTest extends TestCase
     use ScratchDirectory;
 
     /**
+     * The commands that have an ADR and an MVC version, but no CLI version
+     * yet.
+     */
+    private const ADR_AND_MVC = ['make:provider'];
+
+    /**
      * The commands that have no MVC or CLI version yet.
      */
     private const ADR_ONLY = [
@@ -46,7 +52,6 @@ final class ListCommandTest extends TestCase
         'event:list',
         'make:action',
         'make:middleware',
-        'make:provider',
         'make:responder',
         'route:list',
     ];
@@ -92,7 +97,7 @@ final class ListCommandTest extends TestCase
 
         $output = $this->readStdout();
 
-        foreach ([...self::ADR_ONLY, ...self::MVC_ONLY] as $name) {
+        foreach ([...self::ADR_ONLY, ...self::ADR_AND_MVC, ...self::MVC_ONLY] as $name) {
             $this->assertDoesNotMatchRegularExpression($this->row($name), $output);
         }
 
@@ -150,7 +155,8 @@ final class ListCommandTest extends TestCase
         }
 
         // A command that is not a project command, a package command, the
-        // project commands for all flavors, and the MVC commands.
+        // project commands for all flavors, the commands for ADR and MVC, and
+        // the MVC commands.
         $shown = [
             'aaa:first',
             'about',
@@ -159,6 +165,7 @@ final class ListCommandTest extends TestCase
             'make:command',
             'new',
             'stub:publish',
+            ...self::ADR_AND_MVC,
             ...self::MVC_ONLY,
         ];
 

@@ -26,6 +26,8 @@ use Phalcon\Contracts\ADR\Responder\Responder;
 use Phalcon\Contracts\Container\Service\Collection;
 use Phalcon\Contracts\Container\Service\Provider;
 use Phalcon\Contracts\Http\AttributeRequest;
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Http\RequestInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Controller;
@@ -124,6 +126,8 @@ final class StubContractsTest extends TestCase
         yield 'action' => [Action::class, '__invoke', [AttributeRequest::class]];
 
         yield 'middleware' => [Middleware::class, '__invoke', [AttributeRequest::class, Handler::class]];
+
+        yield 'mvc provider' => [ServiceProviderInterface::class, 'register', [DiInterface::class]];
 
         yield 'provider' => [Provider::class, 'provide', [Collection::class]];
 

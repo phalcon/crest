@@ -22,6 +22,101 @@ use const PHP_EOL;
 
 final class ProviderCommandTest extends NamedArtifactCommandTestCase
 {
+    public function testACliProjectStopsWithBothFlavorsInTheError(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'cli']");
+
+        $status = $this->runCommand(['Mailer']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: make:provider does not support the 'cli' flavor of this project; "
+            . 'it supports: adr, mvc' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileDoesNotExist($this->root . '/src/Provider/MailerProvider.php');
+        $this->assertFileDoesNotExist($this->root . '/src/Providers/MailerProvider.php');
+    }
+
+    public function testADeclaredProviderPathIsUsedInTheMvcGuidance(): void
+    {
+        // A project that keeps its classes in app/, as in
+        // ControllerCommandTest. A stub or a fragment with a fixed namespace
+        // fails here.
+        $this->writeComposerJson(['Shop\\' => 'app/']);
+        $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['provider' => 'app/Services']]");
+
+        $status = $this->runCommand(['Mailer']);
+
+        $stdout = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists($this->root . '/app/Services/MailerProvider.php');
+        $this->assertStringContainsString(
+            'namespace Shop\Services;',
+            (string) file_get_contents($this->root . '/app/Services/MailerProvider.php')
+        );
+        $this->assertStringContainsString('    new \Shop\Services\MailerProvider(),' . PHP_EOL, $stdout);
+        $this->assertStringContainsString('$di->register(new \Shop\Services\MailerProvider()).' . PHP_EOL, $stdout);
+    }
+
+    public function testAnMvcProjectGetsTheProvidersGuidance(): void
+    {
+        // Asserted whole: the first line is for the front controller of
+        // crest new, the second for a project with another front controller.
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->runCommand(['Mailer']);
+
+        $expected = 'Created ' . $this->root . '/src/Providers/MailerProvider.php' . PHP_EOL
+            . 'Nothing registers it yet. Add it to providers() in your front controller:' . PHP_EOL
+            . PHP_EOL
+            . '    new \App\Providers\MailerProvider(),' . PHP_EOL
+            . PHP_EOL
+            . 'In a project with another front controller, register it with' . PHP_EOL
+            . '$di->register(new \App\Providers\MailerProvider()).' . PHP_EOL;
+
+        $this->assertSame($expected, $this->readStdout());
+    }
+
+    public function testAnMvcProjectGetsTheWholeDiProvider(): void
+    {
+        // Asserted whole, as the ADR provider is: a dropped use statement or a
+        // method that does not agree with ServiceProviderInterface is a fatal
+        // error in the project of the developer.
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $status = $this->runCommand(['Mailer']);
+
+        $expected = "<?php\n"
+            . "\n"
+            . "declare(strict_types=1);\n"
+            . "\n"
+            . "namespace App\Providers;\n"
+            . "\n"
+            . "use Phalcon\Di\DiInterface;\n"
+            . "use Phalcon\Di\ServiceProviderInterface;\n"
+            . "\n"
+            . "final class MailerProvider implements ServiceProviderInterface\n"
+            . "{\n"
+            . "    public function register(DiInterface \$di): void\n"
+            . "    {\n"
+            . "        // Use a closure that is not static: the container binds each\n"
+            . "        // closure to itself, and a static closure gives a warning there.\n"
+            . "        //\n"
+            . "        // \$di->setShared('thing', function (): Thing {\n"
+            . "        //     return new Thing();\n"
+            . "        // });\n"
+            . "    }\n"
+            . "}\n";
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            $expected,
+            (string) file_get_contents($this->root . '/src/Providers/MailerProvider.php')
+        );
+    }
+
     public function testTheRegistrationSnippetIsPrintedWithTheParentCall(): void
     {
         // The whole hint is the deliverable, asserted as one block: the blank

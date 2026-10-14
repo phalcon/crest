@@ -16,7 +16,8 @@ use Phalcon\Mvc\Application;
  * The front controller. {{ documentRoot }}/index.php runs it for every request,
  * and crest.php names it, so that crest can boot it.
  *
- * Add a service with a provider in providers().
+ * Add a service with a provider in providers(). `crest make:provider` writes
+ * the provider, and prints the line to add here.
  */
 final class {{ front }}
 {

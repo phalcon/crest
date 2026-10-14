@@ -32,11 +32,11 @@ the commands for the flavor of the project.
 | `stub:publish` | copy packaged stubs into the project for editing |
 | `up` | start the project containers |
 
-`make:command` works in each flavor. `make:controller` is for MVC projects
-only. These commands are for ADR projects only: `make:action`,
-`make:middleware`, `make:provider`, `make:responder`, `route:list`,
-`container:list` and `event:list`. In a project of a different flavor, they stop
-with an error:
+`make:command` works in each flavor. `make:provider` works in ADR and MVC projects,
+with a stub for each flavor. `make:controller` is for MVC projects only. These
+commands are for ADR projects only: `make:action`, `make:middleware`,
+`make:responder`, `route:list`, `container:list` and `event:list`. In a project of
+a different flavor, they stop with an error:
 
     crest: make:responder does not support the 'mvc' flavor of this project; it supports: adr
 
@@ -228,8 +228,10 @@ applications (vokuro, invo):
 | `themes/default/` | the layout `index.phtml` and the view `index/index.phtml` |
 
 `crest.php` has `'flavor' => 'mvc'` and the paths `controller`, `provider` and
-`views`. To add a service, write a provider that implements
-`Phalcon\Di\ServiceProviderInterface`, and add it to `AppFront::providers()`.
+`views`. To add a service, run `crest make:provider Mailer`. It writes
+`src/Providers/MailerProvider.php`, a provider that implements
+`Phalcon\Di\ServiceProviderInterface`, and prints the line to add to
+`AppFront::providers()`.
 
 A URL with no controller stops in the dispatcher ("handler class cannot be
 loaded"). With `display_errors` off, PHP answers 500. With it on, PHP shows the

@@ -17,10 +17,13 @@ use Crest\Command\Make\ControllerCommand;
 use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Console\PackageVersion;
+use Crest\Paths;
 use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\ADR\Front\AbstractHttpFront;
 use Phalcon\ADR\Router\Router;
 use Phalcon\Container\Container;
+use Phalcon\Di\Di;
+use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Mvc\Dispatcher;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -28,6 +31,7 @@ use ReflectionMethod;
 use ReflectionNamedType;
 
 use function extension_loaded;
+use function file_get_contents;
 use function sprintf;
 
 /**
@@ -95,6 +99,29 @@ final class GuidanceContractsTest extends TestCase
         $this->assertStringContainsString('setMiddlewareMap(', $this->readStdout());
 
         $this->assertSame(['array'], $this->parameterTypes(Router::class, 'setMiddlewareMap'));
+    }
+
+    public function testMvcProviderGuidanceNamesMethodsThatExist(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->runProjectCommand('make:provider', ProviderCommand::class, ['Cache']);
+
+        $stdout = $this->readStdout();
+
+        $this->assertStringContainsString('providers()', $stdout);
+        $this->assertStringContainsString('$di->register(', $stdout);
+
+        // DiInterface has no register(). Di declares it, and FactoryDefault
+        // extends Di.
+        $this->assertSame([ServiceProviderInterface::class], $this->parameterTypes(Di::class, 'register'));
+
+        // The front controller of crest new has the method that the first
+        // line of the guidance names.
+        $this->assertStringContainsString(
+            'private function providers(): array',
+            (string) file_get_contents(Paths::stubs() . '/mvc/project-front.stub')
+        );
     }
 
     public function testProviderGuidanceNamesAFrontMethodThatExists(): void

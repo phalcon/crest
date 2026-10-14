@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\ServiceProviderInterface;
+
+final class {{ class }} implements ServiceProviderInterface
+{
+    public function register(DiInterface $di): void
+    {
+        // Use a closure that is not static: the container binds each
+        // closure to itself, and a static closure gives a warning there.
+        //
+        // $di->setShared('thing', function (): Thing {
+        //     return new Thing();
+        // });
+    }
+}
