@@ -8,7 +8,7 @@
 declare(strict_types=1);
 
 return [
-    'flavor'    => 'adr',
+    'flavor'    => '{{ flavor }}',
     'namespace' => '{{ namespace }}',
 {{ bootstrap }}    'paths'     => [
 {{ paths }}    ],
