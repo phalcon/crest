@@ -65,6 +65,9 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Generator\Project`: `Skeleton` (the files, the values and the first artifacts of the project of a flavor), `AdrSkeleton`, `MvcSkeleton`, `Skeletons`, `Answers` and `TemplateEngines`, and `Crest\Generator\ControllerBase`. [#47](https://github.com/phalcon/crest/issues/47)
 - Added the flavor question of `init`, and `init --flavor`: `init` proposes `adr` or `mvc` from the default folders of each flavor that the project has, and asks for it after the namespace. A tie gives `adr`. [#48](https://github.com/phalcon/crest/issues/48)
 - Added `Crest\Project\Config::NO_CLASS_PATHS` (`views`), the path keys of folders with no classes, and `Crest\Project\Survey::flavor()`. [#48](https://github.com/phalcon/crest/issues/48)
+- Added `make:model` for MVC projects: it reads a table through the `db` service of the project (crest boots the front controller that `bootstrap` names), and writes a model in `src/Models/` and its base in `src/Models/Base/`, which crest owns. The base has a typed nullable property for each column and `initialize()` with `setSource()`. A second run writes the base again from the table and keeps the model. [#50](https://github.com/phalcon/crest/issues/50)
+- Added the `model` default path (`src/Models`) for MVC projects, and the MVC stubs `model`, `model-base` and `fragment-model-property`. [#50](https://github.com/phalcon/crest/issues/50)
+- Added `Crest\Generator\ClassName::fromTable()` and `RESERVED`, `Crest\Generator\ModelProperties` and `Crest\Project\Database`. `ClassName::PATTERN` is public. [#50](https://github.com/phalcon/crest/issues/50)
 
 ### Changed
 
@@ -108,6 +111,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `init`: it asks one more question, the flavor, after the namespace, so a script that sends answers to `init` needs one more line. For an MVC project, it asks for the MVC paths. `views` is a folder in the project, with no psr-4 check; its proposal is the only folder in `themes/` when `themes/default` does not exist. [#48](https://github.com/phalcon/crest/issues/48)
 - Changed `Crest\Project\Survey::paths()` and `settings()`: `paths()` takes the root, the folder and the flavor; `settings()` takes the root and the flavors to compare. [#48](https://github.com/phalcon/crest/issues/48)
 - Changed `make:provider`: it also runs in MVC projects. There, it writes a provider that implements `Phalcon\Di\ServiceProviderInterface` into the `provider` path (`src/Providers`), and prints the line to add to `providers()` of the front controller. New MVC stubs: `provider` and `fragment-guidance-provider`. [#49](https://github.com/phalcon/crest/issues/49)
+- Changed `init`: for an MVC project, it also asks for the `model` folder, so a script that sends answers to `init` needs one more line. [#50](https://github.com/phalcon/crest/issues/50)
 
 ### Fixed
 

@@ -365,6 +365,7 @@ final class SurveyTest extends TestCase
             [
                 'command'    => 'lib/Shop/Command',
                 'controller' => 'lib/Shop/Controllers',
+                'model'      => 'lib/Shop/Models',
                 'provider'   => 'lib/Shop/Providers',
                 'views'      => 'themes/default',
             ],
@@ -482,6 +483,7 @@ final class SurveyTest extends TestCase
             [
                 'command'    => 'src/Command',
                 'controller' => 'src/Controllers',
+                'model'      => 'src/Models',
                 'provider'   => 'src/Providers',
                 'views'      => 'themes/vokuro',
             ],

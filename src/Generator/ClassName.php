@@ -15,10 +15,14 @@ namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
 
+use function array_map;
 use function explode;
+use function implode;
+use function in_array;
 use function preg_match;
 use function sprintf;
 use function str_ends_with;
+use function strtolower;
 use function trim;
 
 /**
@@ -47,7 +51,54 @@ final class ClassName
      * Deliberately byte-oriented and not /u: that is exactly how PHP itself
      * decides what may name a class.
      */
-    private const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*\z/';
+    public const PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*\z/';
+
+    /**
+     * The words that PHP 8.1 refuses as a class name, in lowercase, that
+     * fromTable() can give. PHP compares class names without regard to case.
+     * __halt_compiler, include_once and require_once are also reserved, but
+     * fromTable() splits at `_`, so it cannot give them.
+     */
+    public const RESERVED = [
+        'abstract', 'and', 'array', 'as', 'bool', 'break', 'callable', 'case', 'catch', 'class',
+        'clone', 'const', 'continue', 'declare', 'default', 'die', 'do', 'echo', 'else', 'elseif',
+        'empty', 'enddeclare', 'endfor', 'endforeach', 'endif', 'endswitch', 'endwhile', 'eval',
+        'exit', 'extends', 'false', 'final', 'finally', 'float', 'fn', 'for', 'foreach', 'function',
+        'global', 'goto', 'if', 'implements', 'include', 'instanceof', 'insteadof', 'int',
+        'interface', 'isset', 'iterable', 'list', 'match', 'mixed', 'namespace', 'never', 'new',
+        'null', 'object', 'or', 'parent', 'print', 'private', 'protected', 'public', 'readonly',
+        'require', 'return', 'self', 'static', 'string', 'switch', 'throw', 'trait', 'true', 'try',
+        'unset', 'use', 'var', 'void', 'while', 'xor', 'yield',
+    ];
+
+    /**
+     * The class of the model of a table. The table name is split at each `_`,
+     * the first letter of each part becomes uppercase, and the parts are
+     * joined: `user_profiles` gives UserProfiles. The other letters do not
+     * change, as in suffixed(). There is no singular form.
+     *
+     * The check runs before crest boots the project, so a name that cannot
+     * be a class stops the command first.
+     */
+    public static function fromTable(string $table): string
+    {
+        $class = implode('', array_map('ucfirst', explode('_', $table)));
+
+        if (0 === preg_match(self::PATTERN, $class)) {
+            throw new Exception(
+                sprintf(
+                    "'%s' gives no usable class name; expected a table name like 'users' or 'user_profiles'",
+                    $table
+                )
+            );
+        }
+
+        if (true === in_array(strtolower($class), self::RESERVED, true)) {
+            throw new Exception(sprintf("'%s' gives the class %s, but PHP reserves that name", $table, $class));
+        }
+
+        return $class;
+    }
 
     /**
      * A namespace: one name, or more names that backslashes join. Each name

@@ -31,6 +31,7 @@ use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Http\RequestInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Controller;
+use Phalcon\Mvc\Model;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -78,14 +79,18 @@ final class StubContractsTest extends TestCase
         'baseNamespace' => 'App\\Generated\\Base',
         'class'         => 'GeneratedArtifact',
         'classJson'     => 'App\\\\Generated\\\\GeneratedArtifact',
+        'column'        => 'id',
         'command'       => 'generated',
         'entries'       => '',
         'extraKey'      => 'crest',
         'name'          => 'id',
         'namespace'     => 'App\\Generated',
         'params'        => '',
+        'properties'    => '',
         'route'         => 'generated',
+        'table'         => 'generated',
         'template'      => 'generated/index',
+        'type'          => 'int',
     ];
 
     protected function setUp(): void
@@ -346,6 +351,61 @@ final class StubContractsTest extends TestCase
         // ReflectionMethod and not method_exists(): the analyzer folds the
         // constant class name, and calls method_exists() always false.
         $this->assertTrue((new ReflectionMethod($controller, 'indexAction'))->isPublic());
+    }
+
+    /**
+     * The model stub imports only its base, a generated class, so no other
+     * test checks what the two classes extend. Both are loaded here: a
+     * rename of Phalcon\Mvc\Model, or a base stub that no longer extends it,
+     * fails here and not in the project of the developer.
+     */
+    public function testTheMvcModelExtendsTheFrameworkModel(): void
+    {
+        $namespace = 'Crest\\Tests\\Generated\\MvcModel';
+        $stub      = new Stub(Paths::stubs());
+
+        $this->makeScratchDirectory('stub-contracts');
+
+        try {
+            file_put_contents(
+                $this->root . '/Base.php',
+                $stub->render(
+                    'mvc',
+                    'model-base',
+                    [
+                        'class'      => 'GeneratedModelBase',
+                        'namespace'  => $namespace . '\\Base',
+                        'properties' => "    public ?int \$id = null;\n",
+                        'table'      => 'generated',
+                    ]
+                )
+            );
+            file_put_contents(
+                $this->root . '/Model.php',
+                $stub->render(
+                    'mvc',
+                    'model',
+                    [
+                        'base'          => 'GeneratedModelBase',
+                        'baseNamespace' => $namespace . '\\Base',
+                        'class'         => 'GeneratedModel',
+                        'namespace'     => $namespace,
+                    ]
+                )
+            );
+
+            require $this->root . '/Base.php';
+            require $this->root . '/Model.php';
+        } finally {
+            $this->removeScratchDirectory();
+        }
+
+        $base  = $namespace . '\\Base\\GeneratedModelBase';
+        $model = $namespace . '\\GeneratedModel';
+
+        $this->assertSame(Model::class, get_parent_class($base));
+        $this->assertSame($base, get_parent_class($model));
+        $this->assertTrue((new ReflectionMethod($base, 'initialize'))->isPublic());
     }
 
     private function render(string $flavor, string $name): string
