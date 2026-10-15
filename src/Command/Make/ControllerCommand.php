@@ -16,7 +16,6 @@ namespace Crest\Command\Make;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
-use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ControllerBase;
 use Crest\Generator\Outcome;
 use Crest\Project\Flavor;
@@ -67,7 +66,7 @@ final class ControllerCommand extends NamedArtifactCommand
         $writer        = $this->writer($config);
 
         // The base first: a controller never exists without its base.
-        $this->reportBase(
+        $this->reportOwned(
             $output,
             $writer->renderOwned(
                 $base,
@@ -125,29 +124,6 @@ final class ControllerCommand extends NamedArtifactCommand
     private function camelize(string $route): string
     {
         return implode('', array_map('ucfirst', preg_split('/[_-]+/', $route) ?: []));
-    }
-
-    /**
-     * One line for the base: none when it did not change, and a note when
-     * crest kept it.
-     */
-    private function reportBase(Output $output, Outcome $outcome, string $file): void
-    {
-        if (Outcome::Kept === $outcome) {
-            $output->line(
-                sprintf(
-                    'Kept %s: it has no "%s" line, so crest does not change it',
-                    $file,
-                    ArtifactWriter::MARKER
-                )
-            );
-
-            return;
-        }
-
-        if (Outcome::Unchanged !== $outcome) {
-            $output->success(sprintf('%s %s', Outcome::Created === $outcome ? 'Created' : 'Updated', $file));
-        }
     }
 
     /**

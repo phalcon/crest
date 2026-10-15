@@ -16,8 +16,10 @@ namespace Crest\Command;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
+use Crest\Console\Output;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
+use Crest\Generator\Outcome;
 use Crest\Generator\Placement;
 use Crest\Generator\Stub;
 use Crest\Paths;
@@ -113,6 +115,30 @@ abstract class ProjectCommand extends Command
             $config->path($key) . '/' . $class . '.php',
             $config->namespaceFor($key)
         );
+    }
+
+    /**
+     * One line for a base that crest owns (renderOwned()): none when it did
+     * not change, and a note when crest kept it. make:controller and
+     * make:model use it, so the three lines have one copy.
+     */
+    protected function reportOwned(Output $output, Outcome $outcome, string $file): void
+    {
+        if (Outcome::Kept === $outcome) {
+            $output->line(
+                sprintf(
+                    'Kept %s: it has no "%s" line, so crest does not change it',
+                    $file,
+                    ArtifactWriter::MARKER
+                )
+            );
+
+            return;
+        }
+
+        if (Outcome::Unchanged !== $outcome) {
+            $output->success(sprintf('%s %s', Outcome::Created === $outcome ? 'Created' : 'Updated', $file));
+        }
     }
 
     /**
