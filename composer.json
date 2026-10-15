@@ -13,6 +13,7 @@
         "pds/skeleton": "^1",
         "phalcon/code-quality": "^1.0",
         "phalcon/phalcon": "v6.0.x-dev",
+        "phalcon/phql": "1.0.x-dev",
         "phalcon/talon": "^1.0.0",
         "phpstan/phpstan": "^2",
         "phpunit/phpunit": "^10.5",

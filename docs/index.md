@@ -477,6 +477,12 @@ that boot the project"). A project from `crest new --flavor=mvc` names
 `AppFront`, but it has no `db` service yet. Add a provider that registers one
 (`crest make:provider Db`).
 
+With the `phalcon/phalcon` package (Phalcon v6), a model also needs
+`phalcon/phql`, because a model uses PHQL to find rows. The extension (Phalcon
+v5) has PHQL. Install the package in your project:
+
+    composer require phalcon/phql:1.0.x-dev
+
 `Users` extends `UsersBase`, which extends `Phalcon\Mvc\Model`. The base has a
 property for each column, in the order of the table, and an `initialize()` that
 sets the table:
