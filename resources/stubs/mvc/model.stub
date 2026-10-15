@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ baseNamespace }}\{{ base }};
+
+final class {{ class }} extends {{ base }}
+{
+    // If you add initialize(), call parent::initialize() first.
+}
