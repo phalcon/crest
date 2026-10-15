@@ -17,8 +17,44 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ClassName;
 use PHPUnit\Framework\TestCase;
 
+use function ucfirst;
+
 final class ClassNameTest extends TestCase
 {
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function reservedWords(): iterable
+    {
+        foreach (ClassName::RESERVED as $word) {
+            yield $word => [$word];
+        }
+    }
+
+    /**
+     * The table name, and the class that it gives.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function tableNames(): iterable
+    {
+        yield 'one word' => ['users', 'Users'];
+        yield 'two parts' => ['user_profiles', 'UserProfiles'];
+        yield 'an uppercase first letter' => ['Users', 'Users'];
+        yield 'all uppercase' => ['USERS', 'USERS'];
+        yield 'a reserved word in a part' => ['list_items', 'ListItems'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unusableTableNames(): iterable
+    {
+        yield 'a hyphen' => ['user-profiles'];
+        yield 'a leading digit' => ['2fa_codes'];
+        yield 'a schema' => ['public.users'];
+    }
+
     public function testABackslashedNameIsRejected(): void
     {
         $this->expectException(Exception::class);
@@ -138,6 +174,49 @@ final class ClassNameTest extends TestCase
         $this->assertSame('Legacy_Responder', ClassName::suffixed('Legacy_', 'Responder'));
     }
 
+    public function testFromTableIgnoresTheCaseOfAReservedName(): void
+    {
+        // PHP compares class names without regard to case.
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("'lIST' gives the class LIST, but PHP reserves that name");
+
+        ClassName::fromTable('lIST');
+    }
+
+    /**
+     * @dataProvider tableNames
+     */
+    public function testFromTableJoinsThePartsOfTheName(string $table, string $class): void
+    {
+        $this->assertSame($class, ClassName::fromTable($table));
+    }
+
+    /**
+     * @dataProvider reservedWords
+     */
+    public function testFromTableStopsOnAReservedName(string $word): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "'" . $word . "' gives the class " . ucfirst($word) . ', but PHP reserves that name'
+        );
+
+        ClassName::fromTable($word);
+    }
+
+    /**
+     * @dataProvider unusableTableNames
+     */
+    public function testFromTableStopsOnATableThatGivesNoClass(string $table): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "'" . $table . "' gives no usable class name; expected a table name like 'users' or 'user_profiles'"
+        );
+
+        ClassName::fromTable($table);
+    }
+
     public function testMatchingIsCaseSensitive(): void
     {
         // 'middleware' is not the suffix 'Middleware', so it is appended. Exact
@@ -149,6 +228,14 @@ final class ClassNameTest extends TestCase
     {
         // No case correction: the class written is the class that was asked for.
         $this->assertSame('albumResponder', ClassName::suffixed('album', 'Responder'));
+    }
+
+    public function testTheReservedListHasTheWordsOfPhp81(): void
+    {
+        // PHP 8.1 refuses 84 words as a class name. Three of them have an
+        // underscore, so fromTable() cannot give them: __halt_compiler,
+        // include_once and require_once.
+        $this->assertCount(81, ClassName::RESERVED);
     }
 
     public function testTheSuffixIsAppendedWhenItIsAbsent(): void

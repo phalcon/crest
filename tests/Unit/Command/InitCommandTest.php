@@ -142,14 +142,15 @@ final class InitCommandTest extends TestCase
 
     public function testAnMvcAnswerAsksForTheMvcPaths(): void
     {
-        // The questions: namespace, flavor, front controller, the four MVC
+        // The questions: namespace, flavor, front controller, the five MVC
         // paths, runtime.
-        $this->answers("\nmvc\n\n\n\n\n\n\n");
+        $this->answers("\nmvc\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringContainsString(
             'command folder (does not exist yet) [src/Command]: '
             . 'controller folder (does not exist yet) [src/Controllers]: '
+            . 'model folder (does not exist yet) [src/Models]: '
             . 'provider folder (does not exist yet) [src/Providers]: '
             . 'views folder (does not exist yet) [themes/default]: ',
             $this->readStderr()
@@ -337,9 +338,9 @@ final class InitCommandTest extends TestCase
     {
         $this->writeComposerJson(['App\\' => 'src/', 'Admin\\' => 'admin/']);
         mkdir($this->root . '/admin/Controllers', 0o775, true);
-        // The questions: namespace, flavor, front controller, the four MVC
+        // The questions: namespace, flavor, front controller, the five MVC
         // paths, runtime.
-        $this->answers("Admin\n\n\n\n\n\n\n\n");
+        $this->answers("Admin\n\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringStartsWith('Root namespace [App]: Flavor (adr, mvc) [mvc]: ', $this->readStderr());
