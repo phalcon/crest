@@ -106,6 +106,27 @@ final class StubTest extends TestCase
         );
     }
 
+    public function testAValueIsNotScannedForTheNextKeys(): void
+    {
+        // A value can have the text of a placeholder, for example a column
+        // name of another table (#51). It goes into the file as it is.
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ a }}|{{ b }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->assertSame('{{ b }}|B', $stub->render('adr', 'action', ['a' => '{{ b }}', 'b' => 'B']));
+    }
+
+    public function testAValueWithAnUnknownPlaceholderDoesNotStop(): void
+    {
+        // The check for a missing value reads the stub, not the values.
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ a }}');
+
+        $stub = new Stub($this->root . '/packaged');
+
+        $this->assertSame('{{ x }}', $stub->render('adr', 'action', ['a' => '{{ x }}']));
+    }
+
     public function testHasFindsAPackagedStub(): void
     {
         file_put_contents($this->root . '/packaged/adr/action.stub', 'packaged');

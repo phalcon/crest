@@ -32,6 +32,20 @@ final class ClassNameTest extends TestCase
     }
 
     /**
+     * The name, and what studly() gives. There is no check.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function studlyNames(): iterable
+    {
+        yield 'one word' => ['customer', 'Customer'];
+        yield 'two parts' => ['billing_address', 'BillingAddress'];
+        yield 'a reserved word' => ['list', 'List'];
+        yield 'a part with a leading digit' => ['_2nd', '2nd'];
+        yield 'an empty name' => ['', ''];
+    }
+
+    /**
      * The table name, and the class that it gives.
      *
      * @return iterable<string, array{string, string}>
@@ -222,6 +236,14 @@ final class ClassNameTest extends TestCase
         // 'middleware' is not the suffix 'Middleware', so it is appended. Exact
         // matching is what keeps the output predictable.
         $this->assertSame('CorsmiddlewareMiddleware', ClassName::suffixed('Corsmiddleware', 'Middleware'));
+    }
+
+    /**
+     * @dataProvider studlyNames
+     */
+    public function testStudlyJoinsThePartsWithNoCheck(string $name, string $expected): void
+    {
+        $this->assertSame($expected, ClassName::studly($name));
     }
 
     public function testTheNameIsTakenVerbatimOtherwise(): void

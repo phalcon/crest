@@ -13,7 +13,9 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Generator;
 
+use Crest\Attribute\RelationAlias;
 use Crest\Console\PackageVersion;
+use Crest\Generator\RelationAliases;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Tests\Support\ScratchDirectory;
@@ -74,6 +76,9 @@ final class StubContractsTest extends TestCase
      * no-placeholder-left assertion rather than quietly emitting `{{ name }}`.
      */
     private const REPLACEMENTS = [
+        'alias'         => 'Generated',
+        'aliases'       => '',
+        'aliasNote'     => '',
         'attributes'    => '',
         'base'          => 'GeneratedBase',
         'baseNamespace' => 'App\\Generated\\Base',
@@ -83,10 +88,13 @@ final class StubContractsTest extends TestCase
         'command'       => 'generated',
         'entries'       => '',
         'extraKey'      => 'crest',
+        'fields'        => "'id'",
         'name'          => 'id',
         'namespace'     => 'App\\Generated',
         'params'        => '',
         'properties'    => '',
+        'referenced'    => "'id'",
+        'relations'     => '',
         'route'         => 'generated',
         'table'         => 'generated',
         'template'      => 'generated/index',
@@ -363,6 +371,30 @@ final class StubContractsTest extends TestCase
     {
         $namespace = 'Crest\\Tests\\Generated\\MvcModel';
         $stub      = new Stub(Paths::stubs());
+        $relation  = [
+            'kind'       => 'belongs-to',
+            'fields'     => ['id'],
+            'class'      => '\\' . $namespace . '\\GeneratedModel',
+            'referenced' => ['id'],
+            'alias'      => 'Self',
+            'key'        => 'belongsTo generated(id) -> generated(id)',
+        ];
+        $relations = '';
+
+        // Both relation fragments go into the base. A fragment that does not
+        // give valid PHP in initialize() fails the require below.
+        foreach (['model-belongs-to', 'model-has-many'] as $fragment) {
+            $relations .= $stub->render(
+                'mvc',
+                Stub::FRAGMENT_PREFIX . $fragment,
+                [
+                    'alias'      => 'Self',
+                    'class'      => '\\' . $namespace . '\\GeneratedModel',
+                    'fields'     => "'id'",
+                    'referenced' => "'id'",
+                ]
+            );
+        }
 
         $this->makeScratchDirectory('stub-contracts');
 
@@ -373,9 +405,12 @@ final class StubContractsTest extends TestCase
                     'mvc',
                     'model-base',
                     [
+                        'aliases'    => RelationAliases::attributes([$relation]),
+                        'aliasNote'  => RelationAliases::note([$relation]),
                         'class'      => 'GeneratedModelBase',
                         'namespace'  => $namespace . '\\Base',
                         'properties' => "    public ?int \$id = null;\n",
+                        'relations'  => $relations,
                         'table'      => 'generated',
                     ]
                 )
@@ -406,6 +441,15 @@ final class StubContractsTest extends TestCase
         $this->assertSame(Model::class, get_parent_class($base));
         $this->assertSame($base, get_parent_class($model));
         $this->assertTrue((new ReflectionMethod($base, 'initialize'))->isPublic());
+
+        // The generated attribute matches the constructor of RelationAlias.
+        // PHPStan sees a string here, not a class-string, so the test gets
+        // the class through initialize(), as the assertion above does.
+        $class     = (new ReflectionMethod($base, 'initialize'))->getDeclaringClass();
+        $attribute = $class->getAttributes(RelationAlias::class)[0]->newInstance();
+
+        $this->assertSame('belongsTo generated(id) -> generated(id)', $attribute->key);
+        $this->assertSame('Self', $attribute->alias);
     }
 
     private function render(string $flavor, string $name): string
