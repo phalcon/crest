@@ -19,11 +19,11 @@ use function basename;
 use function file_get_contents;
 use function glob;
 use function is_file;
-use function preg_match;
+use function preg_match_all;
 use function rtrim;
 use function sort;
 use function sprintf;
-use function str_replace;
+use function strtr;
 
 /**
  * Loads a stub and substitutes placeholders. Plain string replacement,
@@ -181,9 +181,13 @@ final class Stub
     }
 
     /**
-     * Fails when a placeholder has no value. A published copy can keep a
-     * placeholder that crest no longer sends, and the raw placeholder must not
-     * go into the generated file.
+     * Fails when a placeholder of the stub has no value. A published copy can
+     * keep a placeholder that crest no longer sends, and the raw placeholder
+     * must not go into the generated file.
+     *
+     * All the values go in with one strtr(), so crest never scans a value
+     * that is already in the text: a value can have the text of a
+     * placeholder, for example a column name of another table (#51).
      *
      * @param array<string, string> $replacements
      */
@@ -191,16 +195,21 @@ final class Stub
     {
         $path     = $this->resolve($flavor, $name);
         $template = (string) file_get_contents($path);
+        $pairs    = [];
 
         foreach ($replacements as $key => $value) {
-            $template = str_replace('{{ ' . $key . ' }}', $value, $template);
+            $pairs['{{ ' . $key . ' }}'] = $value;
         }
 
-        if (1 === preg_match(self::PLACEHOLDER, $template, $matches)) {
-            throw new Exception(sprintf('%s has no value for %s', $path, $matches[0]));
+        preg_match_all(self::PLACEHOLDER, $template, $matches);
+
+        foreach ($matches[0] as $placeholder) {
+            if (false === isset($pairs[$placeholder])) {
+                throw new Exception(sprintf('%s has no value for %s', $path, $placeholder));
+            }
         }
 
-        return $template;
+        return strtr($template, $pairs);
     }
 
     public function resolve(string $flavor, string $name): string

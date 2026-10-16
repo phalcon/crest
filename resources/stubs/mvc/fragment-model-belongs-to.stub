@@ -1,0 +1,6 @@
+        $this->belongsTo(
+            {{ fields }},
+            {{ class }}::class,
+            {{ referenced }},
+            ['alias' => '{{ alias }}']
+        );

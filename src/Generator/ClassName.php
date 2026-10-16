@@ -82,7 +82,7 @@ final class ClassName
      */
     public static function fromTable(string $table): string
     {
-        $class = implode('', array_map('ucfirst', explode('_', $table)));
+        $class = self::studly($table);
 
         if (0 === preg_match(self::PATTERN, $class)) {
             throw new Exception(
@@ -121,6 +121,17 @@ final class ClassName
         }
 
         return $trimmed;
+    }
+
+    /**
+     * The name split at each `_`, with the first letter of each part in
+     * uppercase, and the parts joined: `billing_address` gives
+     * BillingAddress. The other letters do not change. There is no check:
+     * fromTable() checks a class name, and ModelRelations checks an alias.
+     */
+    public static function studly(string $name): string
+    {
+        return implode('', array_map('ucfirst', explode('_', $name)));
     }
 
     public static function suffixed(string $name, string $suffix): string

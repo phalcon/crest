@@ -19,7 +19,7 @@ Command line application for Phalcon - generators, introspection and project too
 
 ## Requirements
 
-- PHP `^8.1`
+- PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
 - Phalcon, either the `ext-phalcon` C extension (`^5.18`) or the `phalcon/phalcon` PHP
   implementation (`^6`) - crest itself needs neither to run
 
