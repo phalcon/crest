@@ -48,7 +48,12 @@
                 "Crest\\Command\\AboutCommand::phalcon",
                 // The root exists: its crest.php was found. realpath() cannot
                 // fail.
-                "Crest\\HandOff::inContainer"
+                "Crest\\HandOff::inContainer",
+                // (string) Layout::PORT: Stub::render() puts in the values
+                // with strtr(), which takes an int too, so the cast changes
+                // nothing at runtime. It stays because the replacements are
+                // array<string, string> and PHPStan holds them to that.
+                "Crest\\Command\\NewCommand::handle"
             ]
         },
         "Identical": {
@@ -176,11 +181,20 @@
             ]
         },
         "UnwrapArrayValues": {
-            // The routes are keyed by path so they can be sorted; table()
-            // iterates with foreach and ignores keys, so dropping the
-            // array_values() changes nothing at runtime. It stays because
-            // table() declares list<list<string>> and PHPStan holds it to that.
-            "ignore": ["Crest\\Command\\Route\\ListCommand::handle"]
+            "ignore": [
+                // The routes are keyed by path so they can be sorted; table()
+                // iterates with foreach and ignores keys, so dropping the
+                // array_values() changes nothing at runtime. It stays because
+                // table() declares list<list<string>> and PHPStan holds it to
+                // that.
+                "Crest\\Command\\Route\\ListCommand::handle",
+                // A Phalcon adapter gives the columns of a reference as a
+                // list, so array_values() changes nothing. It stays because
+                // Phalcon declares array<array-key, string>, and the Relation
+                // type of ModelRelations declares list<string>.
+                "Crest\\Generator\\ModelRelations::draft",
+                "Crest\\Generator\\ModelRelations::keyAlias"
+            ]
         }
     }
 }

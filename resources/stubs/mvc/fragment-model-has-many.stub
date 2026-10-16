@@ -1,0 +1,6 @@
+        $this->hasMany(
+            {{ fields }},
+            {{ class }}::class,
+            {{ referenced }},
+            ['alias' => '{{ alias }}']
+        );
