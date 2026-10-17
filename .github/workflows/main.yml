@@ -27,6 +27,9 @@ env:
   # dev dependency.
   EXTENSIONS: mbstring, zip
 
+  # The PDO drivers of the database jobs.
+  DB_EXTENSIONS: pdo_mysql, pdo_pgsql, pdo_sqlite
+
   # The cphalcon constraint for the v5 variant. 5.18 is the first release with
   # Phalcon\ADR.
   PHALCON_CONSTRAINT: "^5.18"
@@ -163,6 +166,291 @@ jobs:
       - name: "Unit tests"
         run: composer test
 
+  # The database tests: one job for each driver, as in phalcon. Each job runs
+  # tests/Database on its driver (talon.php). PHP 8.1 only: the unit-tests job
+  # covers the PHP versions. The tests remove each table of the database.
+  db-sqlite-tests:
+    name: "SQLite tests (PHP 8.1, Phalcon ${{ matrix.variant }})"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - 'v5'
+          - 'v6'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}, ${{ env.DB_EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v5 only: the PIE install of the unit-tests job. See the note there.
+      - name: "Install the Phalcon extension"
+        if: matrix.variant == 'v5'
+        env:
+          PIE_VERSION: '1.5.0'
+          PHP_VERSION: '8.1'
+        run: |
+          curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --skip-enable-extension --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          echo "extension=phalcon.so" | sudo tee "/etc/php/${PHP_VERSION}/cli/conf.d/80-phalcon.ini"
+          php -m | grep -i phalcon
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      - name: "SQLite tests"
+        run: composer test-db-sqlite
+
+  db-mysql-tests:
+    name: "MySQL tests (PHP 8.1, Phalcon ${{ matrix.variant }})"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - 'v5'
+          - 'v6'
+
+    services:
+      mysql:
+        image: mysql:8.0
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_USER: crest
+          MYSQL_DATABASE: crest
+          MYSQL_PASSWORD: secret
+        options: >-
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}, ${{ env.DB_EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v5 only: the PIE install of the unit-tests job. See the note there.
+      - name: "Install the Phalcon extension"
+        if: matrix.variant == 'v5'
+        env:
+          PIE_VERSION: '1.5.0'
+          PHP_VERSION: '8.1'
+        run: |
+          curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --skip-enable-extension --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          echo "extension=phalcon.so" | sudo tee "/etc/php/${PHP_VERSION}/cli/conf.d/80-phalcon.ini"
+          php -m | grep -i phalcon
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      - name: "MySQL tests"
+        env:
+          DATA_MYSQL_HOST: 127.0.0.1
+          DATA_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          DATA_MYSQL_USER: root
+          DATA_MYSQL_PASS: secret
+          DATA_MYSQL_NAME: crest
+        run: composer test-db-mysql
+
+  db-mariadb-tests:
+    name: "MariaDB tests (PHP 8.1, Phalcon ${{ matrix.variant }})"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - 'v5'
+          - 'v6'
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_USER: crest
+          MYSQL_DATABASE: crest
+          MYSQL_PASSWORD: secret
+        options: >-
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}, ${{ env.DB_EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v5 only: the PIE install of the unit-tests job. See the note there.
+      - name: "Install the Phalcon extension"
+        if: matrix.variant == 'v5'
+        env:
+          PIE_VERSION: '1.5.0'
+          PHP_VERSION: '8.1'
+        run: |
+          curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --skip-enable-extension --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          echo "extension=phalcon.so" | sudo tee "/etc/php/${PHP_VERSION}/cli/conf.d/80-phalcon.ini"
+          php -m | grep -i phalcon
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      - name: "MariaDB tests"
+        env:
+          DATA_MARIADB_HOST: 127.0.0.1
+          DATA_MARIADB_PORT: ${{ job.services.mariadb.ports['3306'] }}
+          DATA_MARIADB_USER: root
+          DATA_MARIADB_PASS: secret
+          DATA_MARIADB_NAME: crest
+        run: composer test-db-mariadb
+
+  db-pgsql-tests:
+    name: "PostgreSQL tests (PHP 8.1, Phalcon ${{ matrix.variant }})"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - 'v5'
+          - 'v6'
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_USER: crest
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: crest
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.1'
+          extensions: ${{ env.EXTENSIONS }}, ${{ env.DB_EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v5 only: the PIE install of the unit-tests job. See the note there.
+      - name: "Install the Phalcon extension"
+        if: matrix.variant == 'v5'
+        env:
+          PIE_VERSION: '1.5.0'
+          PHP_VERSION: '8.1'
+        run: |
+          curl -fsSL "https://github.com/php/pie/releases/download/${PIE_VERSION}/pie.phar" -o "${RUNNER_TEMP}/pie.phar"
+          sudo "$(which php)" "${RUNNER_TEMP}/pie.phar" install --skip-enable-extension --no-interaction "phalcon/cphalcon:${PHALCON_CONSTRAINT}"
+          echo "extension=phalcon.so" | sudo tee "/etc/php/${PHP_VERSION}/cli/conf.d/80-phalcon.ini"
+          php -m | grep -i phalcon
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      - name: "PostgreSQL tests"
+        env:
+          DATA_POSTGRES_HOST: 127.0.0.1
+          DATA_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
+          DATA_POSTGRES_USER: crest
+          DATA_POSTGRES_PASS: secret
+          DATA_POSTGRES_NAME: crest
+          DATA_POSTGRES_SCHEMA: public
+        run: composer test-db-pgsql
+
   # Mutation testing is not a job here yet. Infection runs locally only, and is
   # not a dependency: `composer require --dev infection/infection`, then
   # `composer infection` (gated at MSI 100 by resources/infection.json5), then
@@ -210,7 +498,8 @@ jobs:
           composer-options: "--prefer-dist"
 
       # One clover file feeds both SonarQube and octocov, so the two dashboards
-      # can never disagree about the same run.
+      # can never disagree about the same run. test-coverage runs the full
+      # configuration: the unit tests and the SQLite tests in one run.
       - name: "Tests with coverage"
         run: composer test-coverage
 

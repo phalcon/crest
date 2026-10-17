@@ -14,3 +14,31 @@ services:
     volumes:
       - .:/srv
     env_file: .env
+
+  # The servers of the database suites (composer test-db). The suites remove
+  # each table of these databases.
+  mysql:
+    image: mysql:8.0
+    container_name: ${PROJECT_PREFIX:-crest}-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_USER=crest
+      - MYSQL_DATABASE=crest
+      - MYSQL_PASSWORD=secret
+
+  mariadb:
+    image: mariadb:10.6
+    container_name: ${PROJECT_PREFIX:-crest}-mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_USER=crest
+      - MYSQL_DATABASE=crest
+      - MYSQL_PASSWORD=secret
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: ${PROJECT_PREFIX:-crest}-postgres
+    environment:
+      - POSTGRES_USER=crest
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=crest

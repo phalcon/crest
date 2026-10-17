@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!--
+    The unit tests (group default) and the SQLite tests in one run, for coverage
+    and Infection. A new test folder goes into this file and into its own file.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         bootstrap="../../tests/bootstrap.php"
+         cacheDirectory="../../tests/_output/.phpunit.cache"
+         colors="true"
+         failOnWarning="true"
+         failOnDeprecation="true">
+    <testsuites>
+        <testsuite name="full">
+            <directory>../../tests/Unit</directory>
+            <directory>../../tests/Database</directory>
+        </testsuite>
+    </testsuites>
+    <source restrictDeprecations="true">
+        <include>
+            <directory suffix=".php">../../src</directory>
+        </include>
+    </source>
+    <groups>
+        <include>
+            <group>default</group>
+            <group>sqlite</group>
+        </include>
+    </groups>
+    <php>
+        <env name="driver" value="sqlite"/>
+        <env name="DATA_SQLITE_NAME" value="tests/Support/assets/crest_test.sqlite"/>
+    </php>
+</phpunit>

@@ -14,8 +14,10 @@
     // run instead of quietly lowering the score.
     "minMsi": 100,
     "minCoveredMsi": 100,
+    // The unit tests and the SQLite tests in one run. A subfolder, because
+    // Infection takes phpunit.xml before phpunit.xml.dist.
     "phpUnit": {
-        "configDir": "."
+        "configDir": "full"
     },
     "mutators": {
         "@default": true,
