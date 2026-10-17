@@ -13,30 +13,25 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Support\Project;
 
-use Phalcon\Db\Adapter\Pdo\Sqlite;
+use Crest\Tests\Support\TestDatabase;
+use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\FactoryDefault;
 
 /**
- * An MVC front whose `db` service is an SQLite file in the project root, as a
- * project from `crest new` with a database provider has.
+ * An MVC front whose `db` service is the database of the suite
+ * (TestDatabase), as a project from `crest new` with a database provider has.
+ * So make:model reads the database of the test.
  */
 final class DatabaseFront
 {
-    public const FILE = 'database.sqlite';
-
-    public function __construct(private readonly string $root)
-    {
-    }
-
     public function boot(): DiInterface
     {
         $container = new FactoryDefault();
-        $file      = $this->root . '/' . self::FILE;
 
         // Not a static closure: the container binds each closure to itself.
-        $container->setShared('db', function () use ($file): Sqlite {
-            return new Sqlite(['dbname' => $file]);
+        $container->setShared('db', function (): AdapterInterface {
+            return TestDatabase::adapter();
         });
 
         return $container;

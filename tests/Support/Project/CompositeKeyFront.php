@@ -16,25 +16,22 @@ namespace Crest\Tests\Support\Project;
 use Phalcon\Db\Reference;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\FactoryDefault;
+use Phalcon\Talon\Talon;
 
 /**
  * An MVC front whose `db` service is a CompositeKeySqlite on the SQLite file
- * of DatabaseFront. The table `shipments` has one key with two columns to the
+ * of the suite. The table `shipments` has one key with two columns to the
  * table `lines`, as MySQL gives it.
  */
 final class CompositeKeyFront
 {
-    public function __construct(private readonly string $root)
-    {
-    }
-
     public function boot(): DiInterface
     {
-        $container = new FactoryDefault();
-        $file      = $this->root . '/' . DatabaseFront::FILE;
+        $container  = new FactoryDefault();
+        $descriptor = Talon::settings()->getDatabaseOptions('sqlite');
 
         // Not a static closure: the container binds each closure to itself.
-        $container->setShared('db', function () use ($file): CompositeKeySqlite {
+        $container->setShared('db', function () use ($descriptor): CompositeKeySqlite {
             $key = new Reference(
                 'fk_shipments_lines',
                 [
@@ -44,7 +41,7 @@ final class CompositeKeyFront
                 ]
             );
 
-            return new CompositeKeySqlite(['dbname' => $file], ['shipments' => [$key]]);
+            return new CompositeKeySqlite($descriptor, ['shipments' => [$key]]);
         });
 
         return $container;

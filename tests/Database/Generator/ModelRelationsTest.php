@@ -11,37 +11,39 @@
 
 declare(strict_types=1);
 
-namespace Crest\Tests\Unit\Generator;
+namespace Crest\Tests\Database\Generator;
 
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ModelRelations;
-use Crest\Tests\Support\Project\CompositeKeySqlite;
-use Phalcon\Db\Adapter\AdapterInterface;
-use Phalcon\Db\Adapter\Pdo\Sqlite;
-use Phalcon\Db\Reference;
-use PHPUnit\Framework\TestCase;
+use Crest\Tests\Support\Migrations\CustomerInCapitalsMigration;
+use Crest\Tests\Support\Migrations\CustomersMigration;
+use Crest\Tests\Support\Migrations\EmployeesMigration;
+use Crest\Tests\Support\Migrations\InvoicesKeyColumnMigration;
+use Crest\Tests\Support\Migrations\InvoicesMigration;
+use Crest\Tests\Support\Migrations\InvoicesWithClientMigration;
+use Crest\Tests\Support\Migrations\InvoicesWithCustomerColumnMigration;
+use Crest\Tests\Support\Migrations\InvoicesWithIdenticalKeysMigration;
+use Crest\Tests\Support\Migrations\ListMigration;
+use Crest\Tests\Support\Migrations\MessagesMigration;
+use Crest\Tests\Support\Migrations\NotesMigration;
+use Crest\Tests\Support\Migrations\OrdersMigration;
+use Crest\Tests\Support\Migrations\TwoFactorCodesMigration;
+use Crest\Tests\Support\Migrations\UsersMigration;
 
 /**
- * The relations of make:model (#51, spec 3.1 to 3.4). Each test makes its
- * tables in an SQLite database in memory. SQLite gives the keys of a table in
- * the reverse order of the table, so a test that declares recipient_id before
- * sender_id gets them in an order that the sort must change.
+ * The relations of make:model (#51, spec 3.1 to 3.4), on each driver. The
+ * tests that need SQLite are in ModelRelationsSqliteTest, and the composite
+ * key of MySQL and PostgreSQL is in ModelRelationsCompositeKeyTest. SQLite
+ * gives the keys of a table in the reverse order of the table, so a test that
+ * declares recipient_id before sender_id gets them in an order that the sort
+ * must change.
  *
- * @phpstan-import-type Relation from ModelRelations
+ * @group mysql
+ * @group pgsql
+ * @group sqlite
  */
-final class ModelRelationsTest extends TestCase
+final class ModelRelationsTest extends AbstractModelRelationsTestCase
 {
-    /**
-     * The base that the errors about the attributes name.
-     */
-    private const BASE_FILE = '/app/src/Models/Base/InvoicesBase.php';
-
-    private const CUSTOMERS = 'CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT)';
-
-    private const INVOICE_KEY = 'belongsTo invoices(customer_id) -> customers(id)';
-
-    private const NAMESPACE = 'App\\Models';
-
     /**
      * The key column of invoices, and the alias of its belongsTo().
      *
@@ -63,9 +65,9 @@ final class ModelRelationsTest extends TestCase
      */
     public function testABelongsToGetsItsAliasFromTheKeyColumn(string $column, string $alias): void
     {
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, "' . $column . '" INTEGER REFERENCES customers(id))'
+        $this->createTables(
+            CustomersMigration::class,
+            $this->migration(InvoicesKeyColumnMigration::class)->column($column)
         );
 
         $this->assertSame(
@@ -79,82 +81,26 @@ final class ModelRelationsTest extends TestCase
                     'belongsTo invoices(' . $column . ') -> customers(id)'
                 ),
             ],
-            $this->relationsOf($adapter, 'invoices', ['id', $column])->relations
-        );
-    }
-
-    public function testACompositeKeyGivesArraysAndTheClassAsTheAlias(): void
-    {
-        // SQLite splits a composite key. CompositeKeySqlite gives one
-        // reference with two columns, as MySQL does. The first column ends in
-        // _id, so an alias from the column would be Order.
-        $adapter = new CompositeKeySqlite(
-            ['dbname' => ':memory:'],
-            [
-                'shipments' => [
-                    new Reference(
-                        'fk_shipments_lines',
-                        [
-                            'columns'           => ['order_id', 'line_no'],
-                            'referencedTable'   => 'lines',
-                            'referencedColumns' => ['order_id', 'number'],
-                        ]
-                    ),
-                ],
-            ]
-        );
-
-        $adapter->execute('CREATE TABLE lines (order_id INTEGER, number INTEGER)');
-        $adapter->execute('CREATE TABLE shipments (id INTEGER PRIMARY KEY, order_id INTEGER, line_no INTEGER)');
-
-        $this->assertSame(
-            [
-                $this->relation(
-                    'belongs-to',
-                    ['order_id', 'line_no'],
-                    '\\App\\Models\\Lines',
-                    ['order_id', 'number'],
-                    'Lines',
-                    'belongsTo shipments(order_id, line_no) -> lines(order_id, number)'
-                ),
-            ],
-            $this->relationsOf($adapter, 'shipments', ['id', 'order_id', 'line_no'])->relations
-        );
-        $this->assertSame(
-            [
-                $this->relation(
-                    'has-many',
-                    ['order_id', 'number'],
-                    '\\App\\Models\\Shipments',
-                    ['order_id', 'line_no'],
-                    'Shipments',
-                    'hasMany shipments(order_id, line_no) -> lines(order_id, number)'
-                ),
-            ],
-            $this->relationsOf($adapter, 'lines', ['order_id', 'number'])->relations
+            $this->relationsOf($this->adapter(), 'invoices', ['id', $column])->relations
         );
     }
 
     public function testADuplicateAliasSkipsAllItsRelations(): void
     {
         // The belongsTo() alias Customer and the hasMany() alias CUSTOMER are
-        // one alias for Phalcon, so crest skips both. billing_id comes after
-        // customer_id, so SQLite gives it first: a skipped relation comes
-        // before the others, and the count of the aliases must go on.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id), '
-            . 'billing_id INTEGER REFERENCES customers)',
-            'CREATE TABLE CUSTOMER (id INTEGER PRIMARY KEY, invoice_id INTEGER REFERENCES invoices(id))'
+        // one alias for Phalcon, so crest skips both. ModelRelationsSqliteTest
+        // has this test with a key that SQLite skips first.
+        $this->createTables(
+            CustomersMigration::class,
+            InvoicesMigration::class,
+            CustomerInCapitalsMigration::class
         );
 
-        $relations = $this->relationsOf($adapter, 'invoices', ['id', 'customer_id', 'billing_id']);
+        $relations = $this->relationsOf($this->adapter(), 'invoices', ['id', 'customer_id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
             [
-                'Skipped the relation belongsTo invoices(billing_id) -> customers(): '
-                . 'the key does not name the referenced columns',
                 'Skipped the relation ' . self::INVOICE_KEY . ': two or more relations have the alias Customer',
                 'Skipped the relation hasMany CUSTOMER(invoice_id) -> invoices(id): '
                 . 'two or more relations have the alias CUSTOMER',
@@ -165,10 +111,7 @@ final class ModelRelationsTest extends TestCase
 
     public function testAHasManyGetsTheClassOfTheOtherTable(): void
     {
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
 
         $this->assertSame(
             [
@@ -181,41 +124,13 @@ final class ModelRelationsTest extends TestCase
                     'hasMany invoices(customer_id) -> customers(id)'
                 ),
             ],
-            $this->relationsOf($adapter, 'customers', ['id', 'name'])->relations
-        );
-    }
-
-    public function testAKeyWithNoReferencedColumnsIsSkipped(): void
-    {
-        // SQLite accepts a key with no column, and gives NULL for the column.
-        // billing_id comes first, so SQLite gives customer_id first, and the
-        // sort of the lines must change the order.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, billing_id INTEGER REFERENCES customers, '
-            . 'customer_id INTEGER REFERENCES customers)'
-        );
-
-        $relations = $this->relationsOf($adapter, 'invoices', ['id', 'billing_id', 'customer_id']);
-
-        $this->assertSame([], $relations->relations);
-        $this->assertSame(
-            [
-                'Skipped the relation belongsTo invoices(billing_id) -> customers(): '
-                . 'the key does not name the referenced columns',
-                'Skipped the relation belongsTo invoices(customer_id) -> customers(): '
-                . 'the key does not name the referenced columns',
-            ],
-            $relations->skipped
+            $this->relationsOf($this->adapter(), 'customers', ['id', 'name'])->relations
         );
     }
 
     public function testAnAliasFromAnAttributeReplacesTheRules(): void
     {
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
 
         $this->assertSame(
             [
@@ -229,7 +144,7 @@ final class ModelRelationsTest extends TestCase
                 ),
             ],
             $this->relationsOf(
-                $adapter,
+                $this->adapter(),
                 'invoices',
                 ['id', 'customer_id'],
                 [self::INVOICE_KEY => ['alias' => 'Client', 'line' => 16]]
@@ -241,11 +156,7 @@ final class ModelRelationsTest extends TestCase
     {
         // An earlier run gave sender_id the alias Messages. Now messages has
         // a second key to users, and only the new key gets an alias with By.
-        $adapter = $this->adapter(
-            'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)',
-            'CREATE TABLE messages (id INTEGER PRIMARY KEY, recipient_id INTEGER REFERENCES users(id), '
-            . 'sender_id INTEGER REFERENCES users(id))'
-        );
+        $this->createTables(UsersMigration::class, MessagesMigration::class);
 
         $this->assertSame(
             [
@@ -267,7 +178,7 @@ final class ModelRelationsTest extends TestCase
                 ),
             ],
             $this->relationsOf(
-                $adapter,
+                $this->adapter(),
                 'users',
                 ['id', 'name'],
                 ['hasMany messages(sender_id) -> users(id)' => ['alias' => 'Messages', 'line' => 16]]
@@ -279,14 +190,10 @@ final class ModelRelationsTest extends TestCase
     {
         // The developer gave client_id the alias Customer. The key
         // customer_id gets Customer from the rules, so crest skips only it.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, client_id INTEGER REFERENCES customers(id), '
-            . 'customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesWithClientMigration::class);
 
         $relations = $this->relationsOf(
-            $adapter,
+            $this->adapter(),
             'invoices',
             ['id', 'client_id', 'customer_id'],
             ['belongsTo invoices(client_id) -> customers(id)' => ['alias' => 'Customer', 'line' => 16]]
@@ -316,11 +223,7 @@ final class ModelRelationsTest extends TestCase
         // A skip would remove the relation from the base, so crest stops,
         // with the file and the line of the attribute. The check ignores
         // case: Total is the column total.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, total REAL, '
-            . 'customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
 
         $this->expectException(Exception::class);
         $this->expectExceptionMessage(
@@ -329,7 +232,7 @@ final class ModelRelationsTest extends TestCase
         );
 
         $this->relationsOf(
-            $adapter,
+            $this->adapter(),
             'invoices',
             ['id', 'total', 'customer_id'],
             [self::INVOICE_KEY => ['alias' => 'Total', 'line' => 16]]
@@ -340,13 +243,12 @@ final class ModelRelationsTest extends TestCase
     {
         // Phalcon finds an alias without regard to case, so the column
         // CUSTOMER has the name of the alias Customer.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, CUSTOMER TEXT, '
-            . 'customer_id INTEGER REFERENCES customers(id))'
+        $this->createTables(
+            CustomersMigration::class,
+            $this->migration(InvoicesWithCustomerColumnMigration::class)->column('CUSTOMER')
         );
 
-        $relations = $this->relationsOf($adapter, 'invoices', ['id', 'CUSTOMER', 'customer_id']);
+        $relations = $this->relationsOf($this->adapter(), 'invoices', ['id', 'CUSTOMER', 'customer_id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
@@ -360,12 +262,10 @@ final class ModelRelationsTest extends TestCase
         // The tables invoices and payments are gone, so crest drops their
         // attributes and says so. The lines are sorted. The attribute of
         // orders comes first and stays, and the check goes on after it.
-        $adapter   = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, OrdersMigration::class);
+
         $relations = $this->relationsOf(
-            $adapter,
+            $this->adapter(),
             'customers',
             ['id', 'name'],
             [
@@ -400,46 +300,11 @@ final class ModelRelationsTest extends TestCase
         );
     }
 
-    public function testAnAttributeForASkippedRelationIsDropped(): void
-    {
-        // Check 0 comes before the alias, so the attribute does nothing, and
-        // crest drops it with a line.
-        $adapter   = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers)'
-        );
-        $relations = $this->relationsOf(
-            $adapter,
-            'invoices',
-            ['id', 'customer_id'],
-            ['belongsTo invoices(customer_id) -> customers()' => ['alias' => 'Client', 'line' => 16]]
-        );
-
-        $this->assertSame([], $relations->relations);
-        $this->assertSame(
-            [
-                'Skipped the relation belongsTo invoices(customer_id) -> customers(): '
-                . 'the key does not name the referenced columns',
-            ],
-            $relations->skipped
-        );
-        $this->assertSame(
-            [
-                "Dropped the alias Client of 'belongsTo invoices(customer_id) -> customers()': "
-                . 'crest skips the relation',
-            ],
-            $relations->dropped
-        );
-    }
-
     public function testAnUnusableTableIsSkipped(): void
     {
-        $adapter = $this->adapter(
-            'CREATE TABLE users (id INTEGER PRIMARY KEY)',
-            'CREATE TABLE "2fa_codes" (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id))'
-        );
+        $this->createTables(UsersMigration::class, TwoFactorCodesMigration::class);
 
-        $relations = $this->relationsOf($adapter, 'users', ['id']);
+        $relations = $this->relationsOf($this->adapter(), 'users', ['id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
@@ -453,12 +318,9 @@ final class ModelRelationsTest extends TestCase
 
     public function testAReservedTableIsSkipped(): void
     {
-        $adapter = $this->adapter(
-            'CREATE TABLE list (id INTEGER PRIMARY KEY)',
-            'CREATE TABLE notes (id INTEGER PRIMARY KEY, list_id INTEGER REFERENCES list(id))'
-        );
+        $this->createTables(ListMigration::class, NotesMigration::class);
 
-        $relations = $this->relationsOf($adapter, 'notes', ['id', 'list_id']);
+        $relations = $this->relationsOf($this->adapter(), 'notes', ['id', 'list_id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
@@ -474,9 +336,7 @@ final class ModelRelationsTest extends TestCase
     {
         // The belongsTo() comes first, although its alias sorts after the
         // alias of the hasMany(). The two keys differ only in the method.
-        $adapter = $this->adapter(
-            'CREATE TABLE employees (id INTEGER PRIMARY KEY, manager_id INTEGER REFERENCES employees(id))'
-        );
+        $this->createTables(EmployeesMigration::class);
 
         $this->assertSame(
             [
@@ -497,13 +357,15 @@ final class ModelRelationsTest extends TestCase
                     'hasMany employees(manager_id) -> employees(id)'
                 ),
             ],
-            $this->relationsOf($adapter, 'employees', ['id', 'manager_id'])->relations
+            $this->relationsOf($this->adapter(), 'employees', ['id', 'manager_id'])->relations
         );
     }
 
     public function testATableWithNoKeysGivesNothing(): void
     {
-        $relations = $this->relationsOf($this->adapter(self::CUSTOMERS), 'customers', ['id', 'name']);
+        $this->createTables(CustomersMigration::class);
+
+        $relations = $this->relationsOf($this->adapter(), 'customers', ['id', 'name']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame([], $relations->skipped);
@@ -514,11 +376,9 @@ final class ModelRelationsTest extends TestCase
     {
         // The database accepts two keys with the same columns and the same
         // target. They are one relation, also for the By count of customers.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id), '
-            . 'FOREIGN KEY (customer_id) REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesWithIdenticalKeysMigration::class);
+
+        $adapter = $this->adapter();
 
         $this->assertSame(
             [
@@ -552,10 +412,7 @@ final class ModelRelationsTest extends TestCase
     {
         // A project with another `model` path, for example Shop\ => app/ and
         // app/Entities.
-        $adapter = $this->adapter(
-            self::CUSTOMERS,
-            'CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id))'
-        );
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
 
         $this->assertSame(
             [
@@ -569,7 +426,7 @@ final class ModelRelationsTest extends TestCase
                 ),
             ],
             ModelRelations::of(
-                $adapter,
+                $this->adapter(),
                 'invoices',
                 'Shop\\Entities',
                 ['id', 'customer_id'],
@@ -583,11 +440,7 @@ final class ModelRelationsTest extends TestCase
     {
         // SQLite gives sender_id first, so crest finds line 17 first. The
         // message gives the two lines in order.
-        $adapter = $this->adapter(
-            'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)',
-            'CREATE TABLE messages (id INTEGER PRIMARY KEY, recipient_id INTEGER REFERENCES users(id), '
-            . 'sender_id INTEGER REFERENCES users(id))'
-        );
+        $this->createTables(UsersMigration::class, MessagesMigration::class);
 
         $this->expectException(Exception::class);
         $this->expectExceptionMessage(
@@ -595,7 +448,7 @@ final class ModelRelationsTest extends TestCase
         );
 
         $this->relationsOf(
-            $adapter,
+            $this->adapter(),
             'messages',
             ['id', 'recipient_id', 'sender_id'],
             [
@@ -608,11 +461,9 @@ final class ModelRelationsTest extends TestCase
     public function testTwoKeysToOneTableAddByToTheAliases(): void
     {
         // recipient_id comes first, so SQLite gives sender_id first.
-        $adapter = $this->adapter(
-            'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)',
-            'CREATE TABLE messages (id INTEGER PRIMARY KEY, recipient_id INTEGER REFERENCES users(id), '
-            . 'sender_id INTEGER REFERENCES users(id))'
-        );
+        $this->createTables(UsersMigration::class, MessagesMigration::class);
+
+        $adapter = $this->adapter();
 
         $this->assertSame(
             [
@@ -656,59 +507,5 @@ final class ModelRelationsTest extends TestCase
             ],
             $this->relationsOf($adapter, 'users', ['id', 'name'])->relations
         );
-    }
-
-    /**
-     * An SQLite database in memory, with the statements run on it.
-     */
-    private function adapter(string ...$statements): Sqlite
-    {
-        $adapter = new Sqlite(['dbname' => ':memory:']);
-
-        foreach ($statements as $statement) {
-            $adapter->execute($statement);
-        }
-
-        return $adapter;
-    }
-
-    /**
-     * @param list<string> $fields
-     * @param list<string> $referenced
-     *
-     * @return Relation
-     */
-    private function relation(
-        string $kind,
-        array $fields,
-        string $class,
-        array $referenced,
-        string $alias,
-        string $key
-    ): array {
-        return [
-            'kind'       => $kind,
-            'fields'     => $fields,
-            'class'      => $class,
-            'referenced' => $referenced,
-            'alias'      => $alias,
-            'key'        => $key,
-        ];
-    }
-
-    /**
-     * The relations of the table in the namespace App\Models, with the
-     * attributes of $stored in the base self::BASE_FILE.
-     *
-     * @param list<string>                                   $columns
-     * @param array<string, array{alias: string, line: int}> $stored
-     */
-    private function relationsOf(
-        AdapterInterface $adapter,
-        string $table,
-        array $columns,
-        array $stored = []
-    ): ModelRelations {
-        return ModelRelations::of($adapter, $table, self::NAMESPACE, $columns, $stored, self::BASE_FILE);
     }
 }
