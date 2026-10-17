@@ -245,7 +245,8 @@ of the C extension.
 `make:model` reads the database of the project. Its tests are in `tests/Database`, and they run on
 SQLite, MySQL 8.0, MariaDB 10.6 and PostgreSQL 18. `docker compose up -d` starts the servers as the
 services `mysql`, `mariadb` and `postgres`. The `DATA_*` lines of `resources/.env.example` tell the
-tests where the servers are: copy them into `.env`, then run `docker compose up -d --build`.
+tests where the servers are: copy them into `.env`, then run
+`docker compose up -d --build --force-recreate`, so that `crest-app` gets the new values.
 
     docker exec crest-app composer test-db
     docker exec crest-app composer test-db-sqlite
@@ -256,9 +257,11 @@ Infection run the unit tests and the SQLite tests in one run (`resources/full/ph
 
 **Warning:** a database suite removes each table of its database, before and after each test. The
 `DATA_*` values must name a database that only the tests use. Run one suite at a time on a database.
+A MySQL, MariaDB or PostgreSQL suite stops when its `DATA_*_NAME` value is not set.
 
-Without the C extension (the v6 path), `php -n` loads no PDO driver for MySQL or PostgreSQL. Give it
-with `-d extension=`:
+A container built with `PHALCON_VARIANT=v6` has no C extension, so the commands above run the v6
+path. To run the v6 path in the v5 container, use `php -n`. `php -n` does not load the C extension,
+`pdo_mysql` or `pdo_pgsql`, so load the PDO driver with `-d extension=`:
 
     docker exec crest-app php -n vendor/bin/phpunit -c resources/phpunit.sqlite.xml
     docker exec crest-app php -n -d extension=pdo_mysql vendor/bin/phpunit -c resources/phpunit.mysql.xml

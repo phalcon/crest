@@ -8,4 +8,4 @@
 /.phpunit.result.cache
 /.php-cs-fixer.cache
 # The SQLite files of the database suites (tests/Support/assets).
-*.sqlite*
+/tests/Support/assets/*.sqlite*

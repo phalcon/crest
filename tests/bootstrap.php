@@ -34,4 +34,19 @@ if (false !== $sqlite && '' !== $sqlite) {
     $overrides['DATA_SQLITE_NAME'] = $root . '/' . $sqlite;
 }
 
+// A server suite removes each table of its database. With no database name,
+// talon gives its default database, so the suite stops.
+$names = [
+    'mariadb' => 'DATA_MARIADB_NAME',
+    'mysql'   => 'DATA_MYSQL_NAME',
+    'pgsql'   => 'DATA_POSTGRES_NAME',
+];
+$name  = $names[(string) getenv('driver')] ?? '';
+
+if ('' !== $name && in_array(getenv($name), [false, ''], true)) {
+    throw new RuntimeException(
+        $name . ' is not set. Copy the DATA_* lines of resources/.env.example into .env.'
+    );
+}
+
 Runner::for(Settings::fromEnv($overrides))->boot();
