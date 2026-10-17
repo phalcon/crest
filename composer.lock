@@ -1182,12 +1182,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/phalcon/phalcon.git",
-                "reference": "db9b8ecf4881a35fa18fbd339a66a08040976d09"
+                "reference": "75f35a8b246ab416ec12780fbbd8500121139c26"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/db9b8ecf4881a35fa18fbd339a66a08040976d09",
-                "reference": "db9b8ecf4881a35fa18fbd339a66a08040976d09",
+                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/75f35a8b246ab416ec12780fbbd8500121139c26",
+                "reference": "75f35a8b246ab416ec12780fbbd8500121139c26",
                 "shasum": ""
             },
             "require": {
@@ -1239,7 +1239,7 @@
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
-                "MIT"
+                "BSD-3-Clause"
             ],
             "description": "Phalcon Framework",
             "keywords": [
@@ -1260,7 +1260,7 @@
                     "type": "open_collective"
                 }
             ],
-            "time": "2026-10-15T19:24:18+00:00"
+            "time": "2026-10-17T13:36:39+00:00"
         },
         {
             "name": "phalcon/phql",

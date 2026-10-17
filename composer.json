@@ -50,6 +50,11 @@
             "/resources/phpstan.neon",
             "/resources/php-cs-fixer.php",
             "/resources/phpunit.xml.dist",
+            "/resources/full",
+            "/resources/phpunit.mariadb.xml",
+            "/resources/phpunit.mysql.xml",
+            "/resources/phpunit.pgsql.xml",
+            "/resources/phpunit.sqlite.xml",
             "/resources/.env.example",
             "/tests",
             "docker-compose.yml"
@@ -63,7 +68,12 @@
         "cs-fixer-fix": "php-cs-fixer fix --config=resources/php-cs-fixer.php",
         "infection": "infection --configuration=resources/infection.json5 --threads=max",
         "test": "@php vendor/bin/talon run",
-        "test-coverage": "@php vendor/bin/talon run unit -- --coverage-clover tests/_output/coverage.xml",
-        "test-coverage-html": "@php vendor/bin/talon run unit -- --coverage-html tests/_output/coverage"
+        "test-coverage": "@php vendor/bin/talon run full -- --coverage-clover tests/_output/coverage.xml",
+        "test-coverage-html": "@php vendor/bin/talon run full -- --coverage-html tests/_output/coverage",
+        "test-db": "@php vendor/bin/talon run sqlite mysql mariadb pgsql",
+        "test-db-mariadb": "@php vendor/bin/talon run mariadb",
+        "test-db-mysql": "@php vendor/bin/talon run mysql",
+        "test-db-pgsql": "@php vendor/bin/talon run pgsql",
+        "test-db-sqlite": "@php vendor/bin/talon run sqlite"
     }
 }
