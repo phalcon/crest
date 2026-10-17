@@ -11,7 +11,8 @@ ARG GID=1000
 ARG USER=crest
 ARG GROUP=crest
 
-# System packages, PHP extensions and an unprivileged user matching the host UID.
+# System packages, PHP extensions (pdo_mysql and pdo_pgsql for the database
+# suites) and an unprivileged user matching the host UID.
 # -o accepts an ID that the image already uses, for example GID 20 on macOS.
 RUN <<EOT
 set -eux
@@ -19,11 +20,11 @@ groupadd -o -g "${GID}" "${GROUP}"
 useradd -l -m -o -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
 apt-get update -y
 apt-get install -yq --no-install-recommends \
-    curl git unzip zip libonig-dev libzip-dev locales
+    curl git unzip zip libonig-dev libpq-dev libzip-dev locales
 sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
 dpkg-reconfigure --frontend=noninteractive locales
 update-locale LANG=en_US.UTF-8
-docker-php-ext-install mbstring zip
+docker-php-ext-install mbstring pdo_mysql pdo_pgsql zip
 git config --system --add safe.directory /srv
 apt-get clean -y
 rm -rf /var/lib/apt/lists/*
