@@ -21,7 +21,10 @@ use Phalcon\Talon\Database\Schema\AbstractSchema;
 use Phalcon\Talon\Traits\DatabaseTrait;
 use PHPUnit\Framework\TestCase;
 
+use function extension_loaded;
 use function is_string;
+use function phpversion;
+use function version_compare;
 
 /**
  * The base of the database tests. A test runs on the database of its suite,
@@ -87,6 +90,25 @@ abstract class AbstractDatabaseTestCase extends TestCase
     protected function migration(string $class): AbstractSchema
     {
         return new $class($this->getConnection()->getPdo(), false);
+    }
+
+    /**
+     * Skips a composite key test on PostgreSQL with cphalcon before 5.24.0.
+     * Its describeReferences() gives each column of the key with each
+     * referenced column. The v6 package has the fix. The test runs again when
+     * the CI gets the release with the fix.
+     */
+    protected function skipCompositeKeyOnOldCphalcon(): void
+    {
+        if (
+            Dialect::Pgsql === $this->getDialect()
+            && extension_loaded('phalcon')
+            && version_compare((string) phpversion('phalcon'), '5.24.0', '<')
+        ) {
+            $this->markTestSkipped(
+                'cphalcon before 5.24.0 gives the wrong columns for a composite key on PostgreSQL.'
+            );
+        }
     }
 
     /**

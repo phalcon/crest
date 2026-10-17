@@ -29,6 +29,8 @@ final class ModelRelationsCompositeKeyTest extends AbstractModelRelationsTestCas
 {
     public function testACompositeKeyGivesArraysAndTheClassAsTheAlias(): void
     {
+        $this->skipCompositeKeyOnOldCphalcon();
+
         // The first column ends in _id, so an alias from the column would be
         // Order.
         $this->createTables(LinesMigration::class, ShipmentsMigration::class);

@@ -50,6 +50,8 @@ final class ModelCommandCompositeKeyTest extends AbstractDatabaseTestCase
 
     public function testACompositeKeyGivesArrays(): void
     {
+        $this->skipCompositeKeyOnOldCphalcon();
+
         $this->createTables(LinesMigration::class, ShipmentsMigration::class);
 
         $status = $this->runCommand(['shipments']);
