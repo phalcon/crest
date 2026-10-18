@@ -1,0 +1,6 @@
+
+    public function columnMap(): array
+    {
+        return [
+{{ pairs }}        ];
+    }
