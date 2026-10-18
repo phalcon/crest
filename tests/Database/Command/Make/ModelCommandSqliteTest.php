@@ -15,17 +15,20 @@ namespace Crest\Tests\Database\Command\Make;
 
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\LinesMigration;
+use Crest\Tests\Support\Migrations\OddMigration;
 use Crest\Tests\Support\Migrations\ShipmentsMigration;
 use Crest\Tests\Support\Project\CompositeKeyFront;
+use Crest\Tests\Support\Project\NoKeyReadFront;
 use Crest\Tests\Support\RunsMakeModel;
 use Phalcon\Di\Di;
 
 use function file_get_contents;
 
 /**
- * make:model with a composite key on SQLite (spec 4.3). SQLite gives one
- * reference for each column of a composite key, so CompositeKeyFront gives
- * the key as one reference, as MySQL does.
+ * make:model on SQLite with a test adapter. SQLite gives one reference for
+ * each column of a composite key, so CompositeKeyFront gives the key as one
+ * reference, as MySQL does (spec 4.3). NoKeyReadFront stops when crest reads
+ * the keys, so it shows that make:model <table> checks the table first (#52).
  *
  * @group sqlite
  */
@@ -47,6 +50,14 @@ final class ModelCommandSqliteTest extends AbstractDatabaseTestCase
         parent::tearDown();
     }
 
+    public function testAColumnThatIsNotAPropertyNameStopsBeforeTheKeys(): void
+    {
+        $this->front(NoKeyReadFront::class);
+        $this->createTables(OddMigration::class);
+
+        $this->assertStops(['odd'], "column 'first name' of table 'odd' is not a usable property name");
+    }
+
     public function testACompositeKeyGivesArrays(): void
     {
         // CompositeKeyFront gives the key of shipments as one reference with
@@ -66,5 +77,12 @@ final class ModelCommandSqliteTest extends AbstractDatabaseTestCase
             . "        );\n",
             (string) file_get_contents($this->root . '/src/Models/Base/ShipmentsBase.php')
         );
+    }
+
+    public function testAMissingTableStopsBeforeTheKeys(): void
+    {
+        $this->front(NoKeyReadFront::class);
+
+        $this->assertStops(['nothing'], "table 'nothing' was not found in the database of the 'db' service");
     }
 }

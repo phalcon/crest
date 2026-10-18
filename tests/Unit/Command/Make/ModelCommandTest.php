@@ -25,9 +25,10 @@ use Phalcon\Di\Di;
 use PHPUnit\Framework\TestCase;
 
 /**
- * make:model stops before it reads a table (spec 3). These tests need no
- * database: each stop comes before crest boots DatabaseFront. The tests that
- * read a table are in tests/Database.
+ * make:model stops before it reads a table (spec 3). The checks of the
+ * command line come first (#52, spec 3.1). These tests need no database:
+ * each stop comes before crest boots DatabaseFront. The tests that read a
+ * table are in tests/Database.
  */
 final class ModelCommandTest extends TestCase
 {
@@ -73,6 +74,11 @@ final class ModelCommandTest extends TestCase
         $this->assertStops(['users'], "the 'db' service is stdClass, not a Phalcon database adapter");
     }
 
+    public function testAllAndATableStop(): void
+    {
+        $this->assertStops(['users', '--all'], 'give a table name or --all, not both');
+    }
+
     public function testAModelPathWithNoNamespaceStopsBeforeTheBoot(): void
     {
         // FailingFront fails to boot. The namespace check runs first, so its
@@ -107,6 +113,16 @@ final class ModelCommandTest extends TestCase
         );
     }
 
+    public function testAnEmptyExcludeNameStops(): void
+    {
+        $this->assertStops(['--all', '--exclude=users,,orders'], '--exclude has an empty table name');
+    }
+
+    public function testAnEmptyExcludeStops(): void
+    {
+        $this->assertStops(['--all', '--exclude='], '--exclude has an empty table name');
+    }
+
     public function testAReservedNameStops(): void
     {
         $this->front(FailingFront::class);
@@ -120,9 +136,15 @@ final class ModelCommandTest extends TestCase
 
         $this->assertSame('make:model', $definition->getName());
         $this->assertSame(
-            'Create an MVC model from a database table (relations come only from foreign keys)',
+            'Create an MVC model from a database table, or from each table with --all '
+            . '(relations come only from foreign keys)',
             $definition->getDescription()
         );
+    }
+
+    public function testExcludeWithoutAllStops(): void
+    {
+        $this->assertStops(['users', '--exclude=orders'], '--exclude is only for --all');
     }
 
     public function testNoDbServiceStops(): void
@@ -135,11 +157,8 @@ final class ModelCommandTest extends TestCase
         );
     }
 
-    public function testTheTableArgumentIsRequired(): void
+    public function testNoTableAndNoAllStop(): void
     {
-        $status = $this->runCommand([]);
-
-        $this->assertSame(1, $status);
-        $this->assertStringContainsString("missing required argument 'table'", $this->readStderr());
+        $this->assertStops([], 'give a table name, or --all');
     }
 }

@@ -13,9 +13,9 @@ declare(strict_types=1);
 
 namespace Crest\Generator;
 
+use CompileError;
 use Crest\Attribute\RelationAlias;
 use Crest\Console\Exceptions\Exception;
-use ParseError;
 
 use function array_slice;
 use function count;
@@ -314,7 +314,9 @@ final class RelationAliases
 
     /**
      * The tokens of the file, with no spaces and no comments. TOKEN_PARSE
-     * checks the syntax, so a base that is not valid PHP stops crest.
+     * checks the syntax, so a base that is not valid PHP stops crest. The
+     * parser also finds some compile errors (two access modifiers), and PHP
+     * throws a CompileError for them. ParseError extends CompileError.
      *
      * @return list<Token>
      */
@@ -322,7 +324,7 @@ final class RelationAliases
     {
         try {
             $tokens = token_get_all($contents, TOKEN_PARSE);
-        } catch (ParseError $error) {
+        } catch (CompileError $error) {
             throw new Exception(sprintf(
                 '%s is not valid PHP: %s on line %d',
                 $file,

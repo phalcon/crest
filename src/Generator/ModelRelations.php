@@ -14,7 +14,6 @@ declare(strict_types=1);
 namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
-use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\ReferenceInterface;
 
 use function array_map;
@@ -82,12 +81,13 @@ final class ModelRelations
      * crest cannot write stops crest, with the file and the line of the
      * attribute (spec 3.4).
      *
+     * @param ForeignKeys  $keys    The foreign keys of the database, read one time (#52)
      * @param list<string> $columns The columns of the table
      * @param Stored       $stored  The attributes in the base, by key
      * @param string       $file    The base, for the errors about the attributes
      */
     public static function of(
-        AdapterInterface $adapter,
+        ForeignKeys $keys,
         string $table,
         string $namespace,
         array $columns,
@@ -96,23 +96,23 @@ final class ModelRelations
     ): self {
         $drafts = [];
 
-        foreach (self::unique($adapter->describeReferences($table)) as $reference) {
+        foreach (self::unique($keys->of($table)) as $reference) {
             $drafts[] = self::draft(self::BELONGS_TO, $table, $reference, $namespace, $columns, $stored, $file, '');
         }
 
-        foreach ($adapter->listTables() as $other) {
-            $keys = [];
+        foreach ($keys->tables() as $other) {
+            $references = [];
 
-            foreach (self::unique($adapter->describeReferences($other)) as $reference) {
+            foreach (self::unique($keys->of($other)) as $reference) {
                 if ($table === $reference->getReferencedTable()) {
-                    $keys[] = $reference;
+                    $references[] = $reference;
                 }
             }
 
-            foreach ($keys as $reference) {
+            foreach ($references as $reference) {
                 // More than one key to this table: the alias of each key
                 // makes the aliases different.
-                $by = 1 < count($keys) ? 'By' . self::keyAlias($reference) : '';
+                $by = 1 < count($references) ? 'By' . self::keyAlias($reference) : '';
 
                 $drafts[] = self::draft(self::HAS_MANY, $other, $reference, $namespace, $columns, $stored, $file, $by);
             }

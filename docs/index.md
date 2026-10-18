@@ -24,7 +24,7 @@ the commands for the flavor of the project.
 | `make:command` | create a crest command |
 | `make:controller` | create an MVC controller |
 | `make:middleware` | create an ADR middleware |
-| `make:model` | create an MVC model from a database table (relations come only from foreign keys) |
+| `make:model` | create an MVC model from a database table, or from each table with --all (relations come only from foreign keys) |
 | `make:provider` | create a service provider |
 | `make:responder` | create an ADR responder |
 | `new` | create an ADR or MVC project |
@@ -497,11 +497,12 @@ public ?string $name = null;
 | Column type | Property type |
 |---|---|
 | the integer types | `?int` |
-| `FLOAT`, `DOUBLE` | `?float` |
-| `BOOLEAN` | `?bool` |
+| `FLOAT`, `REAL`, `DOUBLE` | `?float` |
+| `BOOLEAN` on PostgreSQL | `?bool` |
 | all others, also `DECIMAL`, the dates and text | `?string` |
 
-The column type is the type that Phalcon reads from the database. On SQLite,
+The column type is the type that Phalcon reads from the database. MySQL and
+MariaDB keep a `BOOLEAN` column as `TINYINT(1)`, so it gives `?int`. On SQLite,
 Phalcon reads `DOUBLE` and `BOOLEAN` columns as `VARCHAR`, so they give
 `?string`.
 
@@ -537,6 +538,80 @@ Crest stops, and writes no file, when:
 
 `make:model` is for MVC projects. An ADR project uses repositories, not Active
 Record models, so the command stops there.
+
+### All the tables
+
+`make:model --all` writes a model and its base for each table of the database,
+in the order of the table names. For each table, crest prints a `Table` line,
+then the lines of `make:model <table>`. At the end, crest prints a summary:
+
+    crest make:model --all
+
+    Table customers
+    Created src/Models/Base/CustomersBase.php
+    Created src/Models/Customers.php
+
+    Table invoices
+    Created src/Models/Base/InvoicesBase.php
+    Created src/Models/Invoices.php
+
+    2 tables: 2 models created, 0 kept, 0 failed.
+
+Each table works as with `make:model <table>`: another run writes the bases
+again and keeps the models, and `--force` replaces the models. When the
+database has no tables to write, crest prints `No tables to write.`, and the
+exit status is 0.
+
+`--all` writes no models for views, and no models for the internal tables of
+SQLite (for example, `sqlite_sequence`). For a view, run `make:model <view>`.
+This works on MySQL, MariaDB and PostgreSQL. On SQLite, `make:model <view>`
+stops with the "not found" error, because Phalcon finds only tables there.
+
+To skip tables, give their names to one `--exclude`, separated by commas:
+
+    crest make:model --all --exclude=audit_log,phalcon_migrations
+
+Give all the names to one `--exclude`. If you give `--exclude` two times,
+crest uses only the last one.
+
+Each name must be the exact name of a table, with the same case. A name that
+the database does not have stops crest before it writes a file. When the name
+differs from a table only in case, the error gives the name of the table:
+
+    crest: --exclude: the database has no table Users; did you mean users?
+
+For the name of a view or an internal SQLite table, crest prints a note, and
+continues. A skipped table still gives its relations: with
+`--exclude=invoices`, the base of `customers` has its `hasMany()` to
+`Invoices`.
+
+A table fails when its name gives no class name (`user-profiles`) or a name
+that PHP reserves (`list`), when a column is not a property name, or when
+crest cannot use its base (see the list above). A table also fails when it
+gives the same class as another table, also with a different case
+(`UserProfiles` and `user_profiles`, or `USERS` and `users`): crest writes
+none of these tables. Crest prints the reason, and continues with the next
+table. At the end, crest lists the tables that failed, so that you can write
+their models yourself:
+
+    Table user-profiles
+    Failed: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
+
+    Table users
+    Created src/Models/Base/UsersBase.php
+    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+    Created src/Models/Users.php
+
+    2 tables: 1 model created, 0 kept, 1 failed.
+    Failed tables:
+      user-profiles: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
+
+The exit status is 1 when a table fails, and 0 when crest writes or keeps each
+table. Crest prints all these lines to stdout, also the `Failed` lines, so a
+log of the output (`> log.txt`) has them in order. An error that is not about
+one table stops crest, and goes to stderr: for example, no `db` service, a
+connection that breaks, or a stub that crest cannot render. The files of the
+tables before the error stay, and the next run continues from them.
 
 ### Relations
 
@@ -660,7 +735,8 @@ when two aliases of attributes are the same (the case is ignored). The message
 names the file and the line.
 
 When another table gets a new key to a table, run `make:model` for that table
-again, so that its base gets the new `hasMany()`.
+again, so that its base gets the new `hasMany()`. Or run `make:model --all`,
+which writes the bases of all the tables again.
 
 Crest skips a relation that it cannot write, and prints one line for it:
 
