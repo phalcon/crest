@@ -112,15 +112,28 @@ abstract class AbstractDatabaseTestCase extends TestCase
     }
 
     /**
-     * Removes each table of the database. MySQL and MariaDB do not check the
+     * Removes each view, then each table of the database. A view uses a
+     * table, so the views go first (#52). MySQL and MariaDB do not check the
      * keys for it, and PostgreSQL removes the keys of the other tables
      * (CASCADE). SQLite does not check the keys.
      */
     private function dropAllTables(): void
     {
-        $pdo       = $this->getConnection()->getPdo();
-        $dialect   = $this->getDialect();
-        $statement = $pdo->query(match ($dialect) {
+        $pdo     = $this->getConnection()->getPdo();
+        $dialect = $this->getDialect();
+        $views   = $this->names($pdo, match ($dialect) {
+            Dialect::Mysql  => 'SELECT table_name FROM information_schema.views '
+                . 'WHERE table_schema = DATABASE() ORDER BY table_name',
+            Dialect::Pgsql  => 'SELECT viewname FROM pg_views WHERE schemaname = current_schema() '
+                . 'ORDER BY viewname',
+            Dialect::Sqlite => "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
+        });
+
+        foreach ($views as $view) {
+            $pdo->exec('DROP VIEW ' . $dialect->quoteIdentifier($view));
+        }
+
+        $tables = $this->names($pdo, match ($dialect) {
             Dialect::Mysql  => 'SELECT table_name FROM information_schema.tables '
                 . "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name",
             Dialect::Pgsql  => 'SELECT tablename FROM pg_tables WHERE schemaname = current_schema() '
@@ -128,9 +141,6 @@ abstract class AbstractDatabaseTestCase extends TestCase
             Dialect::Sqlite => "SELECT name FROM sqlite_master WHERE type = 'table' "
                 . "AND name NOT LIKE 'sqlite_%' ORDER BY name",
         });
-
-        /** @var list<string> $tables */
-        $tables = false === $statement ? [] : $statement->fetchAll(PDO::FETCH_COLUMN);
 
         if (Dialect::Mysql === $dialect) {
             $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
@@ -145,5 +155,20 @@ abstract class AbstractDatabaseTestCase extends TestCase
         if (Dialect::Mysql === $dialect) {
             $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
         }
+    }
+
+    /**
+     * The first column of each row of the query.
+     *
+     * @return list<string>
+     */
+    private function names(PDO $pdo, string $sql): array
+    {
+        $statement = $pdo->query($sql);
+
+        /** @var list<string> $names */
+        $names = false === $statement ? [] : $statement->fetchAll(PDO::FETCH_COLUMN);
+
+        return $names;
     }
 }

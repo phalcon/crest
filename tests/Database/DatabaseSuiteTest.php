@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database;
 
+use Crest\Tests\Support\Migrations\CustomerNamesViewMigration;
 use Crest\Tests\Support\Migrations\CustomersMigration;
 use Crest\Tests\Support\Migrations\InvoicesMigration;
 use FilesystemIterator;
@@ -29,8 +30,8 @@ use function str_ends_with;
 
 /**
  * The setup of the database suites: the driver group of each test, the
- * adapter of the suite, the tables of the migrations, and the tables that the
- * base removes before each test.
+ * adapter of the suite, the tables of the migrations, and the tables and the
+ * views that the base removes before each test.
  *
  * @group mysql
  * @group pgsql
@@ -73,6 +74,19 @@ final class DatabaseSuiteTest extends AbstractDatabaseTestCase
 
         $this->assertFalse($this->adapter()->tableExists('customers'));
         $this->assertFalse($this->adapter()->tableExists('invoices'));
+    }
+
+    public function testSetUpRemovesEachView(): void
+    {
+        // A view uses a table: MySQL and SQLite keep the view when the table
+        // is gone, and PostgreSQL does not remove a table that a view uses
+        // without CASCADE (#52).
+        $this->createTables(CustomersMigration::class, CustomerNamesViewMigration::class);
+
+        $this->setUp();
+
+        $this->assertSame([], $this->adapter()->listViews());
+        $this->assertFalse($this->adapter()->tableExists('customers'));
     }
 
     public function testTheAdapterIsForTheDriverOfTheSuite(): void

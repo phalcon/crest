@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Database\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Generator\ForeignKeys;
 use Crest\Generator\ModelRelations;
 use Crest\Tests\Support\Migrations\CustomerInCapitalsMigration;
 use Crest\Tests\Support\Migrations\CustomersMigration;
@@ -426,7 +427,7 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
                 ),
             ],
             ModelRelations::of(
-                $this->adapter(),
+                ForeignKeys::read($this->adapter()),
                 'invoices',
                 'Shop\\Entities',
                 ['id', 'customer_id'],

@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database\Generator;
 
+use Crest\Generator\ForeignKeys;
 use Crest\Generator\ModelRelations;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Phalcon\Db\Adapter\AdapterInterface;
@@ -73,6 +74,13 @@ abstract class AbstractModelRelationsTestCase extends AbstractDatabaseTestCase
         array $columns,
         array $stored = []
     ): ModelRelations {
-        return ModelRelations::of($adapter, $table, self::NAMESPACE, $columns, $stored, self::BASE_FILE);
+        return ModelRelations::of(
+            ForeignKeys::read($adapter),
+            $table,
+            self::NAMESPACE,
+            $columns,
+            $stored,
+            self::BASE_FILE
+        );
     }
 }
