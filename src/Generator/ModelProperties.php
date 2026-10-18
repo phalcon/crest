@@ -16,10 +16,7 @@ namespace Crest\Generator;
 use Crest\Console\Exceptions\Exception;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Column;
-use Phalcon\Mvc\Model;
 
-use function preg_match;
-use function property_exists;
 use function sprintf;
 
 /**
@@ -34,8 +31,8 @@ use function sprintf;
 final class ModelProperties
 {
     /**
-     * The column name and its PHP type, in the order of the table. Each
-     * column must give a property that the base can declare.
+     * The column name and its PHP type, in the order of the table. The
+     * property names come from ModelNames, which checks them (#53).
      *
      * @return array<string, string>
      */
@@ -50,29 +47,7 @@ final class ModelProperties
         $properties = [];
 
         foreach ($adapter->describeColumns($table) as $column) {
-            $name = $column->getName();
-
-            if (0 === preg_match(ClassName::PATTERN, $name)) {
-                throw new Exception(
-                    sprintf("column '%s' of table '%s' is not a usable property name", $name, $table)
-                );
-            }
-
-            // A typed property with the name of a property of the model is a
-            // fatal error, also when the property of the model is protected.
-            // property_exists() reads the Phalcon of the project.
-            if (true === property_exists(Model::class, $name)) {
-                throw new Exception(
-                    sprintf(
-                        "column '%s' of table '%s' has the name of a property of %s",
-                        $name,
-                        $table,
-                        Model::class
-                    )
-                );
-            }
-
-            $properties[$name] = self::type($column->getType());
+            $properties[$column->getName()] = self::type($column->getType());
         }
 
         return $properties;

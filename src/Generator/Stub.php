@@ -23,6 +23,7 @@ use function preg_match_all;
 use function rtrim;
 use function sort;
 use function sprintf;
+use function str_contains;
 use function strtr;
 
 /**
@@ -136,6 +137,16 @@ final class Stub
     public function has(string $flavor, string $name): bool
     {
         return null !== $this->find($flavor, $name);
+    }
+
+    /**
+     * Whether the stub that crest uses has the placeholder. A copy that a
+     * project published before a new placeholder does not have it, and
+     * render() drops a value that has no placeholder (#53).
+     */
+    public function hasPlaceholder(string $flavor, string $name, string $placeholder): bool
+    {
+        return str_contains((string) file_get_contents($this->resolve($flavor, $name)), '{{ ' . $placeholder . ' }}');
     }
 
     /**

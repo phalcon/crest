@@ -40,6 +40,10 @@ use function strtolower;
  * composite key, so there each column gives one relation. Identical keys give
  * one relation.
  *
+ * The class and the property names come from ModelNames (#53): fields has the
+ * property names of the table, referenced the property names of the related
+ * table.
+ *
  * A relation whose key has a RelationAlias attribute in the base keeps the
  * alias of that attribute (RelationAliases). A relation that crest cannot
  * write is not in `relations`. `skipped` has one line for it, with the
@@ -81,23 +85,35 @@ final class ModelRelations
      * crest cannot write stops crest, with the file and the line of the
      * attribute (spec 3.4).
      *
-     * @param ForeignKeys  $keys    The foreign keys of the database, read one time (#52)
-     * @param list<string> $columns The columns of the table
-     * @param Stored       $stored  The attributes in the base, by key
-     * @param string       $file    The base, for the errors about the attributes
+     * @param ForeignKeys  $keys       The foreign keys of the database, read one time (#52)
+     * @param ModelNames   $names      The classes and the property names (#53)
+     * @param list<string> $properties The property names of the table, for the alias check
+     * @param Stored       $stored     The attributes in the base, by key
+     * @param string       $file       The base, for the errors about the attributes
      */
     public static function of(
         ForeignKeys $keys,
+        ModelNames $names,
         string $table,
         string $namespace,
-        array $columns,
+        array $properties,
         array $stored,
         string $file
     ): self {
         $drafts = [];
 
         foreach (self::unique($keys->of($table)) as $reference) {
-            $drafts[] = self::draft(self::BELONGS_TO, $table, $reference, $namespace, $columns, $stored, $file, '');
+            $drafts[] = self::draft(
+                self::BELONGS_TO,
+                $table,
+                $reference,
+                $names,
+                $namespace,
+                $properties,
+                $stored,
+                $file,
+                ''
+            );
         }
 
         foreach ($keys->tables() as $other) {
@@ -114,7 +130,17 @@ final class ModelRelations
                 // makes the aliases different.
                 $by = 1 < count($references) ? 'By' . self::keyAlias($reference) : '';
 
-                $drafts[] = self::draft(self::HAS_MANY, $other, $reference, $namespace, $columns, $stored, $file, $by);
+                $drafts[] = self::draft(
+                    self::HAS_MANY,
+                    $other,
+                    $reference,
+                    $names,
+                    $namespace,
+                    $properties,
+                    $stored,
+                    $file,
+                    $by
+                );
             }
         }
 
@@ -207,8 +233,8 @@ final class ModelRelations
      * One relation, after checks 0 to 2 of spec 3.3. A key with an attribute
      * in the base gets the alias of that attribute (spec 3.4).
      *
-     * @param list<string> $columns The columns of the table
-     * @param Stored       $stored  The attributes in the base, by key
+     * @param list<string> $properties The property names of the table
+     * @param Stored       $stored     The attributes in the base, by key
      *
      * @return Draft
      */
@@ -216,8 +242,9 @@ final class ModelRelations
         string $kind,
         string $keyTable,
         ReferenceInterface $reference,
+        ModelNames $names,
         string $namespace,
-        array $columns,
+        array $properties,
         array $stored,
         string $file,
         string $by
@@ -247,18 +274,31 @@ final class ModelRelations
             return self::skip($relation, 'the key does not name the referenced columns');
         }
 
+        // The class and the property names of both tables (#53). A table
+        // that gives no class, a related base that crest cannot read, or a
+        // column with no usable property name skips the relation.
         try {
-            $class = ClassName::fromTable($belongsTo ? $reference->getReferencedTable() : $keyTable);
+            $class      = $names->classOf($belongsTo ? $reference->getReferencedTable() : $keyTable);
+            $keyNames   = array_map(
+                static fn (string $column): string => $names->fieldOf($keyTable, $column),
+                $keys
+            );
+            $otherNames = array_map(
+                static fn (string $column): string => $names->fieldOf($reference->getReferencedTable(), $column),
+                $referenced
+            );
         } catch (Exception $exception) {
             return self::skip($relation, $exception->getMessage());
         }
 
-        $rules             = $belongsTo ? self::keyAlias($reference) : $class . $by;
-        $relation['class'] = '\\' . $namespace . '\\' . $class;
-        $relation['alias'] = $stored[$relation['key']]['alias'] ?? $rules;
+        $rules                  = $belongsTo ? self::keyAlias($reference) : $class . $by;
+        $relation['fields']     = $belongsTo ? $keyNames : $otherNames;
+        $relation['class']      = '\\' . $namespace . '\\' . $class;
+        $relation['referenced'] = $belongsTo ? $otherNames : $keyNames;
+        $relation['alias']      = $stored[$relation['key']]['alias'] ?? $rules;
 
         // Phalcon finds an alias without regard to case.
-        if (false === in_array(strtolower($relation['alias']), array_map('strtolower', $columns), true)) {
+        if (false === in_array(strtolower($relation['alias']), array_map('strtolower', $properties), true)) {
             return ['relation' => $relation, 'reason' => null];
         }
 

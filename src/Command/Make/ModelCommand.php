@@ -18,25 +18,35 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
-use Crest\Generator\ClassName;
+use Crest\Generator\BaseAttributes;
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelProperties;
 use Crest\Generator\ModelRelations;
 use Crest\Generator\ModelTables;
 use Crest\Generator\Outcome;
+use Crest\Generator\PropertyNames;
 use Crest\Generator\RelationAliases;
+use Crest\Generator\Sentence;
 use Crest\Generator\Stub;
 use Crest\Project\Config;
 use Crest\Project\Database;
 use Crest\Project\Flavor;
 
+use function array_diff;
 use function array_keys;
 use function array_map;
+use function array_values;
 use function count;
 use function explode;
 use function implode;
 use function in_array;
+use function max;
 use function sprintf;
+use function str_pad;
+use function strlen;
+use function strrpos;
+use function substr;
 use function trim;
 use function var_export;
 
@@ -56,25 +66,38 @@ use function var_export;
  * another run brings the model up to date with its table, and the code of the
  * developer does not change.
  *
+ * The names (#53) come from ModelNames: the class of a table from
+ * models.classes in crest.php, and the property of a column from --property,
+ * a PropertyName attribute on the base, or models.camelCase. A property that
+ * does not have the name of its column gives a columnMap() in the base. When
+ * a property name changes, crest says so, and names the tables whose
+ * relations use it.
+ *
  * The work for one table has two phases. The read phase reads the columns,
- * the base and the relations, and changes no file. The write phase writes
- * the base and the model. --all (#52) writes each table of ModelTables, and
- * reads the foreign keys one time for the run (ForeignKeys). A crest error in
- * the read phase fails only its table: crest prints the reason, goes to the
- * next table, and lists the failed tables in the summary.
+ * the base, the names and the relations, and changes no file. The write phase
+ * writes the base and the model. --all (#52) writes each table of
+ * ModelTables, and reads the foreign keys and the bases one time for the run.
+ * A crest error in the read phase fails only its table: crest prints the
+ * reason, goes to the next table, and lists the failed tables in the summary.
  *
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
  *
  * @phpstan-type Parts array{
+ *     attributes: array<string, string>,
  *     base: string,
  *     baseFile: string,
  *     baseNamespace: string,
  *     class: string,
+ *     dropped: list<string>,
  *     file: string,
+ *     map: array<string, string>,
+ *     names: array<string, string>,
  *     namespace: string,
  *     properties: array<string, string>,
  *     relations: ModelRelations,
+ *     renamed: array<string, array{string, string}>|null,
+ *     run: list<string>,
  *     table: string
  * }
  */
@@ -93,6 +116,119 @@ final class ModelCommand extends ProjectCommand
     private const NO_KEYS = 'No relations for %s: the table has no foreign keys, and no foreign keys point to it. '
         . 'Relations come only from foreign keys.';
 
+    /**
+     * The stubs that a base with a columnMap() needs, with the placeholder
+     * of #53 in each one.
+     */
+    private const PLACEHOLDERS = [
+        'model-base'                             => 'columnMap',
+        Stub::FRAGMENT_PREFIX . 'model-property' => 'property',
+    ];
+
+    /**
+     * The base of a class, in the Base subfolder of the `model` path.
+     */
+    private static function baseFile(string $path, string $class): string
+    {
+        return $path . '/' . self::BASE_FOLDER . '/' . $class . self::BASE_SUFFIX . '.php';
+    }
+
+    /**
+     * Reads the base of each table one time, and gives its PropertyName
+     * attributes to $names (spec 3.2). A table that gives no class has no
+     * base. A base that crest cannot read fails each relation that needs its
+     * names, and with --all its own table.
+     *
+     * @param list<string> $tables
+     *
+     * @return array{ModelNames, array<string, BaseAttributes|Exception>}
+     */
+    private static function bases(ModelNames $names, array $tables, string $path): array
+    {
+        $bases = [];
+
+        foreach ($tables as $table) {
+            try {
+                $file = self::baseFile($path, $names->classOf($table));
+            } catch (Exception) {
+                continue;
+            }
+
+            try {
+                $bases[$table] = BaseAttributes::read($file);
+                $names         = $names->withStored($table, $bases[$table]->properties, $file);
+            } catch (Exception $exception) {
+                $bases[$table] = $exception;
+                $names         = $names->withFailed($table, $exception->getMessage());
+            }
+        }
+
+        return [$names, $bases];
+    }
+
+    /**
+     * The names of --property: column => name (spec 3.1). Each item is split
+     * at its last `=`, and the spaces at the start and the end of each part
+     * go, as for --exclude.
+     *
+     * @return array<string, string>
+     */
+    private static function given(string $value): array
+    {
+        $given = [];
+
+        foreach (explode(',', $value) as $item) {
+            $at     = strrpos($item, '=');
+            $column = trim(false === $at ? $item : substr($item, 0, $at));
+            $name   = false === $at ? '' : trim(substr($item, $at + 1));
+
+            if ('' === $column) {
+                throw new Exception('--property has an empty column name');
+            }
+
+            if ('' === $name) {
+                throw new Exception(sprintf("--property: '%s' has no name; use column=name", $column));
+            }
+
+            if (true === isset($given[$column])) {
+                throw new Exception(sprintf("--property: the column '%s' is in the list two times", $column));
+            }
+
+            $given[$column] = $name;
+        }
+
+        return $given;
+    }
+
+    /**
+     * Whether a property does not have the name of its column: then the base
+     * needs a columnMap() (spec 3.4).
+     *
+     * @param array<string, string> $names The column and its property
+     */
+    private static function mapped(array $names): bool
+    {
+        foreach ($names as $column => $name) {
+            if ((string) $column !== $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The keys of the array, as strings: PHP makes a numeric key an integer.
+     *
+     * @param array<array-key, mixed> $array
+     *
+     * @return list<string>
+     */
+    private static function strings(array $array): array
+    {
+        return array_map(static fn (int | string $key): string => (string) $key, array_keys($array));
+    }
+
     public function define(): Definition
     {
         return Definition::for('make:model', self::DESCRIPTION)
@@ -100,14 +236,16 @@ final class ModelCommand extends ProjectCommand
             // No declared default: resolveOptions() supplies false for a flag.
             ->option('all', 'Create a model for each table of the database')
             ->option('exclude=s', 'With --all: the tables to skip, separated by commas')
-            ->option('force', 'Overwrite an existing model');
+            ->option('force', 'Overwrite an existing model')
+            ->option('property=s', 'For one table: property names, as column=name, separated by commas');
     }
 
     public function handle(Input $input, Output $output): int
     {
-        $table   = $input->argumentString('table');
-        $all     = true === $input->option('all');
-        $exclude = $input->optionStringOrNull('exclude');
+        $table    = $input->argumentString('table');
+        $all      = true === $input->option('all');
+        $exclude  = $input->optionStringOrNull('exclude');
+        $property = $input->optionStringOrNull('property');
 
         // These checks read only the command line, so they come first.
         if ('' === $table && false === $all) {
@@ -122,22 +260,29 @@ final class ModelCommand extends ProjectCommand
             throw new Exception('--exclude is only for --all');
         }
 
-        $names = null === $exclude
+        if (null !== $property && true === $all) {
+            throw new Exception('--property is only for one table, not --all');
+        }
+
+        $excluded = null === $exclude
             ? []
             : array_map(static fn (string $name): string => trim($name), explode(',', $exclude));
 
-        if (true === in_array('', $names, true)) {
+        if (true === in_array('', $excluded, true)) {
             throw new Exception('--exclude has an empty table name');
         }
 
+        $given  = null === $property ? [] : self::given($property);
         $config = $this->config($input);
-        $force  = true === $input->option('force');
+        // The models key of crest.php, before crest boots the project (#53).
+        $names = ModelNames::of($config->models());
+        $force = true === $input->option('force');
 
         if (true === $all) {
-            return $this->all($config, $names, $force, $output);
+            return $this->all($config, $names, $excluded, $force, $output);
         }
 
-        $this->one($config, $table, $force, $output);
+        $this->one($config, $names->withGiven($table, $given), $table, $force, $output);
 
         return 0;
     }
@@ -159,12 +304,12 @@ final class ModelCommand extends ProjectCommand
      *
      * @param list<string> $exclude The names of --exclude, without spaces
      */
-    private function all(Config $config, array $exclude, bool $force, Output $output): int
+    private function all(Config $config, ModelNames $names, array $exclude, bool $force, Output $output): int
     {
         $path      = $config->path(self::KEY);
         $namespace = $config->namespaceFor(self::KEY);
         $adapter   = Database::adapter($config);
-        $tables    = ModelTables::of($adapter, $exclude);
+        $tables    = ModelTables::of($adapter, $exclude, $names);
 
         foreach ($tables->notes as $note) {
             $output->line($note);
@@ -176,9 +321,11 @@ final class ModelCommand extends ProjectCommand
             return 0;
         }
 
-        $keys    = ForeignKeys::read($adapter);
-        $created = 0;
-        $failed  = [];
+        $keys            = ForeignKeys::read($adapter);
+        [$names, $bases] = self::bases($names, $keys->tables(), $path);
+        $written         = self::strings($tables->classes);
+        $created         = 0;
+        $failed          = [];
 
         foreach ($tables->names() as $index => $table) {
             if (0 < $index) {
@@ -195,13 +342,26 @@ final class ModelCommand extends ProjectCommand
             }
 
             try {
-                $parts = $this->read(
+                $base = $bases[$table];
+
+                // A base that crest cannot read fails its table.
+                if ($base instanceof Exception) {
+                    throw $base;
+                }
+
+                $columns = ModelProperties::of($adapter, $table);
+                $parts   = $this->read(
+                    $config,
+                    $names,
                     $keys,
-                    ModelProperties::of($adapter, $table),
+                    $base,
+                    $columns,
+                    $names->properties($table, self::strings($columns)),
                     $table,
                     $tables->classes[$table],
                     $path,
-                    $namespace
+                    $namespace,
+                    $written
                 );
             } catch (Exception $exception) {
                 $failed[$table] = $exception->getMessage();
@@ -218,6 +378,66 @@ final class ModelCommand extends ProjectCommand
         $this->summary($output, count($tables->names()), $created, $failed);
 
         return [] === $failed ? 0 : 1;
+    }
+
+    /**
+     * A base with a columnMap() needs the placeholders of #53 in the stubs
+     * that crest uses. A copy that the project published before #53 does not
+     * have them, and crest would write a base with renamed properties and no
+     * columnMap() (spec 3.4).
+     */
+    private function checkStubs(Config $config): void
+    {
+        $flavor = $config->flavor()->value;
+        $stub   = $this->stub($config);
+
+        foreach (self::PLACEHOLDERS as $name => $placeholder) {
+            if (false === $stub->hasPlaceholder($flavor, $name, $placeholder)) {
+                throw new Exception(sprintf(
+                    'the published stub %s has no {{ %s }}; publish it again with crest stub:publish %s --force, '
+                    . 'and make your changes in it again',
+                    $stub->resolve($flavor, $name),
+                    $placeholder,
+                    $name
+                ));
+            }
+        }
+    }
+
+    /**
+     * The columnMap() of the base: '' when each property has the name of its
+     * column. Else each column and its property, in the order of the table:
+     * Phalcon needs each column in the map (spec 3.4).
+     *
+     * @param array<string, string> $map
+     */
+    private function columnMap(Config $config, array $map): string
+    {
+        if ([] === $map) {
+            return '';
+        }
+
+        $width = 0;
+
+        foreach (self::strings($map) as $column) {
+            $width = max($width, strlen(var_export($column, true)));
+        }
+
+        $pairs = '';
+
+        foreach ($map as $column => $name) {
+            $pairs .= sprintf(
+                "            %s => %s,\n",
+                str_pad(var_export((string) $column, true), $width),
+                var_export($name, true)
+            );
+        }
+
+        return $this->stub($config)->render(
+            $config->flavor()->value,
+            Stub::FRAGMENT_PREFIX . 'model-column-map',
+            ['pairs' => $pairs]
+        );
     }
 
     /**
@@ -238,36 +458,62 @@ final class ModelCommand extends ProjectCommand
     }
 
     /**
-     * make:model <table>: the output of #50 and #51. Each error stops the
-     * command.
+     * make:model <table>: the output of #50 to #52, with the names of #53.
+     * Each error stops the command.
      */
-    private function one(Config $config, string $table, bool $force, Output $output): void
+    private function one(Config $config, ModelNames $names, string $table, bool $force, Output $output): void
     {
         // These checks do not boot the project, so they come first: a table
         // that gives no class, or a `model` path that no psr-4 entry covers,
         // stops the command before crest boots the project.
-        $class     = ClassName::fromTable($table);
+        $class     = $names->classOf($table);
         $path      = $config->path(self::KEY);
         $namespace = $config->namespaceFor(self::KEY);
         $adapter   = Database::adapter($config);
 
-        // The columns before the keys: a table that does not exist, or a
-        // column that is not a property name, stops the command before crest
-        // reads the keys of each table.
-        $properties = ModelProperties::of($adapter, $table);
-        $keys       = ForeignKeys::read($adapter, $table);
-        $parts      = $this->read($keys, $properties, $table, $class, $path, $namespace);
+        // The columns and the names before the keys: a table that does not
+        // exist, a base that crest cannot read, or a column with no usable
+        // property name stops the command before crest reads the keys of
+        // each table.
+        $columns  = ModelProperties::of($adapter, $table);
+        $baseFile = self::baseFile($path, $class);
+        $base     = BaseAttributes::read($baseFile);
+        $names    = $names->withStored($table, $base->properties, $baseFile);
+        $final    = $names->properties($table, self::strings($columns));
+        $keys     = ForeignKeys::read($adapter, $table);
 
-        $this->write($config, $parts, $force, $output);
+        // The relations need the property names of the related tables.
+        [$names] = self::bases($names, $keys->related($table), $path);
+
+        $this->write(
+            $config,
+            $this->read(
+                $config,
+                $names,
+                $keys,
+                $base,
+                $columns,
+                $final,
+                $table,
+                $class,
+                $path,
+                $namespace,
+                [$table]
+            ),
+            $force,
+            $output
+        );
     }
 
     /**
-     * One fragment-model-property for each column, in the order of the table.
-     * A project can publish the fragment and change it.
+     * One fragment-model-property for each column, in the order of the
+     * table, with the property name of the column. A project can publish the
+     * fragment and change it.
      *
      * @param array<string, string> $properties The column name and its PHP type
+     * @param array<string, string> $names      The column name and its property
      */
-    private function properties(Config $config, array $properties): string
+    private function properties(Config $config, array $properties, array $names): string
     {
         $flavor = $config->flavor()->value;
         $stub   = $this->stub($config);
@@ -277,7 +523,7 @@ final class ModelCommand extends ProjectCommand
             $text .= $stub->render(
                 $flavor,
                 Stub::FRAGMENT_PREFIX . 'model-property',
-                ['column' => $column, 'type' => $type]
+                ['column' => (string) $column, 'property' => $names[$column], 'type' => $type]
             );
         }
 
@@ -285,47 +531,69 @@ final class ModelCommand extends ProjectCommand
     }
 
     /**
-     * The read phase of one table: the attributes of the base and the
-     * relations, after the columns (ModelProperties::of(), which the caller
-     * reads first). No file changes here, so an error leaves the files of the
-     * table as they are.
+     * The read phase of one table: the relations, the names and the lines
+     * about them, after the columns, the base and the final names, which the
+     * caller reads first. No file changes here, so an error leaves the files
+     * of the table as they are.
      *
-     * @param array<string, string> $properties The column name and its PHP type
+     * @param array<string, string> $columns The column name and its PHP type
+     * @param array<string, string> $final   The column name and its property
+     * @param list<string>          $written The tables that this run writes
      *
      * @return Parts
      */
     private function read(
+        Config $config,
+        ModelNames $names,
         ForeignKeys $keys,
-        array $properties,
+        BaseAttributes $base,
+        array $columns,
+        array $final,
         string $table,
         string $class,
         string $path,
-        string $namespace
+        string $namespace,
+        array $written
     ): array {
-        $base     = $class . self::BASE_SUFFIX;
-        $baseFile = $path . '/' . self::BASE_FOLDER . '/' . $base . '.php';
+        $baseFile = self::baseFile($path, $class);
+        $list     = self::strings($columns);
+        $mapped   = self::mapped($final);
 
-        // The attributes of the base come before each write: a base or an
-        // attribute that crest cannot read, or an alias that crest cannot
-        // write, stops the read phase, and no file changes.
+        // An alias of an attribute that crest cannot write stops the read
+        // phase, and no file changes.
         $relations = ModelRelations::of(
             $keys,
+            $names,
             $table,
             $namespace,
-            array_keys($properties),
-            RelationAliases::read($baseFile),
+            array_values($final),
+            $base->aliases,
             $baseFile
         );
 
+        if (true === $mapped) {
+            $this->checkStubs($config);
+        }
+
+        $renamed = $base->renamed($final);
+
         return [
-            'base'          => $base,
+            'attributes'    => $names->attributes($table, $list),
+            'base'          => $class . self::BASE_SUFFIX,
             'baseFile'      => $baseFile,
             'baseNamespace' => $namespace . '\\' . self::BASE_FOLDER,
             'class'         => $class,
+            'dropped'       => $names->dropped($table, $list),
             'file'          => $path . '/' . $class . '.php',
+            'map'           => true === $mapped ? $final : [],
+            'names'         => $final,
             'namespace'     => $namespace,
-            'properties'    => $properties,
+            'properties'    => $columns,
             'relations'     => $relations,
+            'renamed'       => $renamed,
+            // The tables whose relations use a renamed column, and that this
+            // run does not write (decision 6).
+            'run'           => array_values(array_diff($keys->using($table, self::strings($renamed ?? [])), $written)),
             'table'         => $table,
         ];
     }
@@ -408,17 +676,37 @@ final class ModelCommand extends ProjectCommand
                 $parts['baseFile'],
                 'model-base',
                 [
-                    'aliases'    => RelationAliases::attributes($relations->relations),
-                    'aliasNote'  => RelationAliases::note($relations->relations),
+                    'aliases'    => PropertyNames::attributes($parts['attributes'])
+                        . RelationAliases::attributes($relations->relations),
+                    'aliasNote'  => PropertyNames::note($parts['attributes'])
+                        . RelationAliases::note($relations->relations),
                     'class'      => $parts['base'],
+                    'columnMap'  => $this->columnMap($config, $parts['map']),
                     'namespace'  => $parts['baseNamespace'],
-                    'properties' => $this->properties($config, $parts['properties']),
+                    'properties' => $this->properties($config, $parts['properties'], $parts['names']),
                     'relations'  => $this->relations($config, $relations),
                     'table'      => $parts['table'],
                 ]
             ),
             $parts['baseFile']
         );
+
+        // A property with another name breaks the code that uses it, so
+        // crest says so (decision 6).
+        if (null === $parts['renamed']) {
+            $output->line(sprintf(
+                'Note: crest cannot read columnMap() of %s, so it cannot list the renamed properties',
+                $parts['baseFile']
+            ));
+        }
+
+        foreach ($parts['renamed'] ?? [] as [$old, $new]) {
+            $output->line(sprintf('Renamed $%s to $%s: change the code that uses it', $old, $new));
+        }
+
+        foreach ($parts['dropped'] as $line) {
+            $output->line($line);
+        }
 
         // A relation that crest cannot write is not in the base. The
         // developer can give it an alias with an attribute, or add it in the
@@ -438,6 +726,15 @@ final class ModelCommand extends ProjectCommand
         // foreign keys, and this line tells the user so.
         if ([] === $relations->relations && [] === $relations->skipped) {
             $output->line(sprintf(self::NO_KEYS, $parts['table']));
+        }
+
+        if ([] !== $parts['run']) {
+            $output->line(sprintf(
+                'Run make:model for %s too: %s relations use the property names of %s',
+                Sentence::join($parts['run']),
+                1 === count($parts['run']) ? 'its' : 'their',
+                $parts['table']
+            ));
         }
 
         $outcome = $writer->renderOnce(

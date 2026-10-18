@@ -78,6 +78,7 @@ final class Config implements ProjectContext
         private readonly Runtime $runtime,
         private readonly array $declared = [],
         private readonly ?string $bootstrap = null,
+        private readonly mixed $models = [],
     ) {
     }
 
@@ -262,7 +263,9 @@ final class Config implements ProjectContext
             $source,
             Runtime::fromConfig($declared['runtime'] ?? null),
             $stated,
-            $bootstrap
+            $bootstrap,
+            // make:model checks the models key (#53), so a bad value stops only make:model.
+            $declared['models'] ?? []
         );
     }
 
@@ -303,6 +306,16 @@ final class Config implements ProjectContext
     public function isDeclared(string $key): bool
     {
         return in_array($key, $this->declared, true);
+    }
+
+    /**
+     * The `models` key of crest.php, as the file has it, or [] (#53).
+     * make:model checks it (Crest\Generator\ModelNames): Crest\Project does
+     * not import Crest\Generator (#48), and a bad value stops only make:model.
+     */
+    public function models(): mixed
+    {
+        return $this->models;
     }
 
     public function namespace(): string
