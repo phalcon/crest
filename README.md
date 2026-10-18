@@ -197,6 +197,19 @@ return [
 ];
 ```
 
+`models` changes the names that `make:model` gives in an MVC project: `classes`
+gives a class to a table, and `camelCase` gives camelCase property names. See
+"Names" in [docs/index.md](docs/index.md):
+
+```php
+return [
+    'models' => [
+        'classes'   => ['users' => 'User'],
+        'camelCase' => true,
+    ],
+];
+```
+
 ## Booting the project
 
 `container:list` and `event:list` report services and listeners, which exist only once the
