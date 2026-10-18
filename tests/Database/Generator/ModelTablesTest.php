@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database\Generator;
 
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelTables;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\CustomerNamesViewMigration;
@@ -34,7 +35,7 @@ final class ModelTablesTest extends AbstractDatabaseTestCase
     {
         $this->createTables(CustomersMigration::class, CustomerNamesViewMigration::class);
 
-        $tables = ModelTables::of($this->adapter(), ['customer_names']);
+        $tables = ModelTables::of($this->adapter(), ['customer_names'], ModelNames::of([]));
 
         $this->assertSame(['Note: customer_names is a view; --all writes no models for views'], $tables->notes);
         $this->assertSame(['customers'], $tables->names());
@@ -44,14 +45,14 @@ final class ModelTablesTest extends AbstractDatabaseTestCase
     {
         $this->createTables(CustomersMigration::class, CustomerNamesViewMigration::class);
 
-        $this->assertSame(['customers'], ModelTables::of($this->adapter(), [])->names());
+        $this->assertSame(['customers'], ModelTables::of($this->adapter(), [], ModelNames::of([]))->names());
     }
 
     public function testTablesWithTheSameClassFail(): void
     {
         $this->createTables(UserProfilesMigration::class, UserProfilesCamelMigration::class);
 
-        $tables = ModelTables::of($this->adapter(), []);
+        $tables = ModelTables::of($this->adapter(), [], ModelNames::of([]));
         $reason = 'the tables UserProfiles and user_profiles give the same class UserProfiles';
 
         $this->assertSame(['UserProfiles' => $reason, 'user_profiles' => $reason], $tables->failed);

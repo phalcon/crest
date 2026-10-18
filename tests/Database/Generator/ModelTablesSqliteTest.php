@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database\Generator;
 
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelTables;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\CustomersMigration;
@@ -32,7 +33,7 @@ final class ModelTablesSqliteTest extends AbstractDatabaseTestCase
 
         $this->assertSame(
             ['Note: sqlite_sequence is a SQLite table; --all writes no models for it'],
-            ModelTables::of($this->adapter(), ['sqlite_sequence'])->notes
+            ModelTables::of($this->adapter(), ['sqlite_sequence'], ModelNames::of([]))->notes
         );
     }
 
@@ -41,6 +42,6 @@ final class ModelTablesSqliteTest extends AbstractDatabaseTestCase
         $this->createTables(CustomersMigration::class);
 
         $this->assertContains('sqlite_sequence', $this->adapter()->listTables());
-        $this->assertSame(['customers'], ModelTables::of($this->adapter(), [])->names());
+        $this->assertSame(['customers'], ModelTables::of($this->adapter(), [], ModelNames::of([]))->names());
     }
 }

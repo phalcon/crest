@@ -90,9 +90,11 @@ final class ModelCommandAllTest extends AbstractDatabaseTestCase
 
     public function testABrokenAttributeFailsOnlyItsTable(): void
     {
-        // An attribute with only the key stops the read phase of invoices.
-        // The base of invoices does not change, and crest goes on with the
-        // next table. The attribute is on line 16 of the base.
+        // An attribute with only the key stops the read of the base of
+        // invoices. invoices fails, and its base does not change. The
+        // hasMany() of customers needs the names of invoices, so crest skips
+        // it (#53, spec 3.2) and drops its alias attribute (#51). The
+        // attribute is on line 16 of the base.
         $this->createTables(CustomersMigration::class, InvoicesMigration::class);
         $this->runCommand(['--all']);
 
@@ -109,6 +111,10 @@ final class ModelCommandAllTest extends AbstractDatabaseTestCase
         $this->assertSame(1, $status);
         $this->assertSame(
             'Table customers' . PHP_EOL
+            . 'Updated ' . $this->model('Base/CustomersBase.php') . PHP_EOL
+            . 'Skipped the relation hasMany invoices(customer_id) -> customers(id): ' . $reason . PHP_EOL
+            . "Dropped the alias Invoices of 'hasMany invoices(customer_id) -> customers(id)': "
+            . 'crest skips the relation' . PHP_EOL
             . 'Kept ' . $this->model('Customers.php') . ': it exists; pass --force to replace it' . PHP_EOL
             . PHP_EOL
             . 'Table invoices' . PHP_EOL
@@ -250,7 +256,8 @@ final class ModelCommandAllTest extends AbstractDatabaseTestCase
         $this->createTables(CustomersMigration::class, OddMigration::class, UsersMigration::class);
 
         $status = $this->runCommand(['--all']);
-        $reason = "column 'first name' of table 'odd' is not a usable property name";
+        $reason = "column 'first name' of table 'odd' is not a usable property name; "
+            . 'give it one with --property="first name=<name>"';
 
         $this->assertSame(1, $status);
         $this->assertSame(
