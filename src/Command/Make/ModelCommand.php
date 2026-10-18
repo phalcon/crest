@@ -14,12 +14,15 @@ declare(strict_types=1);
 namespace Crest\Command\Make;
 
 use Crest\Command\ProjectCommand;
+use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ClassName;
+use Crest\Generator\ForeignKeys;
 use Crest\Generator\ModelProperties;
 use Crest\Generator\ModelRelations;
+use Crest\Generator\ModelTables;
 use Crest\Generator\Outcome;
 use Crest\Generator\RelationAliases;
 use Crest\Generator\Stub;
@@ -30,8 +33,11 @@ use Crest\Project\Flavor;
 use function array_keys;
 use function array_map;
 use function count;
+use function explode;
 use function implode;
+use function in_array;
 use function sprintf;
+use function trim;
 use function var_export;
 
 /**
@@ -50,8 +56,27 @@ use function var_export;
  * another run brings the model up to date with its table, and the code of the
  * developer does not change.
  *
+ * The work for one table has two phases. The read phase reads the columns,
+ * the base and the relations, and changes no file. The write phase writes
+ * the base and the model. --all (#52) writes each table of ModelTables, and
+ * reads the foreign keys one time for the run (ForeignKeys). A crest error in
+ * the read phase fails only its table: crest prints the reason, goes to the
+ * next table, and lists the failed tables in the summary.
+ *
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
+ *
+ * @phpstan-type Parts array{
+ *     base: string,
+ *     baseFile: string,
+ *     baseNamespace: string,
+ *     class: string,
+ *     file: string,
+ *     namespace: string,
+ *     properties: array<string, string>,
+ *     relations: ModelRelations,
+ *     table: string
+ * }
  */
 final class ModelCommand extends ProjectCommand
 {
@@ -60,7 +85,8 @@ final class ModelCommand extends ProjectCommand
     private const BASE_SUFFIX = 'Base';
 
     // crest reads relations only from foreign keys, so `crest list` says so.
-    private const DESCRIPTION = 'Create an MVC model from a database table (relations come only from foreign keys)';
+    private const DESCRIPTION = 'Create an MVC model from a database table, or from each table with --all '
+        . '(relations come only from foreign keys)';
 
     private const KEY = 'model';
 
@@ -70,101 +96,48 @@ final class ModelCommand extends ProjectCommand
     public function define(): Definition
     {
         return Definition::for('make:model', self::DESCRIPTION)
-            ->argument('table', true, 'Table name, e.g. users')
+            ->argument('table', false, 'Table name, e.g. users. Omit it with --all')
             // No declared default: resolveOptions() supplies false for a flag.
+            ->option('all', 'Create a model for each table of the database')
+            ->option('exclude=s', 'With --all: the tables to skip, separated by commas')
             ->option('force', 'Overwrite an existing model');
     }
 
     public function handle(Input $input, Output $output): int
     {
+        $table   = $input->argumentString('table');
+        $all     = true === $input->option('all');
+        $exclude = $input->optionStringOrNull('exclude');
+
+        // These checks read only the command line, so they come first.
+        if ('' === $table && false === $all) {
+            throw new Exception('give a table name, or --all');
+        }
+
+        if ('' !== $table && true === $all) {
+            throw new Exception('give a table name or --all, not both');
+        }
+
+        if (null !== $exclude && false === $all) {
+            throw new Exception('--exclude is only for --all');
+        }
+
+        $names = null === $exclude
+            ? []
+            : array_map(static fn (string $name): string => trim($name), explode(',', $exclude));
+
+        if (true === in_array('', $names, true)) {
+            throw new Exception('--exclude has an empty table name');
+        }
+
         $config = $this->config($input);
-        $table  = $input->argumentString('table');
+        $force  = true === $input->option('force');
 
-        // These checks do not boot the project, so they come first: a table
-        // that gives no class, or a `model` path that no psr-4 entry covers,
-        // stops the command before crest boots the project.
-        $class     = ClassName::fromTable($table);
-        $path      = $config->path(self::KEY);
-        $namespace = $config->namespaceFor(self::KEY);
-
-        $adapter       = Database::adapter($config);
-        $properties    = ModelProperties::of($adapter, $table);
-        $base          = $class . self::BASE_SUFFIX;
-        $baseNamespace = $namespace . '\\' . self::BASE_FOLDER;
-        $baseFile      = $path . '/' . self::BASE_FOLDER . '/' . $base . '.php';
-        $file          = $path . '/' . $class . '.php';
-        $writer        = $this->writer($config);
-
-        // The attributes of the base come before each write: a base or an
-        // attribute that crest cannot read, or an alias that crest cannot
-        // write, stops the command, and no file changes.
-        $relations = ModelRelations::of(
-            $adapter,
-            $table,
-            $namespace,
-            array_keys($properties),
-            RelationAliases::read($baseFile),
-            $baseFile
-        );
-
-        // The base first: a model never exists without its base.
-        $this->reportOwned(
-            $output,
-            $writer->renderOwned(
-                $baseFile,
-                'model-base',
-                [
-                    'aliases'    => RelationAliases::attributes($relations->relations),
-                    'aliasNote'  => RelationAliases::note($relations->relations),
-                    'class'      => $base,
-                    'namespace'  => $baseNamespace,
-                    'properties' => $this->properties($config, $properties),
-                    'relations'  => $this->relations($config, $relations),
-                    'table'      => $table,
-                ]
-            ),
-            $baseFile
-        );
-
-        // A relation that crest cannot write is not in the base. The
-        // developer can give it an alias with an attribute, or add it in the
-        // model.
-        foreach ($relations->skipped as $line) {
-            $output->line($line);
+        if (true === $all) {
+            return $this->all($config, $names, $force, $output);
         }
 
-        // An attribute that the next base does not have is dropped, and the
-        // developer must know that its alias is gone.
-        foreach ($relations->dropped as $line) {
-            $output->line($line);
-        }
-
-        // Each key gives a relation or a skipped line, so no relations and no
-        // skipped lines means no keys. crest reads relations only from
-        // foreign keys, and this line tells the user so.
-        if ([] === $relations->relations && [] === $relations->skipped) {
-            $output->line(sprintf(self::NO_KEYS, $table));
-        }
-
-        $outcome = $writer->renderOnce(
-            $file,
-            self::KEY,
-            [
-                'base'          => $base,
-                'baseNamespace' => $baseNamespace,
-                'class'         => $class,
-                'namespace'     => $namespace,
-            ],
-            true === $input->option('force')
-        );
-
-        if (Outcome::Kept === $outcome) {
-            $output->line(sprintf('Kept %s: it exists; pass --force to replace it', $file));
-
-            return 0;
-        }
-
-        $output->success(sprintf('Created %s', $file));
+        $this->one($config, $table, $force, $output);
 
         return 0;
     }
@@ -173,6 +146,78 @@ final class ModelCommand extends ProjectCommand
     {
         // MVC only: an ADR project uses repositories, not Active Record models.
         return [Flavor::MVC];
+    }
+
+    /**
+     * make:model --all (#52, spec 3.4). A crest error in the read phase fails
+     * only its table. An error in the write phase, or an error that is not a
+     * crest error, is not about one table, so it stops the run.
+     *
+     * The Failed lines go to stdout with the other lines. With no terminal
+     * (docker compose exec -T, a pipe), stdout and stderr are two streams, and
+     * their lines can come in the wrong order.
+     *
+     * @param list<string> $exclude The names of --exclude, without spaces
+     */
+    private function all(Config $config, array $exclude, bool $force, Output $output): int
+    {
+        $path      = $config->path(self::KEY);
+        $namespace = $config->namespaceFor(self::KEY);
+        $adapter   = Database::adapter($config);
+        $tables    = ModelTables::of($adapter, $exclude);
+
+        foreach ($tables->notes as $note) {
+            $output->line($note);
+        }
+
+        if ([] === $tables->names()) {
+            $output->line('No tables to write.');
+
+            return 0;
+        }
+
+        $keys    = ForeignKeys::read($adapter);
+        $created = 0;
+        $failed  = [];
+
+        foreach ($tables->names() as $index => $table) {
+            if (0 < $index) {
+                $output->line();
+            }
+
+            $output->line('Table ' . $table);
+
+            if (true === isset($tables->failed[$table])) {
+                $failed[$table] = $tables->failed[$table];
+                $output->line('Failed: ' . $failed[$table]);
+
+                continue;
+            }
+
+            try {
+                $parts = $this->read(
+                    $keys,
+                    ModelProperties::of($adapter, $table),
+                    $table,
+                    $tables->classes[$table],
+                    $path,
+                    $namespace
+                );
+            } catch (Exception $exception) {
+                $failed[$table] = $exception->getMessage();
+                $output->line('Failed: ' . $failed[$table]);
+
+                continue;
+            }
+
+            if (Outcome::Kept !== $this->write($config, $parts, $force, $output)) {
+                $created++;
+            }
+        }
+
+        $this->summary($output, count($tables->names()), $created, $failed);
+
+        return [] === $failed ? 0 : 1;
     }
 
     /**
@@ -190,6 +235,30 @@ final class ModelCommand extends ProjectCommand
         }
 
         return '[' . implode(', ', $quoted) . ']';
+    }
+
+    /**
+     * make:model <table>: the output of #50 and #51. Each error stops the
+     * command.
+     */
+    private function one(Config $config, string $table, bool $force, Output $output): void
+    {
+        // These checks do not boot the project, so they come first: a table
+        // that gives no class, or a `model` path that no psr-4 entry covers,
+        // stops the command before crest boots the project.
+        $class     = ClassName::fromTable($table);
+        $path      = $config->path(self::KEY);
+        $namespace = $config->namespaceFor(self::KEY);
+        $adapter   = Database::adapter($config);
+
+        // The columns before the keys: a table that does not exist, or a
+        // column that is not a property name, stops the command before crest
+        // reads the keys of each table.
+        $properties = ModelProperties::of($adapter, $table);
+        $keys       = ForeignKeys::read($adapter, $table);
+        $parts      = $this->read($keys, $properties, $table, $class, $path, $namespace);
+
+        $this->write($config, $parts, $force, $output);
     }
 
     /**
@@ -213,6 +282,52 @@ final class ModelCommand extends ProjectCommand
         }
 
         return $text;
+    }
+
+    /**
+     * The read phase of one table: the attributes of the base and the
+     * relations, after the columns (ModelProperties::of(), which the caller
+     * reads first). No file changes here, so an error leaves the files of the
+     * table as they are.
+     *
+     * @param array<string, string> $properties The column name and its PHP type
+     *
+     * @return Parts
+     */
+    private function read(
+        ForeignKeys $keys,
+        array $properties,
+        string $table,
+        string $class,
+        string $path,
+        string $namespace
+    ): array {
+        $base     = $class . self::BASE_SUFFIX;
+        $baseFile = $path . '/' . self::BASE_FOLDER . '/' . $base . '.php';
+
+        // The attributes of the base come before each write: a base or an
+        // attribute that crest cannot read, or an alias that crest cannot
+        // write, stops the read phase, and no file changes.
+        $relations = ModelRelations::of(
+            $keys,
+            $table,
+            $namespace,
+            array_keys($properties),
+            RelationAliases::read($baseFile),
+            $baseFile
+        );
+
+        return [
+            'base'          => $base,
+            'baseFile'      => $baseFile,
+            'baseNamespace' => $namespace . '\\' . self::BASE_FOLDER,
+            'class'         => $class,
+            'file'          => $path . '/' . $class . '.php',
+            'namespace'     => $namespace,
+            'properties'    => $properties,
+            'relations'     => $relations,
+            'table'         => $table,
+        ];
     }
 
     /**
@@ -240,5 +355,111 @@ final class ModelCommand extends ProjectCommand
         }
 
         return $text;
+    }
+
+    /**
+     * The end of --all: the counts of the model files, then each failed
+     * table with its reason. The output of a large database scrolls, so the
+     * reasons come again here.
+     *
+     * @param array<string, string> $failed The table and the reason, in the order of the tables
+     */
+    private function summary(Output $output, int $tables, int $created, array $failed): void
+    {
+        $output->line();
+        $output->line(
+            sprintf(
+                '%d %s: %d %s created, %d kept, %d failed.',
+                $tables,
+                1 === $tables ? 'table' : 'tables',
+                $created,
+                1 === $created ? 'model' : 'models',
+                $tables - $created - count($failed),
+                count($failed)
+            )
+        );
+
+        if ([] === $failed) {
+            return;
+        }
+
+        $output->line('Failed tables:');
+
+        foreach ($failed as $table => $reason) {
+            $output->line(sprintf('  %s: %s', $table, $reason));
+        }
+    }
+
+    /**
+     * The write phase of one table: the base, its lines, and the model. The
+     * lines are the lines of make:model <table>.
+     *
+     * @param Parts $parts
+     */
+    private function write(Config $config, array $parts, bool $force, Output $output): Outcome
+    {
+        $writer    = $this->writer($config);
+        $relations = $parts['relations'];
+
+        // The base first: a model never exists without its base.
+        $this->reportOwned(
+            $output,
+            $writer->renderOwned(
+                $parts['baseFile'],
+                'model-base',
+                [
+                    'aliases'    => RelationAliases::attributes($relations->relations),
+                    'aliasNote'  => RelationAliases::note($relations->relations),
+                    'class'      => $parts['base'],
+                    'namespace'  => $parts['baseNamespace'],
+                    'properties' => $this->properties($config, $parts['properties']),
+                    'relations'  => $this->relations($config, $relations),
+                    'table'      => $parts['table'],
+                ]
+            ),
+            $parts['baseFile']
+        );
+
+        // A relation that crest cannot write is not in the base. The
+        // developer can give it an alias with an attribute, or add it in the
+        // model.
+        foreach ($relations->skipped as $line) {
+            $output->line($line);
+        }
+
+        // An attribute that the next base does not have is dropped, and the
+        // developer must know that its alias is gone.
+        foreach ($relations->dropped as $line) {
+            $output->line($line);
+        }
+
+        // Each key gives a relation or a skipped line, so no relations and no
+        // skipped lines means no keys. crest reads relations only from
+        // foreign keys, and this line tells the user so.
+        if ([] === $relations->relations && [] === $relations->skipped) {
+            $output->line(sprintf(self::NO_KEYS, $parts['table']));
+        }
+
+        $outcome = $writer->renderOnce(
+            $parts['file'],
+            self::KEY,
+            [
+                'base'          => $parts['base'],
+                'baseNamespace' => $parts['baseNamespace'],
+                'class'         => $parts['class'],
+                'namespace'     => $parts['namespace'],
+            ],
+            $force
+        );
+
+        if (Outcome::Kept === $outcome) {
+            $output->line(sprintf('Kept %s: it exists; pass --force to replace it', $parts['file']));
+
+            return $outcome;
+        }
+
+        $output->success(sprintf('Created %s', $parts['file']));
+
+        return $outcome;
     }
 }
