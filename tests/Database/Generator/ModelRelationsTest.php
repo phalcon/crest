@@ -15,6 +15,7 @@ namespace Crest\Tests\Database\Generator;
 
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelRelations;
 use Crest\Tests\Support\Migrations\CustomerInCapitalsMigration;
 use Crest\Tests\Support\Migrations\CustomersMigration;
@@ -126,6 +127,27 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
                 ),
             ],
             $this->relationsOf($this->adapter(), 'customers', ['id', 'name'])->relations
+        );
+    }
+
+    public function testAHasManyUsesThePropertyNamesOfBothTables(): void
+    {
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+        $names = ModelNames::of(['camelCase' => true])
+            ->withStored('customers', ['id' => ['name' => 'code', 'line' => 6]], '/app/CustomersBase.php');
+
+        $this->assertSame(
+            [
+                $this->relation(
+                    'has-many',
+                    ['code'],
+                    '\\App\\Models\\Invoices',
+                    ['customerId'],
+                    'Invoices',
+                    'hasMany invoices(customer_id) -> customers(id)'
+                ),
+            ],
+            $this->relationsOf($this->adapter(), 'customers', ['code', 'name'], [], $names)->relations
         );
     }
 
@@ -317,6 +339,41 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
         );
     }
 
+    public function testARelatedBaseThatCannotBeReadSkipsTheRelation(): void
+    {
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+        $relations = $this->relationsOf(
+            $this->adapter(),
+            'invoices',
+            ['id', 'customer_id', 'total'],
+            [],
+            ModelNames::of([])->withFailed('customers', 'the reason')
+        );
+
+        $this->assertSame([], $relations->relations);
+        $this->assertSame(['Skipped the relation ' . self::INVOICE_KEY . ': the reason'], $relations->skipped);
+    }
+
+    public function testARelatedColumnWithNoUsablePropertySkipsTheRelation(): void
+    {
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+        $relations = $this->relationsOf(
+            $this->adapter(),
+            'invoices',
+            ['id', 'customer_id', 'total'],
+            [],
+            ModelNames::of([])->withStored('customers', ['id' => ['name' => '2nd', 'line' => 6]], '/b.php')
+        );
+
+        $this->assertSame(
+            [
+                'Skipped the relation ' . self::INVOICE_KEY
+                . ": column 'id' of table 'customers' has no usable property name",
+            ],
+            $relations->skipped
+        );
+    }
+
     public function testAReservedTableIsSkipped(): void
     {
         $this->createTables(ListMigration::class, NotesMigration::class);
@@ -409,6 +466,31 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
         );
     }
 
+    public function testTheClassComesFromTheMap(): void
+    {
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+
+        $this->assertSame(
+            [
+                $this->relation(
+                    'belongs-to',
+                    ['customer_id'],
+                    '\\App\\Models\\Customer',
+                    ['id'],
+                    'Customer',
+                    self::INVOICE_KEY
+                ),
+            ],
+            $this->relationsOf(
+                $this->adapter(),
+                'invoices',
+                ['id', 'customer_id', 'total'],
+                [],
+                ModelNames::of(['classes' => ['customers' => 'Customer']])
+            )->relations
+        );
+    }
+
     public function testTheClassIsInTheNamespaceOfTheModelPath(): void
     {
         // A project with another `model` path, for example Shop\ => app/ and
@@ -428,12 +510,36 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
             ],
             ModelRelations::of(
                 ForeignKeys::read($this->adapter()),
+                ModelNames::of([]),
                 'invoices',
                 'Shop\\Entities',
                 ['id', 'customer_id'],
                 [],
                 self::BASE_FILE
             )->relations
+        );
+    }
+
+    public function testTheFieldsAreThePropertyNamesOfBothTables(): void
+    {
+        // camelCase gives customerId; the attribute of the base of customers
+        // gives code for its id. The key keeps the column names.
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+        $names = ModelNames::of(['camelCase' => true])
+            ->withStored('customers', ['id' => ['name' => 'code', 'line' => 6]], '/app/CustomersBase.php');
+
+        $this->assertSame(
+            [
+                $this->relation(
+                    'belongs-to',
+                    ['customerId'],
+                    '\\App\\Models\\Customers',
+                    ['code'],
+                    'Customer',
+                    self::INVOICE_KEY
+                ),
+            ],
+            $this->relationsOf($this->adapter(), 'invoices', ['id', 'customerId', 'total'], [], $names)->relations
         );
     }
 

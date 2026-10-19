@@ -51,13 +51,18 @@ trait RunsMakeModel
     }
 
     /**
-     * An MVC crest.php that names the front controller.
+     * An MVC crest.php that names the front controller, and the models key
+     * when the test gives one (#53).
      *
      * @param class-string $class
      */
-    protected function front(string $class): void
+    protected function front(string $class, string $models = ''): void
     {
-        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => \\" . $class . '::class]');
+        $this->writeCrestPhp(
+            "['flavor' => 'mvc', 'bootstrap' => \\" . $class . '::class'
+            . ('' === $models ? '' : ", 'models' => " . $models)
+            . ']'
+        );
     }
 
     /**

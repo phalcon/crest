@@ -65,6 +65,17 @@ final class ForeignKeysTest extends TestCase
         $this->assertSame([$reference], ForeignKeys::read($adapter, 'Invoices')->of('Invoices'));
     }
 
+    public function testRelatedGivesTheOtherTablesInBothDirections(): void
+    {
+        $keys = $this->map();
+
+        $this->assertSame(['customers', 'payments'], $keys->related('invoices'));
+        // Two keys of orders point to customers: orders is in the list one time.
+        $this->assertSame(['invoices', 'orders'], $keys->related('customers'));
+        // A key that points to its own table gives no other table.
+        $this->assertSame([], $keys->related('notes'));
+    }
+
     public function testTablesGivesANumericNameAsAString(): void
     {
         // PHP makes the key '2024' an integer. ModelRelations gives each name
@@ -75,5 +86,63 @@ final class ForeignKeysTest extends TestCase
     public function testTablesKeepsTheOrderOfTheMap(): void
     {
         $this->assertSame(['users', 'customers'], (new ForeignKeys(['users' => [], 'customers' => []]))->tables());
+    }
+
+    public function testUsingGivesTheTablesThatUseTheColumns(): void
+    {
+        $keys = $this->map();
+
+        $this->assertSame([], $keys->using('customers', ['name']));
+        $this->assertSame(['invoices', 'orders'], $keys->using('customers', ['id']));
+        $this->assertSame(['customers'], $keys->using('invoices', ['customer_id']));
+        $this->assertSame(['payments'], $keys->using('invoices', ['id']));
+        $this->assertSame(['customers', 'payments'], $keys->using('invoices', ['id', 'customer_id']));
+        $this->assertSame([], $keys->using('invoices', ['total']));
+        $this->assertSame([], $keys->using('notes', ['id', 'parent_id']));
+    }
+
+    public function testUsingSortsTheTables(): void
+    {
+        // payments comes before invoices in the map; the result is sorted.
+        $keys = new ForeignKeys(
+            [
+                'payments'  => [$this->key('payments', 'customer_id', 'customers')],
+                'invoices'  => [$this->key('invoices', 'customer_id', 'customers')],
+                'customers' => [],
+            ]
+        );
+
+        $this->assertSame(['invoices', 'payments'], $keys->using('customers', ['id']));
+    }
+
+    /**
+     * A key with one column that points to the id of a table.
+     */
+    private function key(string $table, string $column, string $referenced): Reference
+    {
+        return new Reference(
+            $table . '_' . $column,
+            ['referencedTable' => $referenced, 'columns' => [$column], 'referencedColumns' => ['id']]
+        );
+    }
+
+    /**
+     * customers; invoices -> customers; payments -> invoices; notes -> notes;
+     * orders -> customers, two times.
+     */
+    private function map(): ForeignKeys
+    {
+        return new ForeignKeys(
+            [
+                'customers' => [],
+                'invoices'  => [$this->key('invoices', 'customer_id', 'customers')],
+                'payments'  => [$this->key('payments', 'invoice_id', 'invoices')],
+                'notes'     => [$this->key('notes', 'parent_id', 'notes')],
+                'orders'    => [
+                    $this->key('orders', 'customer_id', 'customers'),
+                    $this->key('orders', 'billing_id', 'customers'),
+                ],
+            ]
+        );
     }
 }

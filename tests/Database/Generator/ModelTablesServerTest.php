@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database\Generator;
 
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelTables;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\SqliteCacheMigration;
@@ -30,6 +31,6 @@ final class ModelTablesServerTest extends AbstractDatabaseTestCase
     {
         $this->createTables(SqliteCacheMigration::class);
 
-        $this->assertSame(['sqlite_cache'], ModelTables::of($this->adapter(), [])->names());
+        $this->assertSame(['sqlite_cache'], ModelTables::of($this->adapter(), [], ModelNames::of([]))->names());
     }
 }

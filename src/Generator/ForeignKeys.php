@@ -16,9 +16,15 @@ namespace Crest\Generator;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\ReferenceInterface;
 
+use function array_diff;
+use function array_intersect;
 use function array_keys;
 use function array_map;
+use function array_unique;
 use function array_values;
+use function sort;
+
+use const SORT_STRING;
 
 /**
  * The foreign keys of the database, for make:model (#52). crest reads them
@@ -77,6 +83,18 @@ final class ForeignKeys
     }
 
     /**
+     * The other tables that share a key with the table: the tables that its
+     * keys point to, and the tables whose keys point to it. make:model reads
+     * their bases for the property names of the relations (#53).
+     *
+     * @return list<string>
+     */
+    public function related(string $table): array
+    {
+        return $this->others($table, null);
+    }
+
+    /**
      * The tables, in the order of listTables(), as strings.
      *
      * @return list<string>
@@ -84,5 +102,56 @@ final class ForeignKeys
     public function tables(): array
     {
         return array_map(static fn (int | string $table): string => (string) $table, array_keys($this->keys));
+    }
+
+    /**
+     * The other tables whose relations with the table use one of the
+     * columns: a key of the table with one of the columns, or a key of
+     * another table that points to one of the columns. When the property of
+     * one of the columns changes, these tables must run make:model again
+     * (#53).
+     *
+     * @param list<string> $columns
+     *
+     * @return list<string>
+     */
+    public function using(string $table, array $columns): array
+    {
+        return $this->others($table, $columns);
+    }
+
+    /**
+     * The other tables of related() and using(), sorted, each one time.
+     *
+     * @param list<string>|null $columns Null for each key
+     *
+     * @return list<string>
+     */
+    private function others(string $table, ?array $columns): array
+    {
+        $others = [];
+
+        foreach ($this->of($table) as $reference) {
+            if (null === $columns || [] !== array_intersect($reference->getColumns(), $columns)) {
+                $others[] = $reference->getReferencedTable();
+            }
+        }
+
+        foreach ($this->tables() as $other) {
+            foreach ($this->of($other) as $reference) {
+                if (
+                    $table === $reference->getReferencedTable()
+                    && (null === $columns || [] !== array_intersect($reference->getReferencedColumns(), $columns))
+                ) {
+                    $others[] = $other;
+                }
+            }
+        }
+
+        $others = array_unique(array_diff($others, [$table]));
+
+        sort($others, SORT_STRING);
+
+        return $others;
     }
 }

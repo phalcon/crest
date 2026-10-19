@@ -167,7 +167,11 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
     {
         $this->createTables(OddMigration::class);
 
-        $this->assertStops(['odd'], "column 'first name' of table 'odd' is not a usable property name");
+        $this->assertStops(
+            ['odd'],
+            "column 'first name' of table 'odd' is not a usable property name; "
+            . 'give it one with --property="first name=<name>"'
+        );
     }
 
     public function testAColumnWithTheNameOfAModelPropertyStops(): void
@@ -177,7 +181,8 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
 
         $this->assertStops(
             ['boxes'],
-            "column 'container' of table 'boxes' has the name of a property of Phalcon\\Mvc\\Model"
+            "column 'container' of table 'boxes' has the name of a property of Phalcon\\Mvc\\Model; "
+            . 'give it another name with --property="container=<name>"'
         );
     }
 
@@ -224,6 +229,28 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
             . 'Kept ' . $this->root . '/src/Models/Invoices.php: it exists; pass --force to replace it' . PHP_EOL,
             $this->readStdout()
         );
+    }
+
+    public function testAKeyColumnWithAQuoteSkipsTheRelation(): void
+    {
+        // The key column of notes has a quote, so it is not a usable property
+        // name, and notes has no PropertyName attribute for it. The relation
+        // is skipped (#53, spec 3.4), and the base of users stays valid PHP.
+        $this->createTables(NotesWithQuoteMigration::class);
+
+        $status = $this->runCommand(['users']);
+        $base   = (string) file_get_contents($this->root . self::BASE);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'Created ' . $this->root . self::BASE . PHP_EOL
+            . "Skipped the relation hasMany notes(it's_id) -> users(id): "
+            . "column 'it's_id' of table 'notes' has no usable property name" . PHP_EOL
+            . 'Created ' . $this->root . self::USERS . PHP_EOL,
+            $this->readStdout()
+        );
+        $this->assertStringNotContainsString('hasMany', $base);
+        $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
     }
 
     public function testAMissingTableStops(): void
@@ -293,24 +320,6 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
             . 'Kept ' . $this->root . self::USERS . ': it exists; pass --force to replace it' . PHP_EOL,
             $this->readStdout()
         );
-    }
-
-    public function testAQuoteInAKeyColumnIsEscaped(): void
-    {
-        // The key column of notes is not a column of users, so no other check
-        // reads it. Only the quoting keeps the base of users valid PHP.
-        $this->createTables(NotesWithQuoteMigration::class);
-
-        $this->runCommand(['users']);
-
-        $base = (string) file_get_contents($this->root . self::BASE);
-
-        $this->assertStringContainsString("            'it\\'s_id',\n", $base);
-        $this->assertStringContainsString(
-            "#[\\Crest\\Attribute\\RelationAlias('hasMany notes(it\\'s_id) -> users(id)', alias: 'Notes')]\n",
-            $base
-        );
-        $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
     }
 
     public function testASkippedRelationIsReported(): void

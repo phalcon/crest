@@ -55,7 +55,11 @@ final class ModelCommandSqliteTest extends AbstractDatabaseTestCase
         $this->front(NoKeyReadFront::class);
         $this->createTables(OddMigration::class);
 
-        $this->assertStops(['odd'], "column 'first name' of table 'odd' is not a usable property name");
+        $this->assertStops(
+            ['odd'],
+            "column 'first name' of table 'odd' is not a usable property name; "
+            . 'give it one with --property="first name=<name>"'
+        );
     }
 
     public function testACompositeKeyGivesArrays(): void

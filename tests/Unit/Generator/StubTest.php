@@ -159,6 +159,28 @@ final class StubTest extends TestCase
         $this->assertFalse($stub->has('adr', 'nope'));
     }
 
+    public function testHasPlaceholderNeedsTheWholePlaceholder(): void
+    {
+        // Each half of the placeholder, with its space, is not the
+        // placeholder.
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{columnMap }} {{ columnMap}}');
+
+        $this->assertFalse((new Stub($this->root . '/packaged'))->hasPlaceholder('adr', 'action', 'columnMap'));
+    }
+
+    public function testHasPlaceholderReadsTheStubThatWins(): void
+    {
+        // The project copy wins, so only its placeholders count. A name
+        // without the spaces of a placeholder is not a placeholder.
+        file_put_contents($this->root . '/packaged/adr/action.stub', '{{ old }} {{ new }}');
+        file_put_contents($this->root . '/project/resources/stubs/adr/action.stub', '{{ old }} {{new}} new');
+
+        $stub = new Stub($this->root . '/packaged', $this->root . '/project');
+
+        $this->assertTrue($stub->hasPlaceholder('adr', 'action', 'old'));
+        $this->assertFalse($stub->hasPlaceholder('adr', 'action', 'new'));
+    }
+
     public function testPackagedFolderFallsBackToTheSharedFolder(): void
     {
         file_put_contents($this->root . '/packaged/shared/command.stub', 'shared');

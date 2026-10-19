@@ -47,6 +47,20 @@ final class ModelCommandTest extends TestCase
         $this->endScratchProject();
     }
 
+    public function testABadModelsKeyStopsBeforeTheBoot(): void
+    {
+        // FailingFront fails to boot. The models check runs first, so its
+        // error is the one on stderr.
+        $this->front(FailingFront::class, "'yes'");
+
+        $this->assertStops(['users'], 'crest.php: models must be an array');
+    }
+
+    public function testAColumnTwoTimesInPropertyStops(): void
+    {
+        $this->assertStops(['users', '--property=a=b, a=c'], "--property: the column 'a' is in the list two times");
+    }
+
     public function testAContainerThatIsNotADiStops(): void
     {
         $this->front(WrongContainerFront::class);
@@ -123,6 +137,35 @@ final class ModelCommandTest extends TestCase
         $this->assertStops(['--all', '--exclude='], '--exclude has an empty table name');
     }
 
+    public function testAPropertyWithAnEmptyNameStops(): void
+    {
+        $this->assertStops(
+            ['users', '--property=first name='],
+            "--property: 'first name' has no name; use column=name"
+        );
+    }
+
+    public function testAPropertyWithNoColumnStops(): void
+    {
+        $this->assertStops(['users', '--property==firstName'], '--property has an empty column name');
+    }
+
+    public function testAPropertyWithNoNameStops(): void
+    {
+        $this->assertStops(
+            ['users', '--property=first name'],
+            "--property: 'first name' has no name; use column=name"
+        );
+    }
+
+    public function testAPropertyWithOnlySpacesAsTheNameStops(): void
+    {
+        $this->assertStops(
+            ['users', '--property=first name= '],
+            "--property: 'first name' has no name; use column=name"
+        );
+    }
+
     public function testAReservedNameStops(): void
     {
         $this->front(FailingFront::class);
@@ -160,5 +203,21 @@ final class ModelCommandTest extends TestCase
     public function testNoTableAndNoAllStop(): void
     {
         $this->assertStops([], 'give a table name, or --all');
+    }
+
+    public function testPropertyWithAllStops(): void
+    {
+        $this->assertStops(['--all', '--property=a=b'], '--property is only for one table, not --all');
+    }
+
+    public function testThePropertyOptionHasItsHelp(): void
+    {
+        $option = (new ModelCommand())->define()->findOption('property');
+
+        $this->assertNotNull($option);
+        $this->assertSame(
+            'For one table: property names, as column=name, separated by commas',
+            $option->description
+        );
     }
 }

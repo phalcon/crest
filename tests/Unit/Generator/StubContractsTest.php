@@ -13,8 +13,10 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Generator;
 
+use Crest\Attribute\PropertyName;
 use Crest\Attribute\RelationAlias;
 use Crest\Console\PackageVersion;
+use Crest\Generator\PropertyNames;
 use Crest\Generator\RelationAliases;
 use Crest\Generator\Stub;
 use Crest\Paths;
@@ -85,14 +87,17 @@ final class StubContractsTest extends TestCase
         'class'         => 'GeneratedArtifact',
         'classJson'     => 'App\\\\Generated\\\\GeneratedArtifact',
         'column'        => 'id',
+        'columnMap'     => '',
         'command'       => 'generated',
         'entries'       => '',
         'extraKey'      => 'crest',
         'fields'        => "'id'",
         'name'          => 'id',
         'namespace'     => 'App\\Generated',
+        'pairs'         => '',
         'params'        => '',
         'properties'    => '',
+        'property'      => 'id',
         'referenced'    => "'id'",
         'relations'     => '',
         'route'         => 'generated',
@@ -405,9 +410,15 @@ final class StubContractsTest extends TestCase
                     'mvc',
                     'model-base',
                     [
-                        'aliases'    => RelationAliases::attributes([$relation]),
-                        'aliasNote'  => RelationAliases::note([$relation]),
+                        'aliases'    => PropertyNames::attributes(['id' => 'id'])
+                            . RelationAliases::attributes([$relation]),
+                        'aliasNote'  => PropertyNames::note(['id' => 'id']) . RelationAliases::note([$relation]),
                         'class'      => 'GeneratedModelBase',
+                        'columnMap'  => $stub->render(
+                            'mvc',
+                            Stub::FRAGMENT_PREFIX . 'model-column-map',
+                            ['pairs' => "            'id' => 'id',\n"]
+                        ),
                         'namespace'  => $namespace . '\\Base',
                         'properties' => "    public ?int \$id = null;\n",
                         'relations'  => $relations,
@@ -450,6 +461,15 @@ final class StubContractsTest extends TestCase
 
         $this->assertSame('belongsTo generated(id) -> generated(id)', $attribute->key);
         $this->assertSame('Self', $attribute->alias);
+
+        // The base has a public columnMap(), and the generated attribute
+        // matches the constructor of PropertyName.
+        $this->assertTrue((new ReflectionMethod($base, 'columnMap'))->isPublic());
+
+        $property = $class->getAttributes(PropertyName::class)[0]->newInstance();
+
+        $this->assertSame('id', $property->column);
+        $this->assertSame('id', $property->name);
     }
 
     private function render(string $flavor, string $name): string

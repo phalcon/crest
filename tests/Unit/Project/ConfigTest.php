@@ -297,6 +297,24 @@ final class ConfigTest extends TestCase
         $this->assertSame(['command' => $this->root . '/src/Command'], $config->paths());
     }
 
+    public function testModelsGivesTheKeyAsTheFileHasIt(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp("['models' => ['camelCase' => 'yes']]");
+
+        // Config does not check the key, so a bad value does not stop the
+        // other commands. make:model checks it (#53).
+        $this->assertSame(['camelCase' => 'yes'], Config::discover($this->root)->models());
+    }
+
+    public function testModelsIsEmptyWithNoKey(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        $this->writeCrestPhp();
+
+        $this->assertSame([], Config::discover($this->root)->models());
+    }
+
     public function testMvcGetsTheControllerPath(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);

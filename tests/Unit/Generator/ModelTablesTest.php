@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelTables;
 use Phalcon\Db\Adapter\AdapterInterface;
 use PHPUnit\Framework\TestCase;
@@ -26,9 +27,58 @@ use PHPUnit\Framework\TestCase;
  */
 final class ModelTablesTest extends TestCase
 {
+    public function testAMapClassCanFailTheSameClassCheck(): void
+    {
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['members', 'users']),
+            [],
+            ModelNames::of(['classes' => ['members' => 'Users']])
+        );
+
+        $this->assertSame(
+            [
+                'members' => 'the tables members and users give the same class Users',
+                'users'   => 'the tables members and users give the same class Users',
+            ],
+            $tables->failed
+        );
+    }
+
+    public function testAMapLineForATableThatTheDatabaseDoesNotHaveGivesANote(): void
+    {
+        // A view counts as a name of the database. The notes come after the
+        // notes of --exclude.
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['customers', 'users'], ['customer_names']),
+            ['customer_names'],
+            ModelNames::of(['classes' => ['Users' => 'Member', 'customer_names' => 'Name', 'gone' => 'Gone']])
+        );
+
+        $this->assertSame(
+            [
+                'Note: customer_names is a view; --all writes no models for views',
+                'Note: models.classes names the table Users, which the database does not have; did you mean users?',
+                'Note: models.classes names the table gone, which the database does not have',
+            ],
+            $tables->notes
+        );
+    }
+
+    public function testAMapLineGivesAClassToANameWithNoClass(): void
+    {
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['users', 'user-profiles']),
+            [],
+            ModelNames::of(['classes' => ['user-profiles' => 'UserProfile']])
+        );
+
+        $this->assertSame(['user-profiles' => 'UserProfile', 'users' => 'Users'], $tables->classes);
+        $this->assertSame([], $tables->failed);
+    }
+
     public function testANameThatGivesNoClassFails(): void
     {
-        $tables = ModelTables::of($this->adapter('mysql', ['users', 'user-profiles']), []);
+        $tables = ModelTables::of($this->adapter('mysql', ['users', 'user-profiles']), [], ModelNames::of([]));
 
         $this->assertSame(
             ['user-profiles' => "'user-profiles' gives no usable class name; "
@@ -41,7 +91,11 @@ final class ModelTablesTest extends TestCase
 
     public function testAnExcludedInternalSqliteTableGivesANote(): void
     {
-        $tables = ModelTables::of($this->adapter('sqlite', ['customers', 'sqlite_sequence']), ['sqlite_sequence']);
+        $tables = ModelTables::of(
+            $this->adapter('sqlite', ['customers', 'sqlite_sequence']),
+            ['sqlite_sequence'],
+            ModelNames::of([])
+        );
 
         $this->assertSame(['Note: sqlite_sequence is a SQLite table; --all writes no models for it'], $tables->notes);
         $this->assertSame(['customers'], $tables->names());
@@ -49,7 +103,11 @@ final class ModelTablesTest extends TestCase
 
     public function testAnExcludedTableCausesNoClassFailure(): void
     {
-        $tables = ModelTables::of($this->adapter('mysql', ['user_profiles', 'UserProfiles']), ['UserProfiles']);
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['user_profiles', 'UserProfiles']),
+            ['UserProfiles'],
+            ModelNames::of([])
+        );
 
         $this->assertSame(['user_profiles' => 'UserProfiles'], $tables->classes);
         $this->assertSame([], $tables->failed);
@@ -57,7 +115,7 @@ final class ModelTablesTest extends TestCase
 
     public function testAnExcludedTableIsNotInTheList(): void
     {
-        $tables = ModelTables::of($this->adapter('mysql', ['customers', 'invoices']), ['invoices']);
+        $tables = ModelTables::of($this->adapter('mysql', ['customers', 'invoices']), ['invoices'], ModelNames::of([]));
 
         $this->assertSame(['customers'], $tables->names());
         $this->assertSame([], $tables->notes);
@@ -68,7 +126,8 @@ final class ModelTablesTest extends TestCase
         // A name given two times has no effect.
         $tables = ModelTables::of(
             $this->adapter('mysql', ['customers', 'customer_names'], ['customer_names']),
-            ['customer_names', 'customer_names']
+            ['customer_names', 'customer_names'],
+            ModelNames::of([])
         );
 
         $this->assertSame(['Note: customer_names is a view; --all writes no models for views'], $tables->notes);
@@ -78,21 +137,29 @@ final class ModelTablesTest extends TestCase
     public function testAnInternalSqliteTableIsNotATable(): void
     {
         // SQLite rejects the prefix in any case, so the check ignores case.
-        $tables = ModelTables::of($this->adapter('sqlite', ['customers', 'sqlite_sequence', 'SQLITE_STAT1']), []);
+        $tables = ModelTables::of(
+            $this->adapter('sqlite', ['customers', 'sqlite_sequence', 'SQLITE_STAT1']),
+            [],
+            ModelNames::of([])
+        );
 
         $this->assertSame(['customers'], $tables->names());
     }
 
     public function testASqliteNameIsATableOnAServer(): void
     {
-        $tables = ModelTables::of($this->adapter('pgsql', ['customers', 'sqlite_cache']), []);
+        $tables = ModelTables::of($this->adapter('pgsql', ['customers', 'sqlite_cache']), [], ModelNames::of([]));
 
         $this->assertSame(['customers', 'sqlite_cache'], $tables->names());
     }
 
     public function testAViewIsNotATable(): void
     {
-        $tables = ModelTables::of($this->adapter('mysql', ['customers', 'customer_names'], ['customer_names']), []);
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['customers', 'customer_names'], ['customer_names']),
+            [],
+            ModelNames::of([])
+        );
 
         $this->assertSame(['customers'], $tables->names());
         $this->assertSame(['customers' => 'Customers'], $tables->classes);
@@ -107,7 +174,7 @@ final class ModelTablesTest extends TestCase
             '/\A--exclude: the database has no table USERS, nope; did you mean Users\?\z/'
         );
 
-        ModelTables::of($this->adapter('mysql', ['customers', 'Users']), ['USERS', 'nope']);
+        ModelTables::of($this->adapter('mysql', ['customers', 'Users']), ['USERS', 'nope'], ModelNames::of([]));
     }
 
     public function testAWrongCaseViewGetsAHint(): void
@@ -118,14 +185,18 @@ final class ModelTablesTest extends TestCase
             '/\A--exclude: the database has no table Customer_Names; did you mean customer_names\?\z/'
         );
 
-        ModelTables::of($this->adapter('sqlite', ['customers'], ['customer_names']), ['Customer_Names']);
+        ModelTables::of(
+            $this->adapter('sqlite', ['customers'], ['customer_names']),
+            ['Customer_Names'],
+            ModelNames::of([])
+        );
     }
 
     public function testClassesThatDifferOnlyInCaseFail(): void
     {
         // PHP and the file systems of macOS and Windows ignore case. The
         // reason names the class of each table.
-        $tables = ModelTables::of($this->adapter('pgsql', ['users', 'USERS', 'uSers']), []);
+        $tables = ModelTables::of($this->adapter('pgsql', ['users', 'USERS', 'uSers']), [], ModelNames::of([]));
         $reason = 'the tables USERS, uSers and users give the classes USERS, USers and Users, '
             . 'which PHP sees as the same class';
 
@@ -136,7 +207,11 @@ final class ModelTablesTest extends TestCase
     public function testTablesWithTheSameClassAfterAnotherTableFail(): void
     {
         // The check reads each class, also after a class with one table.
-        $tables = ModelTables::of($this->adapter('mysql', ['customers', 'user_profiles', 'userProfiles']), []);
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['customers', 'user_profiles', 'userProfiles']),
+            [],
+            ModelNames::of([])
+        );
         $reason = 'the tables userProfiles and user_profiles give the same class UserProfiles';
 
         $this->assertSame(['userProfiles' => $reason, 'user_profiles' => $reason], $tables->failed);
@@ -147,14 +222,14 @@ final class ModelTablesTest extends TestCase
     {
         // SORT_STRING: '10' comes before '9'. The names stay strings, also
         // the numeric names.
-        $tables = ModelTables::of($this->adapter('mysql', ['users', '9', '10', 'customers']), []);
+        $tables = ModelTables::of($this->adapter('mysql', ['users', '9', '10', 'customers']), [], ModelNames::of([]));
 
         $this->assertSame(['10', '9', 'customers', 'users'], $tables->names());
     }
 
     public function testThreeTablesWithTheSameClassAllFail(): void
     {
-        $tables = ModelTables::of($this->adapter('mysql', ['a_b', 'aB', 'A_b', 'users']), []);
+        $tables = ModelTables::of($this->adapter('mysql', ['a_b', 'aB', 'A_b', 'users']), [], ModelNames::of([]));
         $reason = 'the tables A_b, aB and a_b give the same class AB';
 
         $this->assertSame(['A_b' => $reason, 'aB' => $reason, 'a_b' => $reason], $tables->failed);
@@ -167,7 +242,11 @@ final class ModelTablesTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessageMatches('/\A--exclude: the database has no table nope, other\z/');
 
-        ModelTables::of($this->adapter('mysql', ['customers']), ['nope', 'customers', 'other', 'nope']);
+        ModelTables::of(
+            $this->adapter('mysql', ['customers']),
+            ['nope', 'customers', 'other', 'nope'],
+            ModelNames::of([])
+        );
     }
 
     public function testUnlistedSqliteNameIsUnknown(): void
@@ -175,7 +254,7 @@ final class ModelTablesTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessageMatches('/\A--exclude: the database has no table sqlite_nope\z/');
 
-        ModelTables::of($this->adapter('sqlite', ['customers']), ['sqlite_nope']);
+        ModelTables::of($this->adapter('sqlite', ['customers']), ['sqlite_nope'], ModelNames::of([]));
     }
 
     /**

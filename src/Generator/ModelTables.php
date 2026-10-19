@@ -17,7 +17,6 @@ use Crest\Console\Exceptions\Exception;
 use Phalcon\Db\Adapter\AdapterInterface;
 
 use function array_diff;
-use function array_slice;
 use function array_unique;
 use function array_values;
 use function count;
@@ -42,6 +41,8 @@ final class ModelTables
 {
     private const INTERNAL = 'Note: %s is a SQLite table; --all writes no models for it';
 
+    private const MAPPED = 'Note: models.classes names the table %s, which the database does not have';
+
     private const VIEW = 'Note: %s is a view; --all writes no models for views';
 
     /**
@@ -49,7 +50,8 @@ final class ModelTables
      * @param array<string, string> $failed  The table and the reason, for each table that fails the
      *                                       class check
      * @param list<string>          $notes   One line for each --exclude name that is a view or an SQLite
-     *                                       table
+     *                                       table, and for each line of models.classes that names a
+     *                                       table that the database does not have
      * @param list<string>          $names   The tables of $classes and $failed, sorted by name
      */
     private function __construct(
@@ -66,8 +68,9 @@ final class ModelTables
      * typo, crest would write the table that the user wants to skip.
      *
      * @param list<string> $exclude The names of --exclude, without spaces
+     * @param ModelNames   $names   The classes of models.classes (#53)
      */
-    public static function of(AdapterInterface $adapter, array $exclude): self
+    public static function of(AdapterInterface $adapter, array $exclude, ModelNames $names): self
     {
         $listed = $adapter->listTables();
         $views  = $adapter->listViews();
@@ -110,11 +113,20 @@ final class ModelTables
             );
         }
 
+        // A line of models.classes for a name that the database does not
+        // have is a note, not a stop: the map stays in crest.php after a
+        // table is dropped (#53, spec 3.2).
+        foreach ($names->mapped() as $table) {
+            if (false === in_array($table, $listed, true) && false === in_array($table, $views, true)) {
+                $notes[] = sprintf(self::MAPPED, $table) . self::hint([$table], [...$listed, ...$views]);
+            }
+        }
+
         $tables = array_diff($tables, $exclude);
 
         sort($tables, SORT_STRING);
 
-        [$classes, $failed] = self::classes($tables);
+        [$classes, $failed] = self::classes($tables, $names);
 
         return new self($classes, $failed, $notes, $tables);
     }
@@ -126,10 +138,11 @@ final class ModelTables
      * the check ignores case too.
      *
      * @param list<string> $tables Sorted by name
+     * @param ModelNames   $names  The classes of models.classes (#53)
      *
      * @return array{array<string, string>, array<string, string>} The classes, and the failed tables
      */
-    private static function classes(array $tables): array
+    private static function classes(array $tables, ModelNames $names): array
     {
         $classes = [];
         $failed  = [];
@@ -137,7 +150,7 @@ final class ModelTables
 
         foreach ($tables as $table) {
             try {
-                $classes[$table] = ClassName::fromTable($table);
+                $classes[$table] = $names->classOf($table);
             } catch (Exception $exception) {
                 $failed[$table] = $exception->getMessage();
 
@@ -162,11 +175,11 @@ final class ModelTables
 
             $named  = array_values($distinct);
             $reason = 1 === count($named)
-                ? sprintf('the tables %s give the same class %s', self::sentence($group), $named[0])
+                ? sprintf('the tables %s give the same class %s', Sentence::join($group), $named[0])
                 : sprintf(
                     'the tables %s give the classes %s, which PHP sees as the same class',
-                    self::sentence($group),
-                    self::sentence($named)
+                    Sentence::join($group),
+                    Sentence::join($named)
                 );
 
             foreach ($group as $table) {
@@ -180,11 +193,12 @@ final class ModelTables
     }
 
     /**
-     * A hint for each --exclude name that differs from a name of the
-     * database only in case (#52). MySQL on macOS and Windows, and PostgreSQL
-     * for a name with no quotes, keep a name in another case.
+     * A hint for each --exclude name or line of models.classes that differs
+     * from a name of the database only in case (#52, #53). MySQL on macOS and
+     * Windows, and PostgreSQL for a name with no quotes, keep a name in
+     * another case.
      *
-     * @param list<string>  $unknown The --exclude names that the database does not have
+     * @param list<string>  $unknown The names that the database does not have
      * @param array<string> $names   The tables and the views of the database
      */
     private static function hint(array $unknown, array $names): string
@@ -204,16 +218,6 @@ final class ModelTables
         }
 
         return [] === $hints ? '' : '; did you mean ' . implode(', ', $hints) . '?';
-    }
-
-    /**
-     * The names joined as in a sentence: "a, b and c".
-     *
-     * @param list<string> $names Two or more names
-     */
-    private static function sentence(array $names): string
-    {
-        return implode(', ', array_slice($names, 0, -1)) . ' and ' . $names[count($names) - 1];
     }
 
     /**

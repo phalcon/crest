@@ -22,10 +22,16 @@
     "mutators": {
         "@default": true,
         "ArrayItemRemoval": {
-            // usage() aligns two untitled columns by passing an empty header
-            // row. Both cells are '', so they contribute no width and dropping
-            // one changes nothing that is printed.
-            "ignore": ["Crest\\Console\\Output::usage"]
+            "ignore": [
+                // usage() aligns two untitled columns by passing an empty
+                // header row. Both cells are '', so they contribute no width
+                // and dropping one changes nothing that is printed.
+                "Crest\\Console\\Output::usage",
+                // one() gives its table as the table that the run writes.
+                // ForeignKeys::using() never gives the table itself, so an
+                // empty list changes nothing.
+                "Crest\\Command\\Make\\ModelCommand::one"
+            ]
         },
         "CastString": {
             "ignore": [
@@ -55,7 +61,22 @@
                 // with strtr(), which takes an int too, so the cast changes
                 // nothing at runtime. It stays because the replacements are
                 // array<string, string> and PHPStan holds them to that.
-                "Crest\\Command\\NewCommand::handle"
+                "Crest\\Command\\NewCommand::handle",
+                // The same reason as for NewCommand::handle: the column is an
+                // integer when it is a number.
+                "Crest\\Command\\Make\\ModelCommand::properties",
+                // A numeric column is an integer key. A property name cannot
+                // start with a digit, so it is never the text of the column,
+                // and both compares give true.
+                "Crest\\Command\\Make\\ModelCommand::mapped",
+                // A numeric table is an integer key. It goes only into keys,
+                // sprintf() and implode(), which give the same text. It stays
+                // because the return type is array<string, string> and
+                // PHPStan holds it to that.
+                "Crest\\Generator\\ModelNames::classes",
+                // resolve() gives only a file that exists, so
+                // file_get_contents() cannot return false.
+                "Crest\\Generator\\Stub::hasPlaceholder"
             ]
         },
         "Identical": {
@@ -116,7 +137,10 @@
                 // The max() seed only stops max() from failing on no paths.
                 // With no paths, the loop does not use the width. With paths,
                 // each key is longer than the seed.
-                "Crest\\Project\\Settings::pathLines"
+                "Crest\\Project\\Settings::pathLines",
+                // The same reason: a quoted column has two characters or
+                // more, so each one is longer than the seed.
+                "Crest\\Command\\Make\\ModelCommand::columnMap"
             ]
         },
         "FalseValue": {
@@ -156,6 +180,15 @@
                 "Crest\\Project\\Settings::pathLines"
             ]
         },
+        "InstanceOf_": {
+            // A base that crest cannot read also makes each name of its table
+            // stop with the same reason (ModelNames::withFailed()). Without
+            // the throw, properties() throws the same message one line later.
+            // The check stays because read() needs a BaseAttributes, and
+            // PHPStan holds it to that. The same reason covers the Throw_
+            // entry for this method.
+            "ignore": ["Crest\\Command\\Make\\ModelCommand::all"]
+        },
         "NotIdentical": {
             "ignore": ["Crest\\Console\\Output::detectDecoration"]
         },
@@ -171,9 +204,21 @@
                 "Crest\\Command\\Make\\NamedArtifactCommand::replacements"
             ]
         },
+        "Ternary": {
+            // draft() writes the property names into 'fields' and
+            // 'referenced' of a relation that it keeps. A skipped relation
+            // uses only its key. So the first values of the two keys change
+            // nothing. Only this statement is ignored, not the method; it also
+            // has the ternary of the key, which the tests kill.
+            "ignoreSourceCodeByRegex": [
+                "\\$relation = \\['kind' => \\$kind, 'fields' => \\$belongsTo \\? \\$keys : \\$referenced, .*"
+            ]
+        },
         "Throw_": {
             "ignore": [
                 "Crest\\ADR\\PhalconRouterResolver::router",
+                // See InstanceOf_.
+                "Crest\\Command\\Make\\ModelCommand::all",
                 // proc_open() returns false only when it cannot create the
                 // process. ShellRunner::run() checks the program and the
                 // directory first, so the suite cannot make it fail. The same
@@ -195,7 +240,12 @@
                 // Phalcon declares array<array-key, string>, and the Relation
                 // type of ModelRelations declares list<string>.
                 "Crest\\Generator\\ModelRelations::draft",
-                "Crest\\Generator\\ModelRelations::keyAlias"
+                "Crest\\Generator\\ModelRelations::keyAlias",
+                // ModelRelations::of() reads only the values of the property
+                // names (in_array()), and Sentence::join() and count() read
+                // only the values of the run list. They stay because the
+                // types are list<string>, and PHPStan holds them to that.
+                "Crest\\Command\\Make\\ModelCommand::read"
             ]
         }
     }
