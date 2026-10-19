@@ -251,7 +251,7 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage(
             self::BASE_FILE . ", line 16: the alias Total of '" . self::INVOICE_KEY
-            . "' has the name of a column; change it"
+            . "' has the name of a property; change it"
         );
 
         $this->relationsOf(
@@ -275,7 +275,7 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
-            ['Skipped the relation ' . self::INVOICE_KEY . ': the alias Customer has the name of a column'],
+            ['Skipped the relation ' . self::INVOICE_KEY . ': the alias Customer has the name of a property'],
             $relations->skipped
         );
     }

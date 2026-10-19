@@ -21,6 +21,7 @@ use Crest\Tests\Support\Migrations\InvoicesMigration;
 use Crest\Tests\Support\Migrations\InvoicesWithBuyerMigration;
 use Crest\Tests\Support\Migrations\NotesWithQuoteMigration;
 use Crest\Tests\Support\Migrations\OddMigration;
+use Crest\Tests\Support\Migrations\OrdersMigration;
 use Crest\Tests\Support\Migrations\PeopleMigration;
 use Crest\Tests\Support\Migrations\PetsMigration;
 use Crest\Tests\Support\Migrations\TotalsMigration;
@@ -510,6 +511,28 @@ final class ModelCommandNamesTest extends AbstractDatabaseTestCase
         $this->assertStringContainsString("            'it\\'s_id' => 'authorId',\n", $base);
         $this->assertStringContainsString("            'authorId',\n", $base);
         $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
+    }
+
+    public function testARenamedColumnNamesEachTableThatUsesIt(): void
+    {
+        // invoices and orders both have a key to customers(id), so the line
+        // names the two tables.
+        $this->front(DatabaseFront::class);
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class, OrdersMigration::class);
+        $this->runCommand(['customers']);
+        $this->freshStreams();
+
+        $status = $this->runCommand(['customers', '--property=id=code']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'Updated ' . $this->model('Base/CustomersBase.php') . PHP_EOL
+            . 'Renamed $id to $code: change the code that uses it' . PHP_EOL
+            . 'Run make:model for invoices and orders too: '
+            . 'their relations use the property names of customers' . PHP_EOL
+            . 'Kept ' . $this->model('Customers.php') . ': it exists; pass --force to replace it' . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testASecondRunKeepsThePropertyName(): void

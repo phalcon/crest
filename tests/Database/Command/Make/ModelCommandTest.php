@@ -333,7 +333,7 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
         $this->assertSame(
             'Created ' . $this->root . '/src/Models/Base/InvoicesBase.php' . PHP_EOL
             . 'Skipped the relation belongsTo invoices(customer_id) -> customers(id): '
-            . 'the alias Customer has the name of a column' . PHP_EOL
+            . 'the alias Customer has the name of a property' . PHP_EOL
             . 'Created ' . $this->root . '/src/Models/Invoices.php' . PHP_EOL,
             $this->readStdout()
         );

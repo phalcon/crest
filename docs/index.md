@@ -643,13 +643,27 @@ table:
     Kept src/Models/Invoices.php: it exists; pass --force to replace it
 
 With `--all`, crest writes all the tables again, so it names only the tables of
-`--exclude` and the tables that failed.
+`--exclude` and the tables that get no class (see "All the tables"). It does not
+name a table that fails later. The summary lists each table that failed: run
+`make:model` for it again after the fix.
 
 **Published stubs.** `model-base` has the placeholder `{{ columnMap }}`, and
 `fragment-model-property` has `{{ property }}`. A copy that you published before
 does not have them. When a base needs a `columnMap()`, crest stops:
 
     crest: the published stub .../resources/stubs/mvc/model-base.stub has no {{ columnMap }}; publish it again with crest stub:publish model-base --force, and make your changes in it again
+
+Crest writes the `columnMap()` with the stub `fragment-model-column-map`, which
+has the placeholder `{{ pairs }}`. On the next run, crest reads the old property
+names from this `columnMap()`. It reads only the form that it writes: a body
+with only `return [...];`, and a plain string on each side of each `=>`. When
+the base has another form (a published `fragment-model-column-map`, or a change
+by hand), crest still writes the base, but it cannot find the renamed
+properties. It prints no `Renamed` line, and prints:
+
+    Note: crest cannot read columnMap() of src/Models/Base/CustomersBase.php, so it cannot list the renamed properties
+
+Then find the code that uses the properties of that table yourself.
 
 ### All the tables
 
@@ -844,7 +858,7 @@ need to exist when your application runs, so an install without crest
 Crest stops, and writes no file, when the base is not valid PHP, when a
 `RelationAlias` attribute does not have two plain strings (the key and the
 alias), when an alias is not a valid name, when two attributes have the same
-key, when an alias of an attribute has the name of a column of the table, or
+key, when an alias of an attribute has the name of a property of the table, or
 when two aliases of attributes are the same (the case is ignored). The message
 names the file and the line.
 
@@ -854,7 +868,7 @@ which writes the bases of all the tables again.
 
 Crest skips a relation that it cannot write, and prints one line for it:
 
-    Skipped the relation belongsTo invoices(customer_id) -> customers(id): the alias Customer has the name of a column
+    Skipped the relation belongsTo invoices(customer_id) -> customers(id): the alias Customer has the name of a property
 
 Crest skips a relation when:
 
@@ -865,7 +879,7 @@ Crest skips a relation when:
   attribute in it does not have two plain strings. The line gives the error;
 - a key column of the related table has no usable property name, and no
   `--property` or attribute gives it one (see "Names");
-- the alias has the name of a column of the table (the case is ignored);
+- the alias has the name of a property of the table (the case is ignored);
 - two or more relations have the same alias (the case is ignored). Crest skips
   all of them, but not a relation whose alias comes from an attribute.
 

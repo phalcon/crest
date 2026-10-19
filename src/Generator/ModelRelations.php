@@ -307,7 +307,7 @@ final class ModelRelations
         // and the base does not change.
         if (true === isset($stored[$relation['key']])) {
             throw new Exception(sprintf(
-                "%s, line %d: the alias %s of '%s' has the name of a column; change it",
+                "%s, line %d: the alias %s of '%s' has the name of a property; change it",
                 $file,
                 $stored[$relation['key']]['line'],
                 $relation['alias'],
@@ -315,7 +315,7 @@ final class ModelRelations
             ));
         }
 
-        return self::skip($relation, sprintf('the alias %s has the name of a column', $relation['alias']));
+        return self::skip($relation, sprintf('the alias %s has the name of a property', $relation['alias']));
     }
 
     /**
