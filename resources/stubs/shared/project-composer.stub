@@ -2,7 +2,7 @@
     "type": "project",
     "require": {
         "php": ">={{ phpVersion }}",
-        "{{ phalconPackage }}": "{{ phalconConstraint }}"
+        "{{ phalconPackage }}": "{{ phalconConstraint }}"{{ phql }}
     },
     "require-dev": {
         "phalcon/crest": "{{ crestConstraint }}"

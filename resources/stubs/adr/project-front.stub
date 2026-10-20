@@ -24,4 +24,4 @@ final class {{ front }} extends AbstractHttpFront
             ->setBaseNamespace('{{ actionNamespace }}')
             ->setActionDirectory($this->projectRoot . '/{{ actionPath }}');
     }
-}
+{{ registerProviders }}}

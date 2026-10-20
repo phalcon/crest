@@ -10,7 +10,7 @@ declare(strict_types=1);
 return [
     'flavor'    => '{{ flavor }}',
     'namespace' => '{{ namespace }}',
-{{ bootstrap }}    'paths'     => [
+{{ bootstrap }}{{ models }}    'paths'     => [
 {{ paths }}    ],
     'runtime'   => {{ runtime }},
 ];
