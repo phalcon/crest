@@ -88,7 +88,10 @@ final class InitCommand extends Command
             $namespace,
             $bootstrap,
             $paths,
-            Questions::runtime($output, $proposal->runtime)
+            Questions::runtime($output, $proposal->runtime),
+            // An existing MVC project has models: false keeps their property
+            // names. ADR and CLI get no models key.
+            Flavor::MVC === $flavor ? false : null
         );
 
         // The lookup uses the flavor: a copy in the mvc/ folder of the

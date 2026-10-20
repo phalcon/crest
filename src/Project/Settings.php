@@ -25,12 +25,28 @@ use function var_export;
  * The decisions of the user that crest.php holds: the flavor, the root
  * namespace, the front controller, the paths and the runtime (D07).
  * `crest new` and `crest init` write crest.php from them through the
- * project-config stub.
+ * project-config stub. An MVC project also gets the models key (#54).
  */
 final class Settings
 {
     /**
+     * The models key of an MVC project (#53), with the camelCase answer. The
+     * comments help the user who reads crest.php.
+     */
+    private const MODELS = "    'models'    => [\n"
+        . "        // Property names in camelCase. A change renames the properties of\n"
+        . "        // each model, so choose before the first make:model.\n"
+        . "        'camelCase' => %s,\n"
+        . "        // The class name of a table, when the default name does not fit,\n"
+        . "        // e.g. 'user_logins' => 'Login'.\n"
+        . "        'classes'   => [],\n"
+        . "    ],\n";
+
+    /**
      * @param array<string, string> $paths
+     * @param bool|null             $camelCase The models.camelCase answer of an MVC project.
+     *                                         Null gives no models key: ADR and CLI have no
+     *                                         models.
      */
     public function __construct(
         public readonly Flavor $flavor,
@@ -38,6 +54,7 @@ final class Settings
         public readonly ?string $bootstrap,
         public readonly array $paths,
         public readonly Runtime $runtime,
+        public readonly ?bool $camelCase = null,
     ) {
     }
 
@@ -54,6 +71,9 @@ final class Settings
                 ? ''
                 : sprintf("    'bootstrap' => %s::class,\n", $this->bootstrap),
             'flavor'    => $this->flavor->value,
+            'models'    => null === $this->camelCase
+                ? ''
+                : sprintf(self::MODELS, var_export($this->camelCase, true)),
             'namespace' => $this->namespace,
             'paths'     => $this->pathLines(),
             'runtime'   => $this->runtime->render(),

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace {{ namespace }};
 
-use {{ providerNamespace }}\DispatcherProvider;
+{{ dbUse }}use {{ providerNamespace }}\DispatcherProvider;
 use {{ providerNamespace }}\ViewProvider;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\FactoryDefault;
@@ -61,7 +61,7 @@ final class {{ front }}
     private function providers(): array
     {
         return [
-            new DispatcherProvider(),
+{{ dbProvider }}            new DispatcherProvider(),
             new ViewProvider($this->projectRoot . '/{{ viewsPath }}'),
         ];
     }

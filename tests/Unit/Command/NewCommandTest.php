@@ -317,8 +317,9 @@ final class NewCommandTest extends TestCase
 
     public function testAnOptionSkipsItsQuestion(): void
     {
-        // No runtime option is given, so only the runtime questions are asked.
-        $this->answers("docker\nweb\n");
+        // No runtime option and no database option are given, so only the
+        // runtime questions and the database question are asked.
+        $this->answers("docker\nweb\n\n");
 
         $status = $this->runCommand(
             ['my-app', '--flavor', 'adr', '--namespace', 'Acme', '--php', '8.2', '--phalcon', 'v6'],
@@ -378,7 +379,7 @@ final class NewCommandTest extends TestCase
 
     public function testAnUnusableAnswerIsAskedAgain(): void
     {
-        $this->answers("\n1bad\nShop\n\n\n\n\n");
+        $this->answers("\n1bad\nShop\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString("'1bad' is not a usable namespace", $this->readStderr());
@@ -988,9 +989,9 @@ final class NewCommandTest extends TestCase
 
     public function testTheFlavorIsTheFirstQuestion(): void
     {
-        // Flavor, namespace, PHP version, Phalcon version, runtime, service.
-        // MVC has one engine, so there is no engine question.
-        $this->answers("mvc\n\n\n\n\n\n");
+        // Flavor, namespace, PHP version, Phalcon version, runtime, service,
+        // database. MVC has one engine, so there is no engine question.
+        $this->answers("mvc\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringStartsWith('Flavor (adr, mvc) [adr]: Root namespace [App]: ', $this->readStderr());
@@ -1100,6 +1101,14 @@ final class NewCommandTest extends TestCase
             . "    'flavor'    => 'mvc',\n"
             . "    'namespace' => 'App',\n"
             . "    'bootstrap' => App\\AppFront::class,\n"
+            . "    'models'    => [\n"
+            . "        // Property names in camelCase. A change renames the properties of\n"
+            . "        // each model, so choose before the first make:model.\n"
+            . "        'camelCase' => false,\n"
+            . "        // The class name of a table, when the default name does not fit,\n"
+            . "        // e.g. 'user_logins' => 'Login'.\n"
+            . "        'classes'   => [],\n"
+            . "    ],\n"
             . "    'paths'     => [\n"
             . "        'command'    => 'src/Command',\n"
             . "        'controller' => 'src/Controllers',\n"
@@ -1296,8 +1305,8 @@ final class NewCommandTest extends TestCase
 
     public function testTheQuestionsFillTheValuesThatNoOptionGives(): void
     {
-        // Flavor, namespace, PHP version, Phalcon version, runtime.
-        $this->answers("adr\nShop\n8.3\nv6\nhost\n");
+        // Flavor, namespace, PHP version, Phalcon version, runtime, database.
+        $this->answers("adr\nShop\n8.3\nv6\nhost\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString(
@@ -1355,6 +1364,8 @@ final class NewCommandTest extends TestCase
                 'docker',
                 '--service',
                 'web',
+                '--database',
+                'none',
             ],
             true
         );

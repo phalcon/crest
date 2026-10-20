@@ -1,0 +1,20 @@
+  database:
+    image: mysql:8.4
+    container_name: ${PROJECT_PREFIX:-{{ project }}}-database
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:${DB_PUBLISHED_PORT:-3306}:3306"
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  database:

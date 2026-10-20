@@ -62,6 +62,9 @@ use const TOKEN_PARSE;
  * process. There is no docker and no HTTP. The full generate, install and
  * request run is a release check.
  *
+ * A project with a database (#54) runs too: its db service connects at the
+ * first get('db'), so GET / works with no database server.
+ *
  * The generated classes are declared in this process. Thus they use a
  * namespace that no other test uses.
  */
@@ -69,9 +72,12 @@ final class GeneratedProjectTest extends TestCase
 {
     use GeneratesInAScratchProject;
 
+    private const DATABASE_NAMESPACE = 'ScaffoldedWithDatabase';
+
     private const ROOT_NAMESPACE = 'Scaffolded';
 
-    private ?Closure $autoloader = null;
+    /** @var list<Closure> */
+    private array $autoloaders = [];
 
     private string $project = '';
 
@@ -90,40 +96,45 @@ final class GeneratedProjectTest extends TestCase
             $this->markTestSkipped('running the generated project needs Phalcon present');
         }
 
-        $this->runProjectCommand('new', NewCommand::class, ['shop', '--namespace', self::ROOT_NAMESPACE]);
-
-        $this->project = $this->root . '/shop';
-
-        // The project has no vendor/ yet. Load its classes as its own
-        // composer.json does: the root namespace maps to src/.
-        $source = $this->project . '/src/';
-
-        $this->autoloader = static function (string $class) use ($source): void {
-            $prefix = self::ROOT_NAMESPACE . '\\';
-
-            if (false === str_starts_with($class, $prefix)) {
-                return;
-            }
-
-            $file = $source . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-
-            if (true === is_file($file)) {
-                require $file;
-            }
-        };
-
-        spl_autoload_register($this->autoloader);
+        $this->project = $this->generate('shop', self::ROOT_NAMESPACE, []);
     }
 
     protected function tearDown(): void
     {
-        if (null !== $this->autoloader) {
-            spl_autoload_unregister($this->autoloader);
+        foreach ($this->autoloaders as $autoloader) {
+            spl_autoload_unregister($autoloader);
         }
 
         $_SERVER = $this->server;
 
         $this->endScratchProject();
+    }
+
+    public function testAProjectWithADatabaseAnswersGetSlashWithNoDatabase(): void
+    {
+        // The db service connects at the first get('db'), and GET / does
+        // not ask for it. There is no MySQL server here.
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
+
+        $response = $this->get('/');
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+    }
+
+    public function testAProjectWithADatabaseHasTheDbService(): void
+    {
+        // registerProviders() of the front calls DbProvider after the ADR
+        // services. The container keeps the definition, and makes nothing.
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
+
+        $container = Bootstrap::container(Config::discover($this->project));
+
+        if (false === $container instanceof Container) {
+            $this->fail('the front did not return a Phalcon container');
+        }
+
+        $this->assertTrue($container->has('db'));
+        $this->assertFalse($container->hasInstance('db'));
     }
 
     public function testCrestBootsTheGeneratedFrontController(): void
@@ -136,26 +147,16 @@ final class GeneratedProjectTest extends TestCase
 
     public function testEveryGeneratedPhpFileParsesAndItsImportsResolve(): void
     {
-        $files = ['crest.php', '.htrouter.php', 'public/index.php', 'src/AppFront.php', 'src/Action/Get.php'];
+        $this->assertParsesAndImportsResolve(
+            ['crest.php', '.htrouter.php', 'public/index.php', 'src/AppFront.php', 'src/Action/Get.php']
+        );
+    }
 
-        foreach ($files as $path) {
-            $code = (string) file_get_contents($this->project . '/' . $path);
+    public function testEveryPhpFileOfAProjectWithADatabaseParsesAndItsImportsResolve(): void
+    {
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
 
-            try {
-                $this->assertNotEmpty(token_get_all($code, TOKEN_PARSE));
-            } catch (ParseError $error) {
-                $this->fail(sprintf('%s does not parse: %s', $path, $error->getMessage()));
-            }
-
-            preg_match_all('/^use\s+(?!function\s|const\s)([\w\\\\]+)/m', $code, $matches);
-
-            foreach ($matches[1] as $import) {
-                $this->assertTrue(
-                    class_exists($import) || interface_exists($import),
-                    sprintf('%s imports %s, which does not exist', $path, $import)
-                );
-            }
-        }
+        $this->assertParsesAndImportsResolve(['src/AppFront.php', 'src/Provider/DbProvider.php']);
     }
 
     public function testTheGeneratedApplicationAnswersGetSlash(): void
@@ -198,6 +199,66 @@ final class GeneratedProjectTest extends TestCase
         $this->assertSame(self::ROOT_NAMESPACE . '\\AppFront', $config->bootstrap());
         $this->assertSame(self::ROOT_NAMESPACE . '\\Action', $config->namespaceFor('action'));
         $this->assertSame($this->project . '/src/Action', $config->path('action'));
+    }
+
+    /**
+     * Each file parses, and each class that it imports exists.
+     *
+     * @param list<string> $files
+     */
+    private function assertParsesAndImportsResolve(array $files): void
+    {
+        foreach ($files as $path) {
+            $code = (string) file_get_contents($this->project . '/' . $path);
+
+            try {
+                $this->assertNotEmpty(token_get_all($code, TOKEN_PARSE));
+            } catch (ParseError $error) {
+                $this->fail(sprintf('%s does not parse: %s', $path, $error->getMessage()));
+            }
+
+            preg_match_all('/^use\s+(?!function\s|const\s)([\w\\\\]+)/m', $code, $matches);
+
+            foreach ($matches[1] as $import) {
+                $this->assertTrue(
+                    class_exists($import) || interface_exists($import),
+                    sprintf('%s imports %s, which does not exist', $path, $import)
+                );
+            }
+        }
+    }
+
+    /**
+     * Runs `new` for an ADR project in the scratch folder, and loads its
+     * classes as its own composer.json does: the root namespace maps to
+     * src/. The project has no vendor/ yet.
+     *
+     * @param list<string> $options
+     */
+    private function generate(string $name, string $namespace, array $options): string
+    {
+        $this->runProjectCommand('new', NewCommand::class, [$name, '--namespace', $namespace, ...$options]);
+
+        $source     = $this->root . '/' . $name . '/src/';
+        $autoloader = static function (string $class) use ($namespace, $source): void {
+            $prefix = $namespace . '\\';
+
+            if (false === str_starts_with($class, $prefix)) {
+                return;
+            }
+
+            $file = $source . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+
+            if (true === is_file($file)) {
+                require $file;
+            }
+        };
+
+        spl_autoload_register($autoloader);
+
+        $this->autoloaders[] = $autoloader;
+
+        return $this->root . '/' . $name;
     }
 
     /**

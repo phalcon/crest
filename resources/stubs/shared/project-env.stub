@@ -6,3 +6,4 @@ PROJECT_PREFIX={{ project }}
 # Then the files that the container writes belong to you.
 UID=1000
 GID=1000
+{{ databaseEnv }}

@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ providerNamespace }};
+
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\Contracts\Container\Service\Provider as ProviderContract;
+use Phalcon\Db\Adapter\Pdo\{{ adapter }};
+
+/**
+ * The database. docker compose gives the values of .env to the app container.
+ * PHP on the host does not read .env: there, the defaults apply, and they point
+ * to the published port of the database container.
+ */
+final class DbProvider implements ProviderContract
+{
+    public function provide(Collection $services): void
+    {
+        $config = [
+            'host'     => self::env('DB_HOST', '127.0.0.1'),
+            'port'     => self::env('DB_PORT', '{{ databasePort }}'),
+            'dbname'   => self::env('DB_NAME', '{{ databaseName }}'),
+            'username' => self::env('DB_USERNAME', '{{ databaseUser }}'),
+            'password' => self::env('DB_PASSWORD', 'secret'),
+{{ charset }}        ];
+
+        // The container calls the closure at the first get('db'), and keeps
+        // the adapter.
+        $services->set('db', static function () use ($config): {{ adapter }} {
+            return new {{ adapter }}($config);
+        });
+    }
+
+    /**
+     * The real environment wins (the env_file of docker compose). $_ENV covers
+     * a loader that does not call putenv(), such as phpdotenv.
+     */
+    private static function env(string $name, string $default): string
+    {
+        $value = getenv($name);
+
+        if (false !== $value) {
+            return $value;
+        }
+
+        return (string) ($_ENV[$name] ?? $default);
+    }
+}

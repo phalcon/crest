@@ -38,6 +38,15 @@ final class SettingsTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    /**
+     * @return iterable<string, array{bool, string}>
+     */
+    public static function camelCases(): iterable
+    {
+        yield 'false' => [false, 'false'];
+        yield 'true' => [true, 'true'];
+    }
+
     public function testABootstrapIsOneLine(): void
     {
         $settings = new Settings(Flavor::ADR, 'App', 'App\\AppFront', [], Runtime::host());
@@ -45,11 +54,40 @@ final class SettingsTest extends TestCase
         $this->assertSame("    'bootstrap' => App\\AppFront::class,\n", $settings->replacements()['bootstrap']);
     }
 
+    /**
+     * @dataProvider camelCases
+     */
+    public function testACamelCaseAnswerGivesTheModelsKey(bool $camelCase, string $written): void
+    {
+        $settings = new Settings(Flavor::MVC, 'App', null, [], Runtime::host(), $camelCase);
+
+        $this->assertSame(
+            "    'models'    => [\n"
+            . "        // Property names in camelCase. A change renames the properties of\n"
+            . "        // each model, so choose before the first make:model.\n"
+            . "        'camelCase' => " . $written . ",\n"
+            . "        // The class name of a table, when the default name does not fit,\n"
+            . "        // e.g. 'user_logins' => 'Login'.\n"
+            . "        'classes'   => [],\n"
+            . "    ],\n",
+            $settings->replacements()['models']
+        );
+    }
+
     public function testNoBootstrapIsNoLine(): void
     {
         $this->assertSame(
             '',
             (new Settings(Flavor::ADR, 'App', null, [], Runtime::host()))->replacements()['bootstrap']
+        );
+    }
+
+    public function testNoCamelCaseAnswerIsNoModelsKey(): void
+    {
+        // ADR and CLI have no models.
+        $this->assertSame(
+            '',
+            (new Settings(Flavor::ADR, 'App', null, [], Runtime::host()))->replacements()['models']
         );
     }
 
@@ -134,5 +172,27 @@ final class SettingsTest extends TestCase
         $this->assertTrue($config->isDeclared('paths.responder'));
         $this->assertTrue($config->runtime()->isDocker());
         $this->assertSame('web', $config->runtime()->service);
+    }
+
+    public function testTheRenderedConfigReadsTheModelsKeyBack(): void
+    {
+        // make:model reads the key that new and init write.
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $settings = new Settings(
+            Flavor::MVC,
+            'App',
+            'App\\AppFront',
+            Config::defaultPaths(Flavor::MVC),
+            Runtime::docker(),
+            true
+        );
+
+        file_put_contents(
+            $this->root . '/crest.php',
+            (new Stub(Paths::stubs()))->render('mvc', 'project-config', $settings->replacements())
+        );
+
+        $this->assertSame(['camelCase' => true, 'classes' => []], Config::discover($this->root)->models());
     }
 }

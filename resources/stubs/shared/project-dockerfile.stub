@@ -18,7 +18,7 @@ useradd -l -m -o -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
 apt-get update -y
 apt-get install -yq --no-install-recommends curl git libzip-dev unzip zip
 docker-php-ext-install zip
-apt-get clean -y
+{{ databaseInstall }}apt-get clean -y
 rm -rf /var/lib/apt/lists/*
 EOT
 

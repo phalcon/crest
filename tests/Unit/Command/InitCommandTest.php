@@ -116,6 +116,12 @@ final class InitCommandTest extends TestCase
         $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
     }
 
+    public function testAnAdrCrestPhpHasNoModelsKey(): void
+    {
+        $this->assertSame(0, $this->init([]));
+        $this->assertStringNotContainsString("'models'", (string) file_get_contents($this->root . '/crest.php'));
+    }
+
     public function testAnExistingCrestPhpComesBeforeTheFlavorCheck(): void
     {
         $this->writeCrestPhp("['namespace' => 'Kept']");
@@ -156,6 +162,14 @@ final class InitCommandTest extends TestCase
             $this->readStderr()
         );
         $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
+    }
+
+    public function testAnMvcCrestPhpKeepsThePropertyNames(): void
+    {
+        // An existing project has models: camelCase false keeps their names.
+        // init asks no question for it.
+        $this->assertSame(0, $this->init(['--flavor', 'mvc']));
+        $this->assertSame(['camelCase' => false, 'classes' => []], Config::discover($this->root)->models());
     }
 
     public function testAnMvcProjectFromNewGetsTheSameCrestPhp(): void

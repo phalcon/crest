@@ -15,3 +15,4 @@ services:
     volumes:
       - .:/srv
     env_file: .env
+{{ dependsOn }}{{ databaseService }}

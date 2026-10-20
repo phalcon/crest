@@ -1,0 +1,3 @@
+# The database: a SQLite file, relative to the project root. PHP on the host
+# does not read this file: there, the default in DbProvider applies.
+DB_NAME={{ databaseFile }}

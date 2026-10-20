@@ -1,0 +1,10 @@
+# The database. docker compose creates it from these values, and gives them to the
+# app container. PHP on the host does not read this file: there, the defaults in
+# DbProvider apply.
+DB_HOST=database
+DB_PORT={{ databasePort }}
+DB_NAME={{ databaseName }}
+DB_USERNAME={{ databaseUser }}
+DB_PASSWORD=secret
+# The port of the database on the host, for PHP on the host or a database client.
+DB_PUBLISHED_PORT={{ databasePort }}

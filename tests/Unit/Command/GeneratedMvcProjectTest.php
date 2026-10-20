@@ -30,14 +30,17 @@ use Phalcon\Di\DiInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Application;
 use PHPUnit\Framework\TestCase;
+use ReflectionFunction;
 
 use function class_exists;
 use function extension_loaded;
 use function file_get_contents;
 use function interface_exists;
+use function is_array;
 use function is_file;
 use function method_exists;
 use function preg_match_all;
+use function putenv;
 use function spl_autoload_register;
 use function spl_autoload_unregister;
 use function sprintf;
@@ -59,18 +62,25 @@ use const TOKEN_PARSE;
  * this process. There is no docker and no HTTP. The full generate, install
  * and request run is a release check.
  *
+ * A project with a database (#54) runs too: its db service connects at the
+ * first use, so GET / works with no database server.
+ *
  * The generated classes are declared in this process. Thus they use a
  * namespace that no other test uses. It has two parts, so that each `use`
  * line and the namespace of the dispatcher are tested with a nested
- * namespace.
+ * namespace. The project with a database has a namespace of its own, because
+ * its front is another class.
  */
 final class GeneratedMvcProjectTest extends TestCase
 {
     use GeneratesInAScratchProject;
 
+    private const DATABASE_NAMESPACE = 'Scaffolded\\MvcWithDatabase';
+
     private const ROOT_NAMESPACE = 'Scaffolded\\Mvc';
 
-    private ?Closure $autoloader = null;
+    /** @var list<Closure> */
+    private array $autoloaders = [];
 
     private string $project = '';
 
@@ -89,39 +99,13 @@ final class GeneratedMvcProjectTest extends TestCase
             $this->markTestSkipped('running the generated project needs Phalcon present');
         }
 
-        $this->runProjectCommand(
-            'new',
-            NewCommand::class,
-            ['shop', '--flavor', 'mvc', '--namespace', self::ROOT_NAMESPACE]
-        );
-
-        $this->project = $this->root . '/shop';
-
-        // The project has no vendor/ yet. Load its classes as its own
-        // composer.json does: the root namespace maps to src/.
-        $source = $this->project . '/src/';
-
-        $this->autoloader = static function (string $class) use ($source): void {
-            $prefix = self::ROOT_NAMESPACE . '\\';
-
-            if (false === str_starts_with($class, $prefix)) {
-                return;
-            }
-
-            $file = $source . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-
-            if (true === is_file($file)) {
-                require $file;
-            }
-        };
-
-        spl_autoload_register($this->autoloader);
+        $this->project = $this->generate('shop', self::ROOT_NAMESPACE, []);
     }
 
     protected function tearDown(): void
     {
-        if (null !== $this->autoloader) {
-            spl_autoload_unregister($this->autoloader);
+        foreach ($this->autoloaders as $autoloader) {
+            spl_autoload_unregister($autoloader);
         }
 
         // FactoryDefault makes itself the default container. The next test
@@ -163,6 +147,15 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->assertStringNotContainsString('<h1>shop</h1>', $content);
     }
 
+    public function testAProjectWithADatabaseAnswersGetSlashWithNoDatabase(): void
+    {
+        // The db service connects at the first use, and GET / does not use
+        // it. There is no MySQL server here.
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
+
+        $this->assertStringContainsString('<h1>shop-db</h1>', $this->get('/'));
+    }
+
     public function testCrestBootsTheGeneratedFrontController(): void
     {
         $this->assertInstanceOf(
@@ -171,21 +164,97 @@ final class GeneratedMvcProjectTest extends TestCase
         );
     }
 
+    public function testEveryFileOfAProjectWithADatabaseParsesAndItsImportsResolve(): void
+    {
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
+
+        $this->assertParsesAndImportsResolve(['crest.php', 'src/AppFront.php', 'src/Providers/DbProvider.php']);
+    }
+
     public function testEveryGeneratedFileParsesAndItsImportsResolve(): void
     {
-        $files = [
-            'crest.php',
-            '.htrouter.php',
-            'public/index.php',
-            'src/AppFront.php',
-            'src/Controllers/Base/CrestControllerBase.php',
-            'src/Controllers/IndexController.php',
-            'src/Providers/DispatcherProvider.php',
-            'src/Providers/ViewProvider.php',
-            'themes/default/index.phtml',
-            'themes/default/index/index.phtml',
-        ];
+        $this->assertParsesAndImportsResolve(
+            [
+                'crest.php',
+                '.htrouter.php',
+                'public/index.php',
+                'src/AppFront.php',
+                'src/Controllers/Base/CrestControllerBase.php',
+                'src/Controllers/IndexController.php',
+                'src/Providers/DispatcherProvider.php',
+                'src/Providers/ViewProvider.php',
+                'themes/default/index.phtml',
+                'themes/default/index/index.phtml',
+            ]
+        );
+    }
 
+    public function testGetSlashShowsTheIndexViewInTheLayout(): void
+    {
+        $content = $this->get('/');
+
+        $this->assertStringContainsString('<title>shop</title>', $content);
+        $this->assertStringContainsString('<h1>shop</h1>', $content);
+    }
+
+    public function testGetSlashWithAQueryStringReachesTheIndexController(): void
+    {
+        $this->assertStringContainsString('<h1>shop</h1>', $this->get('/?page=2'));
+    }
+
+    public function testTheDbProviderReadsTheEnvironmentInOrder(): void
+    {
+        // getenv() wins, then $_ENV, then the default for PHP on the host. An
+        // empty value is a value: DB_PASSWORD= gives an empty password. The
+        // closure of the db service keeps the values; nothing connects.
+        $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
+
+        putenv('DB_HOST=from-getenv');
+        putenv('DB_PASSWORD=');
+        $_ENV['DB_HOST'] = 'from-env';
+        $_ENV['DB_NAME'] = 'from-env';
+
+        try {
+            $config = $this->dbConfig();
+        } finally {
+            putenv('DB_HOST');
+            putenv('DB_PASSWORD');
+            unset($_ENV['DB_HOST'], $_ENV['DB_NAME']);
+        }
+
+        $this->assertSame(
+            [
+                'host'     => 'from-getenv',
+                'port'     => '3306',
+                'dbname'   => 'from-env',
+                'username' => 'shop_db',
+                'password' => '',
+                'charset'  => 'utf8mb4',
+            ],
+            $config
+        );
+    }
+
+    public function testTheGeneratedConfigurationIsReadByCrest(): void
+    {
+        $config = Config::discover($this->project);
+
+        $this->assertSame(Flavor::MVC, $config->flavor());
+        $this->assertSame(self::ROOT_NAMESPACE, $config->namespace());
+        $this->assertSame(self::ROOT_NAMESPACE . '\\AppFront', $config->bootstrap());
+        $this->assertSame(self::ROOT_NAMESPACE . '\\Controllers', $config->namespaceFor('controller'));
+        $this->assertSame($this->project . '/src/Controllers', $config->path('controller'));
+        $this->assertSame($this->project . '/src/Providers', $config->path('provider'));
+        $this->assertSame($this->project . '/themes/default', $config->path('views'));
+    }
+
+    /**
+     * Each file parses, and each class that it imports exists.
+     *
+     * @param list<string> $files
+     */
+    private function assertParsesAndImportsResolve(array $files): void
+    {
         foreach ($files as $path) {
             $code = (string) file_get_contents($this->project . '/' . $path);
 
@@ -206,30 +275,70 @@ final class GeneratedMvcProjectTest extends TestCase
         }
     }
 
-    public function testGetSlashShowsTheIndexViewInTheLayout(): void
+    /**
+     * The connection values of the db service: the $config of its closure.
+     * The provider reads the environment when the front boots.
+     *
+     * @return array<mixed>
+     */
+    private function dbConfig(): array
     {
-        $content = $this->get('/');
+        $container = Bootstrap::container(Config::discover($this->project));
 
-        $this->assertStringContainsString('<title>shop</title>', $content);
-        $this->assertStringContainsString('<h1>shop</h1>', $content);
+        if (false === $container instanceof DiInterface) {
+            $this->fail('boot() did not return a DI container');
+        }
+
+        $definition = $container->getService('db')->getDefinition();
+
+        if (false === $definition instanceof Closure) {
+            $this->fail('the db service is not a closure');
+        }
+
+        $config = (new ReflectionFunction($definition))->getStaticVariables()['config'] ?? null;
+
+        if (false === is_array($config)) {
+            $this->fail('the closure of the db service has no $config');
+        }
+
+        return $config;
     }
 
-    public function testGetSlashWithAQueryStringReachesTheIndexController(): void
+    /**
+     * Runs `new` for an MVC project in the scratch folder, and loads its
+     * classes as its own composer.json does: the root namespace maps to
+     * src/. The project has no vendor/ yet.
+     *
+     * @param list<string> $options
+     */
+    private function generate(string $name, string $namespace, array $options): string
     {
-        $this->assertStringContainsString('<h1>shop</h1>', $this->get('/?page=2'));
-    }
+        $this->runProjectCommand(
+            'new',
+            NewCommand::class,
+            [$name, '--flavor', 'mvc', '--namespace', $namespace, ...$options]
+        );
 
-    public function testTheGeneratedConfigurationIsReadByCrest(): void
-    {
-        $config = Config::discover($this->project);
+        $source     = $this->root . '/' . $name . '/src/';
+        $autoloader = static function (string $class) use ($namespace, $source): void {
+            $prefix = $namespace . '\\';
 
-        $this->assertSame(Flavor::MVC, $config->flavor());
-        $this->assertSame(self::ROOT_NAMESPACE, $config->namespace());
-        $this->assertSame(self::ROOT_NAMESPACE . '\\AppFront', $config->bootstrap());
-        $this->assertSame(self::ROOT_NAMESPACE . '\\Controllers', $config->namespaceFor('controller'));
-        $this->assertSame($this->project . '/src/Controllers', $config->path('controller'));
-        $this->assertSame($this->project . '/src/Providers', $config->path('provider'));
-        $this->assertSame($this->project . '/themes/default', $config->path('views'));
+            if (false === str_starts_with($class, $prefix)) {
+                return;
+            }
+
+            $file = $source . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+
+            if (true === is_file($file)) {
+                require $file;
+            }
+        };
+
+        spl_autoload_register($autoloader);
+
+        $this->autoloaders[] = $autoloader;
+
+        return $this->root . '/' . $name;
     }
 
     /**

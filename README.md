@@ -112,6 +112,8 @@ the defaults:
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
 | `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
+| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [docs/index.md](docs/index.md#the-database) |
+| `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`) |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 `new` also writes `./crest`, a launcher for a host with docker and no PHP. `./crest up`,
@@ -198,8 +200,9 @@ return [
 ```
 
 `models` changes the names that `make:model` gives in an MVC project: `classes`
-gives a class to a table, and `camelCase` gives camelCase property names. See
-"Names" in [docs/index.md](docs/index.md):
+gives a class to a table, and `camelCase` gives camelCase property names. `crest new`
+and `crest init` write the key for an MVC project, with `'camelCase' => false`;
+`crest new --camel-case` gives `true`. See "Names" in [docs/index.md](docs/index.md):
 
 ```php
 return [

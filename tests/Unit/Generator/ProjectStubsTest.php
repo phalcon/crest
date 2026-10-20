@@ -53,28 +53,44 @@ final class ProjectStubsTest extends TestCase
     private const REPLACEMENTS = [
         'actionNamespace'     => 'App\\Action',
         'actionPath'          => 'src/Action',
+        'adapter'             => 'Mysql',
         'autoloader'          => 'vendor/autoload.php',
         'baseFolder'          => 'Base',
         'bootstrap'           => "    'bootstrap' => App\\AppFront::class,\n",
+        'charset'             => "            'charset'  => 'utf8mb4',\n",
         'controllerNamespace' => 'App\\Controllers',
         'controllerPath'      => 'src/Controllers',
         'crestConstraint'     => '^1.0',
+        'databaseEnv'         => '',
+        'databaseFile'        => 'storage/database.sqlite',
+        'databaseIgnore'      => '',
+        'databaseInstall'     => '',
+        'databaseName'        => 'my_app',
+        'databasePort'        => '3306',
+        'databaseService'     => '',
+        'databaseUser'        => 'my_app',
+        'dbProvider'          => '',
+        'dbUse'               => '',
+        'dependsOn'           => '',
         'documentRoot'        => 'public',
         'extensionConstraint' => '^5.18',
         'flavor'              => 'adr',
         'front'               => 'AppFront',
         'jsonNamespace'       => 'App',
+        'models'              => '',
         'namespace'           => 'App',
         'paths'               => "        'action' => 'src/Action',\n",
         'phalconConstraint'   => '^5',
         'phalconPackage'      => 'ext-phalcon',
         'phalconVariant'      => 'v5',
         'phpVersion'          => '8.4',
+        'phql'                => '',
         'port'                => '8080',
         'portVariable'        => 'APP_PORT',
         'project'             => 'my-app',
         'providerNamespace'   => 'App\\Providers',
         'providerPath'        => 'src/Providers',
+        'registerProviders'   => '',
         'router'              => '.htrouter.php',
         'runtime'             => "['type' => 'docker', 'service' => 'app']",
         'seed'                => 'Get',
@@ -92,8 +108,12 @@ final class ProjectStubsTest extends TestCase
     public static function importingStubs(): iterable
     {
         yield 'adr/project-front' => ['adr', 'project-front'];
+        yield 'adr/project-provider-db' => ['adr', 'project-provider-db'];
+        yield 'adr/project-provider-db-sqlite' => ['adr', 'project-provider-db-sqlite'];
         yield 'mvc/project-front' => ['mvc', 'project-front'];
         yield 'mvc/project-phtml-provider' => ['mvc', 'project-phtml-provider'];
+        yield 'mvc/project-provider-db' => ['mvc', 'project-provider-db'];
+        yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
     }
 
@@ -103,10 +123,14 @@ final class ProjectStubsTest extends TestCase
     public static function phpStubs(): iterable
     {
         yield 'adr/project-front' => ['adr', 'project-front'];
+        yield 'adr/project-provider-db' => ['adr', 'project-provider-db'];
+        yield 'adr/project-provider-db-sqlite' => ['adr', 'project-provider-db-sqlite'];
         yield 'mvc/project-front' => ['mvc', 'project-front'];
         yield 'mvc/project-phtml-index' => ['mvc', 'project-phtml-index'];
         yield 'mvc/project-phtml-layout' => ['mvc', 'project-phtml-layout'];
         yield 'mvc/project-phtml-provider' => ['mvc', 'project-phtml-provider'];
+        yield 'mvc/project-provider-db' => ['mvc', 'project-provider-db'];
+        yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
         yield 'shared/project-config' => ['adr', 'project-config'];
         yield 'shared/project-htrouter' => ['adr', 'project-htrouter'];
@@ -216,6 +240,24 @@ final class ProjectStubsTest extends TestCase
         );
     }
 
+    public function testTheComposerStubTakesPhqlAfterPhalcon(): void
+    {
+        // The value of MvcSkeleton for an MVC v6 project with a database.
+        $rendered = (new Stub(Paths::stubs()))->render(
+            'adr',
+            'project-composer',
+            [...self::REPLACEMENTS, 'phql' => ",\n        \"phalcon/phql\": \"1.0.x-dev\""]
+        );
+
+        $json = json_decode($rendered, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($json);
+        $this->assertSame(
+            ['php' => '>=8.4', 'ext-phalcon' => '^5', 'phalcon/phql' => '1.0.x-dev'],
+            $json['require']
+        );
+    }
+
     public function testTheComposeServiceRunsAnInit(): void
     {
         // php -S is not PID 1 then, so it stops on the SIGTERM of
@@ -285,11 +327,18 @@ final class ProjectStubsTest extends TestCase
         $this->assertSame(
             [
                 'adr/project-front',
+                'adr/project-provider-db-sqlite',
+                'adr/project-provider-db',
                 'adr/project-readme',
+                'shared/project-compose-mariadb',
+                'shared/project-compose-mysql',
+                'shared/project-compose-pgsql',
                 'shared/project-compose',
                 'shared/project-composer',
                 'shared/project-config',
                 'shared/project-dockerfile',
+                'shared/project-env-database',
+                'shared/project-env-sqlite',
                 'shared/project-env',
                 'shared/project-gitignore',
                 'shared/project-htrouter',
@@ -299,6 +348,8 @@ final class ProjectStubsTest extends TestCase
                 'mvc/project-phtml-index',
                 'mvc/project-phtml-layout',
                 'mvc/project-phtml-provider',
+                'mvc/project-provider-db-sqlite',
+                'mvc/project-provider-db',
                 'mvc/project-provider-dispatcher',
                 'mvc/project-readme',
             ],
