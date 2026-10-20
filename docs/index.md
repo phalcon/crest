@@ -57,13 +57,17 @@ projects only. These commands are for ADR projects only: `make:action`,
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
 | `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
+| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See "The database" |
+| `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`). See "Names" |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 In a terminal, `new` asks for each value that no option gives: the flavor, the
-namespace, the PHP version, the Phalcon version, and the runtime (`docker` with the
-service `app`, or `host`). There is no question for the view engine while there is only
-one. An empty answer takes the default. `--no-interaction`, or a run without a terminal
-(CI, a pipe), asks nothing and takes the defaults. The options stay, for CI.
+namespace, the PHP version, the Phalcon version, the runtime (`docker` with the
+service `app`, or `host`), and the database. For an MVC project with a database, it
+also asks if the property names of the models are in camelCase. There is no question
+for the view engine while there is only one. An empty answer takes the default.
+`--no-interaction`, or a run without a terminal (CI, a pipe), asks nothing and takes
+the defaults. The options stay, for CI.
 
 The project goes into the working directory, or into `--directory` if you give
 one. By default, `new` runs nothing: no composer, no docker, no network. It
@@ -239,6 +243,95 @@ loaded"). With `display_errors` off, PHP answers 500. With it on, PHP shows the
 error in the page, with status 200. Add a not-found page if your project needs
 one, for example a dispatcher listener such as the `NotFoundPlugin` of invo.
 
+### The database
+
+`--database` gives the project a database, in each flavor:
+
+    crest new my-app --flavor=mvc --database=mysql
+
+| Choice | The service in `docker-compose.yml` | The PHP extension |
+|---|---|---|
+| `none` | none; the default | none |
+| `mariadb` | `database`, with the image `mariadb:11.4` | `pdo_mysql` |
+| `mysql` | `database`, with the image `mysql:8.4` | `pdo_mysql` |
+| `pgsql` | `database`, with the image `postgres:18` | `pdo_pgsql` |
+| `sqlite` | none: the database is the file `storage/database.sqlite` | `pdo_sqlite`, which the `php` image has |
+
+With a database, `new` also writes:
+
+- `DbProvider.php` in the provider folder (`src/Providers` for MVC, `src/Provider` for
+  ADR). It registers the `db` service. The MVC front adds it in `providers()`. The ADR
+  front gets a `registerProviders()` override that calls it.
+- The connection values at the end of `.env`:
+
+      DB_HOST=database
+      DB_PORT=3306
+      DB_NAME=my_app
+      DB_USERNAME=my_app
+      DB_PASSWORD=secret
+      DB_PUBLISHED_PORT=3306
+
+  `DB_NAME` is the project name, with `_` in place of `-`, cut to 64 characters.
+  `DB_USERNAME` is the same name, cut to 32 characters. For `sqlite`, `.env` has only
+  `DB_NAME=storage/database.sqlite`, relative to the project root.
+- The service `database` in `docker-compose.yml`, with a named volume for its data and a
+  health check. The app service starts when the database accepts connections, so
+  `crest make:model` works right after `crest up` and `crest install`. The database
+  listens on the host only at `127.0.0.1`, on the port `DB_PUBLISHED_PORT`: other
+  computers cannot connect to it.
+- The PDO extension in `resources/docker/Dockerfile`.
+- `phalcon/phql` in `composer.json`, for an MVC project with Phalcon v6 (see "Generating
+  models").
+- For `sqlite`: the empty file `storage/database.sqlite` (an empty file is a valid SQLite
+  database), `storage/.gitkeep`, and `/storage/database.sqlite` in `.gitignore`.
+  `--force` does not replace a database file that exists: git ignores the file, so nothing
+  can restore its data.
+
+docker compose gives the values of `.env` to the app container. PHP on the host does not
+read `.env`: there, `DbProvider` uses its defaults, `127.0.0.1` and the published port.
+`DbProvider` reads each value from `getenv()`, then from `$_ENV`, then takes the default.
+A loader such as phpdotenv also reads `.env` on the host, and there `DB_HOST=database` is
+not a known host. Then give PHP on the host `DB_HOST=127.0.0.1` and `DB_PORT` (the
+published port) in its environment: `getenv()` wins over `$_ENV`. To run the project
+with PHP on the host, start only the database, and install the PDO extension on the
+host:
+
+    docker compose up -d database
+
+If the port is in use on the host, change `DB_PUBLISHED_PORT` in `.env`. Then PHP on the
+host needs `DB_PORT` with the same value in its environment. The MySQL and MariaDB images
+do not accept the user `root`, so a project with the name `root` needs another
+`DB_USERNAME`.
+
+The `db` service is shared, and it connects when the project uses it for the first time,
+for example at the first query of a model. Thus the project answers `GET /` when the
+database does not run, and a wrong value gives the connection error at the first use of
+`db`.
+
+With `mysql`, `mariadb` or `pgsql`, the app service cannot have the name `database`:
+
+    crest: the service 'database' is the name of the database service; choose another service name
+
+In an ADR project with a database, the front already has `registerProviders()`. For a new
+provider, add only the `provide()` line that `crest make:provider` prints.
+
+The service and the `.env` lines come from the project stubs `project-compose-mysql`,
+`project-compose-mariadb`, `project-compose-pgsql`, `project-env-database` and
+`project-env-sqlite`. To change one, for example the image, publish it by name in the
+directory that the projects go into:
+
+    crest stub:publish project-compose-mysql
+
+A copy of a project stub that you published before the database option does not have the
+new placeholders: `{{ dependsOn }}`, `{{ databaseService }}`, `{{ databaseInstall }}`,
+`{{ databaseEnv }}`, `{{ databaseIgnore }}`, `{{ phql }}`, `{{ dbUse }}`,
+`{{ dbProvider }}`, `{{ registerProviders }}` and `{{ models }}`. When the project needs
+one, `new` stops before it writes a file, and names the copy:
+
+    crest: the published stub /path/to/resources/stubs/shared/project-compose.stub has no {{ databaseService }}; publish it again with crest stub:publish project-compose --flavor=adr --force, and make your changes in it again
+
+Without a database and without `--camel-case`, such a copy works as before.
+
 ### Commands after `new`
 
 `new` can run commands after it writes the files, for example `crest up` and
@@ -327,6 +420,10 @@ questions, in this order, each with a proposal:
 Press Enter to accept a proposal. `--no-interaction` accepts all of them. `--force`
 overwrites an existing `crest.php`. If the project does not require crest, `init` prints
 the `composer require` line.
+
+For an MVC project, `init` also writes the `models` key of `crest.php`, with
+`'camelCase' => false`, so the models of the project keep their property names. See
+"Names".
 
 `init` needs a psr-4 entry in `composer.json`, because the generators get their
 namespaces from it. Without one, `init` stops and tells you to add one, for example
@@ -475,13 +572,14 @@ only from FOREIGN KEY constraints (see "Relations"):
 
 Crest reads the table through the `db` service of your project, so it starts
 your front controller: `crest.php` must name it in `bootstrap` (see "Commands
-that boot the project"). A project from `crest new --flavor=mvc` names
-`AppFront`, but it has no `db` service yet. Add a provider that registers one
-(`crest make:provider Db`).
+that boot the project"). A project from `crest new --flavor=mvc --database=<choice>`
+has the `db` service (see "The database"). For a project without one, add a
+provider that registers it (`crest make:provider Db`).
 
 With the `phalcon/phalcon` package (Phalcon v6), a model also needs
 `phalcon/phql`, because a model uses PHQL to find rows. The extension (Phalcon
-v5) has PHQL. Install the package in your project:
+v5) has PHQL. `crest new --database` adds the package to `composer.json`. For
+another project, install it:
 
     composer require phalcon/phql:1.0.x-dev
 
