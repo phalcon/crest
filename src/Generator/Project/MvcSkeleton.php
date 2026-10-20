@@ -21,7 +21,8 @@ use Crest\Project\Flavor;
 /**
  * The MVC project of `new`: IndexController and its view answer GET /. The
  * controllers extend the base that crest owns (ControllerBase, #46). Two
- * providers set the dispatcher and the view.
+ * providers set the dispatcher and the view. With a database, DbProvider sets
+ * the db service that make:model reads (#54).
  *
  * A stub that depends on the view engine has the engine name after the
  * prefix: project-<engine>-<part>. A view file has the engine name as its
@@ -29,6 +30,13 @@ use Crest\Project\Flavor;
  */
 final class MvcSkeleton implements Skeleton
 {
+    /**
+     * The requirement of PHQL in composer.json, after the requirement of
+     * Phalcon. A model finds rows with PHQL. The extension (v5) has it; the
+     * phalcon/phalcon package (v6) does not (#50).
+     */
+    private const PHQL = ",\n        \"phalcon/phql\": \"1.0.x-dev\"";
+
     /**
      * The controller that answers GET / with the default routes of the
      * router. GeneratedMvcProjectTest sends GET / through the generated
@@ -52,13 +60,19 @@ final class MvcSkeleton implements Skeleton
         $prefix   = Stub::PROJECT_PREFIX . $engine . '-';
         $provider = $this->path('provider');
         $views    = $this->path('views');
-
-        return [
+        $files    = [
             Stub::PROJECT_PREFIX . 'provider-dispatcher' => $provider . '/DispatcherProvider.php',
             $prefix . 'provider'                         => $provider . '/ViewProvider.php',
             $prefix . 'layout'                           => $views . '/index.' . $engine,
             $prefix . 'index'                            => $views . '/index/index.' . $engine,
         ];
+        $database = $answers->database->provider();
+
+        if (null !== $database) {
+            $files[$database] = $provider . '/DbProvider.php';
+        }
+
+        return $files;
     }
 
     public function flavor(): Flavor
@@ -97,11 +111,18 @@ final class MvcSkeleton implements Skeleton
 
     public function values(Answers $answers): array
     {
+        $none = DatabaseChoice::NONE === $answers->database;
+
         return [
             'baseFolder'          => ControllerBase::FOLDER,
             'controllerNamespace' => $this->controllerNamespace($answers),
             'controllerPath'      => $this->path('controller'),
-            'providerNamespace'   => $answers->namespace . '\\Providers',
+            'dbProvider'          => $this->dbProvider($answers->database),
+            'dbUse'               => true === $none
+                ? ''
+                : 'use ' . $this->providerNamespace($answers) . "\\DbProvider;\n",
+            'phql'                => true === $none || 'v6' !== $answers->phalcon ? '' : self::PHQL,
+            'providerNamespace'   => $this->providerNamespace($answers),
             'providerPath'        => $this->path('provider'),
             'seed'                => self::SEED,
             'viewsPath'           => $this->path('views'),
@@ -114,10 +135,31 @@ final class MvcSkeleton implements Skeleton
     }
 
     /**
+     * The line of DbProvider in providers() of the front, before
+     * DispatcherProvider. The SQLite provider gets the project root, because
+     * DB_NAME is relative to it.
+     */
+    private function dbProvider(DatabaseChoice $database): string
+    {
+        if (DatabaseChoice::NONE === $database) {
+            return '';
+        }
+
+        $root = DatabaseChoice::SQLITE === $database ? '$this->projectRoot' : '';
+
+        return '            new DbProvider(' . $root . "),\n";
+    }
+
+    /**
      * A default path of the flavor, relative to the project root.
      */
     private function path(string $key): string
     {
         return Config::defaultPaths(Flavor::MVC)[$key];
+    }
+
+    private function providerNamespace(Answers $answers): string
+    {
+        return $answers->namespace . '\\Providers';
     }
 }

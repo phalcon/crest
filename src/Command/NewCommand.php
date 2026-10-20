@@ -22,6 +22,8 @@ use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
 use Crest\Generator\Project\Answers;
+use Crest\Generator\Project\DatabaseChoice;
+use Crest\Generator\Project\Skeleton;
 use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Stub;
 use Crest\Paths;
@@ -36,6 +38,7 @@ use Crest\Project\Steps;
 use FilesystemIterator;
 use Throwable;
 
+use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_slice;
@@ -55,6 +58,7 @@ use function strtolower;
 use function var_export;
 use function version_compare;
 
+use const ARRAY_FILTER_USE_KEY;
 use const PHP_BINARY;
 
 /**
@@ -71,10 +75,12 @@ use const PHP_BINARY;
  *
  * By default, it runs nothing: no composer, no docker, no network. The `new`
  * key of crest.php can list commands that it runs after it writes the files
- * (Steps). It checks all its input before it writes the first file. The `new`
- * key is the exception: it reads the key from the crest.php that it writes,
- * so it checks the key after the write. Only a write error, for example a
- * full disk, can stop it after it has written some of the files.
+ * (Steps). It checks all its input before it writes the first file, also the
+ * published project stubs: a copy without a placeholder that the project
+ * needs stops it (checkPlaceholders()). The `new` key is the exception: it
+ * reads the key from the crest.php that it writes, so it checks the key after
+ * the write. Only a write error, for example a full disk, can stop it after
+ * it has written some of the files.
  */
 final class NewCommand extends Command
 {
@@ -142,6 +148,23 @@ final class NewCommand extends Command
      */
     private const PHP_FLOOR = '8.1';
 
+    /**
+     * The placeholders of #54, and the project stub of each. A copy of a stub
+     * that a team published before #54 does not have them (spec 3.5).
+     */
+    private const PLACEHOLDERS = [
+        'databaseEnv'       => 'env',
+        'databaseIgnore'    => 'gitignore',
+        'databaseInstall'   => 'dockerfile',
+        'databaseService'   => 'compose',
+        'dbProvider'        => 'front',
+        'dbUse'             => 'front',
+        'dependsOn'         => 'compose',
+        'models'            => 'config',
+        'phql'              => 'composer',
+        'registerProviders' => 'front',
+    ];
+
     private readonly Runner $runner;
 
     /**
@@ -185,6 +208,8 @@ final class NewCommand extends Command
             ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
             ->option('runtime=s', 'Where the project commands run: host or docker. Default: docker')
             ->option('service=s', 'The docker compose service, for docker. Default: app')
+            ->option('database=s', 'The database: none, mariadb, mysql, pgsql or sqlite', 'none')
+            ->option('camel-case', 'MVC: property names in camelCase (models.camelCase of crest.php)')
             ->option('force', 'Write into a directory that is not empty, and overwrite files with the same names');
     }
 
@@ -243,7 +268,18 @@ final class NewCommand extends Command
             $input->optionStringOrNull('service')
         );
 
-        $answers = new Answers($name, $flavor, $namespace, $php, $variant, $runtime, $engine);
+        $database = DatabaseChoice::select(
+            true === $input->hasOption('database')
+                ? $input->optionString('database')
+                : $output->choice('Database', DatabaseChoice::names(), $input->optionString('database'))
+        );
+
+        $camelCase = $this->camelCase($input, $output, $flavor, $database);
+
+        // After the questions, and before the first write.
+        $this->checkService($runtime, $database);
+
+        $answers = new Answers($name, $flavor, $namespace, $php, $variant, $runtime, $engine, $database);
 
         // Overrides come from the directory that the project goes into. A
         // team that publishes the project stubs there gets its own
@@ -257,7 +293,8 @@ final class NewCommand extends Command
             $namespace,
             $namespace . '\\' . Layout::FRONT,
             Config::defaultPaths($flavor),
-            $runtime
+            $runtime,
+            $camelCase
         );
 
         $replacements = [
@@ -283,8 +320,13 @@ final class NewCommand extends Command
             // The prefix of each line of the extension install in the
             // Dockerfile: active for v5, commented out for v6.
             'v5'                => 'v5' === $variant ? '' : '# ',
+            ...$database->values($stub, $flavor->value, $name),
             ...$skeleton->values($answers),
         ];
+
+        // A published copy from before #54 stops here, before the first
+        // write, when the project needs one of its new placeholders.
+        $this->checkPlaceholders($stub, $flavor->value, $replacements, $camelCase);
 
         // All files render before the first write. A published stub that does
         // not render then stops the command before it writes a file.
@@ -300,8 +342,19 @@ final class NewCommand extends Command
             );
         }
 
-        // The first artifacts of the flavor, from the stubs of its generators.
-        $files = [...$files, ...$skeleton->seed($stub, $answers)];
+        // The first artifacts of the flavor, from the stubs of its
+        // generators, and the files of the database that no stub renders.
+        // A file of the database that exists stays: git ignores the SQLite
+        // file, so nothing can restore its data.
+        $files = [
+            ...$files,
+            ...$skeleton->seed($stub, $answers),
+            ...array_filter(
+                $database->files(),
+                static fn (string $path): bool => false === file_exists($target . '/' . $path),
+                ARRAY_FILTER_USE_KEY
+            ),
+        ];
 
         // guard() has refused a directory that is not empty, unless --force
         // is given. Thus a file that exists here can be overwritten.
@@ -321,12 +374,35 @@ final class NewCommand extends Command
         $steps = $this->steps($target, $shown, $stub, $flavor->value);
 
         if ([] === $steps) {
-            $this->report($output, $shown, $skeleton->entry());
+            $this->report($output, $shown, $skeleton, $database);
 
             return 0;
         }
 
         return $this->runSteps($output, $steps, $target, $shown);
+    }
+
+    /**
+     * The models.camelCase answer of an MVC project. Null for ADR: make:model
+     * is MVC only, so crest.php gets no models key. --camel-case answers it.
+     * A project without a database has no tables yet, so it gets false with
+     * no question.
+     */
+    private function camelCase(Input $input, Output $output, Flavor $flavor, DatabaseChoice $database): ?bool
+    {
+        if (Flavor::MVC !== $flavor) {
+            return null;
+        }
+
+        if (true === $input->option('camel-case')) {
+            return true;
+        }
+
+        if (DatabaseChoice::NONE === $database) {
+            return false;
+        }
+
+        return 'yes' === $output->choice('Property names in camelCase', ['no', 'yes'], 'no');
     }
 
     /**
@@ -350,6 +426,60 @@ final class NewCommand extends Command
                 )
             );
         }
+    }
+
+    /**
+     * Each placeholder of PLACEHOLDERS that has a value must be in the stub
+     * that crest uses: render() drops a value that has no placeholder, and
+     * the project would lose its database service, or its models key, with
+     * no message. An empty value is not lost, so an old copy works for a
+     * project without a database. The models key with camelCase false says
+     * what make:model does with no key, so only true needs the placeholder.
+     *
+     * @param array<string, string> $replacements
+     */
+    private function checkPlaceholders(Stub $stub, string $flavor, array $replacements, ?bool $camelCase): void
+    {
+        foreach (self::PLACEHOLDERS as $placeholder => $file) {
+            $name   = Stub::PROJECT_PREFIX . $file;
+            $needed = 'models' === $placeholder
+                ? true === $camelCase
+                : '' !== ($replacements[$placeholder] ?? '');
+
+            if (false === $needed || true === $stub->hasPlaceholder($flavor, $name, $placeholder)) {
+                continue;
+            }
+
+            throw new Exception(
+                sprintf(
+                    'the published stub %s has no {{ %s }}; publish it again with crest stub:publish %s '
+                    . '--flavor=%s --force, and make your changes in it again',
+                    $stub->resolve($flavor, $name),
+                    $placeholder,
+                    $name,
+                    $flavor
+                )
+            );
+        }
+    }
+
+    /**
+     * The app service cannot have the name of the database service: compose
+     * would have one service for two. The host runtime always has app, so
+     * only a docker answer can fail.
+     */
+    private function checkService(Runtime $runtime, DatabaseChoice $database): void
+    {
+        if (false === $database->hasService() || DatabaseChoice::SERVICE !== $runtime->service) {
+            return;
+        }
+
+        throw new Exception(
+            sprintf(
+                "the service '%s' is the name of the database service; choose another service name",
+                DatabaseChoice::SERVICE
+            )
+        );
     }
 
     /**
@@ -457,9 +587,9 @@ final class NewCommand extends Command
     /**
      * Both ways to run the project, always. The generated files are the same
      * on every host. Only this text names the two ways, so nothing here
-     * examines the environment.
+     * examines the environment. The lines of the database come last.
      */
-    private function report(Output $output, string $shown, string $entry): void
+    private function report(Output $output, string $shown, Skeleton $skeleton, DatabaseChoice $database): void
     {
         // Quoted when the path has a space, so that the line works when pasted.
         $cd = '    cd ' . $this->quote($shown);
@@ -476,7 +606,34 @@ final class NewCommand extends Command
         $output->line('    composer install');
         $output->line('    crest serve');
         $output->line();
-        $output->line(sprintf('Then GET / answers from %s', $entry));
+        $output->line(sprintf('Then GET / answers from %s', $skeleton->entry()));
+
+        if (DatabaseChoice::NONE === $database) {
+            return;
+        }
+
+        $output->line();
+
+        if (true === $database->hasService()) {
+            $output->line(
+                sprintf(
+                    "The database: %s, in the docker service '%s'. The values are in .env.",
+                    $database->value,
+                    DatabaseChoice::SERVICE
+                )
+            );
+            $output->line('On the host, start it with: docker compose up -d ' . DatabaseChoice::SERVICE);
+            $output->line(sprintf('PHP on the host also needs %s.', $database->extension()));
+        }
+
+        if (DatabaseChoice::SQLITE === $database) {
+            $output->line(sprintf('The database: sqlite, in %s.', DatabaseChoice::SQLITE_FILE));
+        }
+
+        // make:model is MVC only.
+        if (Flavor::MVC === $skeleton->flavor()) {
+            $output->line('Then crest make:model <table> reads it.');
+        }
     }
 
     /**

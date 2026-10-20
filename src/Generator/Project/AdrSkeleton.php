@@ -17,9 +17,12 @@ use Crest\Generator\Stub;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
 
+use function sprintf;
+
 /**
  * The ADR project of `new`: a seed action answers GET /. ADR has no views,
- * so it has no engines.
+ * so it has no engines. With a database, DbProvider sets the db service, and
+ * the front registers it in registerProviders() (#54).
  */
 final class AdrSkeleton implements Skeleton
 {
@@ -43,7 +46,9 @@ final class AdrSkeleton implements Skeleton
 
     public function files(Answers $answers): array
     {
-        return [];
+        $database = $answers->database->provider();
+
+        return null === $database ? [] : [$database => $this->providerPath() . '/DbProvider.php'];
     }
 
     public function flavor(): Flavor
@@ -74,9 +79,13 @@ final class AdrSkeleton implements Skeleton
     public function values(Answers $answers): array
     {
         return [
-            'actionNamespace' => $this->actionNamespace($answers),
-            'actionPath'      => $this->actionPath(),
-            'seed'            => self::SEED,
+            'actionNamespace'   => $this->actionNamespace($answers),
+            'actionPath'        => $this->actionPath(),
+            // make:model is MVC only: an ADR project needs no PHQL.
+            'phql'              => '',
+            'providerNamespace' => $this->providerNamespace($answers),
+            'registerProviders' => $this->registerProviders($answers),
+            'seed'              => self::SEED,
         ];
     }
 
@@ -92,5 +101,43 @@ final class AdrSkeleton implements Skeleton
     private function actionPath(): string
     {
         return Config::defaultPaths(Flavor::ADR)['action'];
+    }
+
+    private function providerNamespace(Answers $answers): string
+    {
+        return $answers->namespace . '\\Provider';
+    }
+
+    /**
+     * Where the providers go, relative to the project root.
+     */
+    private function providerPath(): string
+    {
+        return Config::defaultPaths(Flavor::ADR)['provider'];
+    }
+
+    /**
+     * The registerProviders() override of the front, after getApplication(),
+     * in the form that make:provider prints. The full class name means that
+     * the front needs no new use line. The SQLite provider gets the project
+     * root, because DB_NAME is relative to it. Empty without a database.
+     */
+    private function registerProviders(Answers $answers): string
+    {
+        if (DatabaseChoice::NONE === $answers->database) {
+            return '';
+        }
+
+        return sprintf(
+            "\n"
+            . "    protected function registerProviders(Container \$container): void\n"
+            . "    {\n"
+            . "        parent::registerProviders(\$container);\n"
+            . "\n"
+            . "        (new \\%s\\DbProvider(%s))->provide(\$container);\n"
+            . "    }\n",
+            $this->providerNamespace($answers),
+            DatabaseChoice::SQLITE === $answers->database ? '$this->projectRoot' : ''
+        );
     }
 }

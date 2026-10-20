@@ -37,6 +37,7 @@ final class Answers
         public readonly string $phalcon,
         public readonly Runtime $runtime,
         public readonly ?string $engine,
+        public readonly DatabaseChoice $database,
     ) {
     }
 }
