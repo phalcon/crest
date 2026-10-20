@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit\Generator\Project;
 
 use Crest\Generator\Project\AdrSkeleton;
 use Crest\Generator\Project\Answers;
+use Crest\Generator\Project\DatabaseChoice;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Flavor;
@@ -23,6 +24,39 @@ use PHPUnit\Framework\TestCase;
 
 final class AdrSkeletonTest extends TestCase
 {
+    public function testADatabaseAddsItsProvider(): void
+    {
+        $this->assertSame(
+            ['project-provider-db' => 'src/Provider/DbProvider.php'],
+            (new AdrSkeleton())->files($this->answers(DatabaseChoice::MYSQL))
+        );
+        $this->assertSame(
+            ['project-provider-db-sqlite' => 'src/Provider/DbProvider.php'],
+            (new AdrSkeleton())->files($this->answers(DatabaseChoice::SQLITE))
+        );
+    }
+
+    public function testADatabaseGivesTheFrontARegisterProvidersOverride(): void
+    {
+        // The form that make:provider prints, with the full class name: the
+        // front needs no new use line.
+        $this->assertSame(
+            "\n"
+            . "    protected function registerProviders(Container \$container): void\n"
+            . "    {\n"
+            . "        parent::registerProviders(\$container);\n"
+            . "\n"
+            . "        (new \\Acme\\Shop\\Provider\\DbProvider())->provide(\$container);\n"
+            . "    }\n",
+            (new AdrSkeleton())->values($this->answers(DatabaseChoice::MARIADB))['registerProviders']
+        );
+        // The SQLite file is relative to the project root.
+        $this->assertStringContainsString(
+            "(new \\Acme\\Shop\\Provider\\DbProvider(\$this->projectRoot))->provide(\$container);\n",
+            (new AdrSkeleton())->values($this->answers(DatabaseChoice::SQLITE))['registerProviders']
+        );
+    }
+
     public function testItHasNoEngines(): void
     {
         $this->assertFalse((new AdrSkeleton())->engines()->hasEngines());
@@ -70,16 +104,19 @@ final class AdrSkeletonTest extends TestCase
     {
         $this->assertSame(
             [
-                'actionNamespace' => 'Acme\\Shop\\Action',
-                'actionPath'      => 'src/Action',
-                'seed'            => 'Get',
+                'actionNamespace'   => 'Acme\\Shop\\Action',
+                'actionPath'        => 'src/Action',
+                'phql'              => '',
+                'providerNamespace' => 'Acme\\Shop\\Provider',
+                'registerProviders' => '',
+                'seed'              => 'Get',
             ],
             (new AdrSkeleton())->values($this->answers())
         );
     }
 
-    private function answers(): Answers
+    private function answers(DatabaseChoice $database = DatabaseChoice::NONE): Answers
     {
-        return new Answers('shop', Flavor::ADR, 'Acme\\Shop', '8.4', 'v5', Runtime::docker(), null);
+        return new Answers('shop', Flavor::ADR, 'Acme\\Shop', '8.4', 'v5', Runtime::docker(), null, $database);
     }
 }
