@@ -310,8 +310,9 @@ final class Config implements ProjectContext
 
     /**
      * The `models` key of crest.php, as the file has it, or [] (#53).
-     * make:model checks it (Crest\Generator\ModelNames): Crest\Project does
-     * not import Crest\Generator (#48), and a bad value stops only make:model.
+     * make:model and config:show check it (Crest\Generator\ModelNames):
+     * Crest\Project does not import Crest\Generator (#48), and a bad value
+     * stops only make:model.
      */
     public function models(): mixed
     {
