@@ -266,6 +266,15 @@ final class ModelNamesTest extends TestCase
         $this->assertSame($expected, ModelNames::of(['camelCase' => true])->propertyOf('t', $column));
     }
 
+    public function testCamelCaseGivesTheValue(): void
+    {
+        // A null value counts as no value (#53).
+        $this->assertTrue(ModelNames::of(['camelCase' => true])->camelCase());
+        $this->assertFalse(ModelNames::of(['camelCase' => false])->camelCase());
+        $this->assertFalse(ModelNames::of(['camelCase' => null])->camelCase());
+        $this->assertFalse(ModelNames::of([])->camelCase());
+    }
+
     public function testCamelCaseIsOffByDefault(): void
     {
         $this->assertSame('first_name', ModelNames::of([])->propertyOf('t', 'first_name'));
