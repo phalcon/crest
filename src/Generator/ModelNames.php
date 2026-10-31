@@ -243,6 +243,14 @@ final class ModelNames
     }
 
     /**
+     * models.camelCase, for config:show (#71).
+     */
+    public function camelCase(): bool
+    {
+        return $this->camelCase;
+    }
+
+    /**
      * The line of models.classes, else ClassName::fromTable(), which stops
      * for a table that gives no usable class.
      */
@@ -295,7 +303,9 @@ final class ModelNames
     }
 
     /**
-     * The tables of models.classes, for the notes of --all (ModelTables).
+     * The tables of models.classes, as strings: for the notes of --all
+     * (ModelTables), for config:show, and for the old files of make:model
+     * (#71).
      *
      * @return list<string>
      */

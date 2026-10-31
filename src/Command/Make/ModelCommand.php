@@ -18,7 +18,9 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Generator\ArtifactWriter;
 use Crest\Generator\BaseAttributes;
+use Crest\Generator\ClassName;
 use Crest\Generator\ForeignKeys;
 use Crest\Generator\ModelNames;
 use Crest\Generator\ModelProperties;
@@ -39,13 +41,17 @@ use function array_map;
 use function array_values;
 use function count;
 use function explode;
+use function file_get_contents;
 use function implode;
 use function in_array;
+use function is_file;
 use function max;
 use function sprintf;
+use function str_contains;
 use function str_pad;
 use function strlen;
 use function strrpos;
+use function strtolower;
 use function substr;
 use function trim;
 use function var_export;
@@ -71,7 +77,8 @@ use function var_export;
  * a PropertyName attribute on the base, or models.camelCase. A property that
  * does not have the name of its column gives a columnMap() in the base. When
  * a property name changes, crest says so, and names the tables whose
- * relations use it.
+ * relations use it. When a line of models.classes gives a table a new class,
+ * the old model and base stay, and crest names them in a Note line (#71).
  *
  * The work for one table has two phases. The read phase reads the columns,
  * the base, the names and the relations, and changes no file. The write phase
@@ -94,6 +101,7 @@ use function var_export;
  *     map: array<string, string>,
  *     names: array<string, string>,
  *     namespace: string,
+ *     note: string|null,
  *     properties: array<string, string>,
  *     relations: ModelRelations,
  *     renamed: array<string, array{string, string}>|null,
@@ -115,6 +123,15 @@ final class ModelCommand extends ProjectCommand
 
     private const NO_KEYS = 'No relations for %s: the table has no foreign keys, and no foreign keys point to it. '
         . 'Relations come only from foreign keys.';
+
+    /**
+     * The Note line for the old files of a table whose class now comes from
+     * models.classes (#71): with only the old base, and with the old model
+     * and the old base. The last %s is the end of the line.
+     */
+    private const OLD_FILE = 'Note: the old file of %s stays: %s; move your code to %s, delete it%s';
+
+    private const OLD_FILES = 'Note: the old files of %s stay: %s and %s; move your code to %s, delete them%s';
 
     /**
      * The stubs that a base with a columnMap() needs, with the placeholder
@@ -167,6 +184,18 @@ final class ModelCommand extends ProjectCommand
     }
 
     /**
+     * The class of the table, or null for a table that gives no class.
+     */
+    private static function classOrNull(ModelNames $names, string $table): ?string
+    {
+        try {
+            return $names->classOf($table);
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /**
      * The names of --property: column => name (spec 3.1). Each item is split
      * at its last `=`, and the spaces at the start and the end of each part
      * go, as for --exclude.
@@ -215,6 +244,73 @@ final class ModelCommand extends ProjectCommand
         }
 
         return false;
+    }
+
+    /**
+     * The Note line for the old files of the table (#71), or null. The class
+     * of the table comes from models.classes, so crest writes a new model and
+     * a new base, and the old files stay. There is a line only when:
+     *
+     * 1. the table gives a default class;
+     * 2. no table gives the default class, without regard to case. The
+     *    tables are the tables of models.classes and of the database, and
+     *    ForeignKeys::read() puts the table itself in them. When the table
+     *    itself gives the default class, there are no old files: PHP sees
+     *    User and USER as one class, and a file system that ignores case
+     *    sees one file. When another table gives it, the old base can be
+     *    the base of that table;
+     * 3. the old base exists and has ArtifactWriter::MARKER.
+     *
+     * The line also names the related tables that give a class and that this
+     * run does not write: their bases have relations with the old class.
+     *
+     * @param list<string> $written The tables that this run writes
+     */
+    private static function oldFiles(
+        ModelNames $names,
+        ForeignKeys $keys,
+        string $table,
+        string $class,
+        string $path,
+        array $written
+    ): ?string {
+        try {
+            $default = ClassName::fromTable($table);
+        } catch (Exception) {
+            return null;
+        }
+
+        foreach ([...$names->mapped(), ...$keys->tables()] as $other) {
+            $found = self::classOrNull($names, $other);
+
+            if (null !== $found && strtolower($found) === strtolower($default)) {
+                return null;
+            }
+        }
+
+        // Suppressed: a missing or unreadable old base gives no line. The
+        // line is information, so it does not stop the command.
+        $base     = self::baseFile($path, $default);
+        $contents = @file_get_contents($base);
+
+        if (false === $contents || false === str_contains($contents, ArtifactWriter::MARKER)) {
+            return null;
+        }
+
+        $run = [];
+
+        foreach (array_diff($keys->related($table), $written) as $other) {
+            if (null !== self::classOrNull($names, $other)) {
+                $run[] = $other;
+            }
+        }
+
+        $then  = [] === $run ? '' : ', then run make:model for ' . Sentence::join($run);
+        $model = $path . '/' . $default . '.php';
+
+        return true === is_file($model)
+            ? sprintf(self::OLD_FILES, $table, $model, $base, $class, $then)
+            : sprintf(self::OLD_FILE, $table, $base, $class, $then);
     }
 
     /**
@@ -588,6 +684,7 @@ final class ModelCommand extends ProjectCommand
             'map'           => true === $mapped ? $final : [],
             'names'         => $final,
             'namespace'     => $namespace,
+            'note'          => self::oldFiles($names, $keys, $table, $class, $path, $written),
             'properties'    => $columns,
             'relations'     => $relations,
             'renamed'       => $renamed,
@@ -751,11 +848,15 @@ final class ModelCommand extends ProjectCommand
 
         if (Outcome::Kept === $outcome) {
             $output->line(sprintf('Kept %s: it exists; pass --force to replace it', $parts['file']));
-
-            return $outcome;
+        } else {
+            $output->success(sprintf('Created %s', $parts['file']));
         }
 
-        $output->success(sprintf('Created %s', $parts['file']));
+        // The old files of the table stay: the developer moves the code and
+        // deletes them (#71).
+        if (null !== $parts['note']) {
+            $output->line($parts['note']);
+        }
 
         return $outcome;
     }

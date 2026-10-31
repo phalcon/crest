@@ -202,7 +202,8 @@ return [
 `models` changes the names that `make:model` gives in an MVC project: `classes`
 gives a class to a table, and `camelCase` gives camelCase property names. `crest new`
 and `crest init` write the key for an MVC project, with `'camelCase' => false`;
-`crest new --camel-case` gives `true`. See "Names" in [docs/index.md](docs/index.md):
+`crest new --camel-case` gives `true`. `crest config:show` shows the key. See
+"Names" in [docs/index.md](docs/index.md):
 
 ```php
 return [
