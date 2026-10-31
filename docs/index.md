@@ -661,20 +661,50 @@ return [
 ];
 ```
 
+In an MVC project, `crest config:show` shows the key: the row `camelCase`, with
+its origin, and a table with each line of `classes`, sorted by table:
+
+    ITEM       VALUE          ORIGIN
+    ...
+    service    app            default
+    camelCase  true           declared
+
+    PATH        LOCATION                   ORIGIN
+    ...
+
+    TABLE          CLASS
+    user-profiles  UserProfile
+    users          User
+
+When the key is not correct, `config:show` shows the error in a `models` row,
+and `make:model` stops on it:
+
+    service    app                                                default
+    models     crest.php: models.camelCase must be true or false  declared
+
 **Classes.** `classes` gives a class to a table. Write a line only for each
 table whose class you want to change: the other tables keep the class of their
-name (`users` gives `Users`). The table name must be exact, with the same case.
-A line also gives a class to a table whose name gives none (`user-profiles`), or
-gives a name that PHP reserves (`list`), also with `--all`. With `--all`, a line
-for a table that the database does not have gives a note:
+name. Crest does not make a singular class name: `users` gives `Users`, not
+`User`. For `User`, write the line `'users' => 'User'`. The table name must be
+exact, with the same case. A line also gives a class to a table whose name gives
+none (`user-profiles`), or gives a name that PHP reserves (`list`), also with
+`--all`. With `--all`, a line for a table that the database does not have gives a
+note:
 
     Note: models.classes names the table Users, which the database does not have; did you mean users?
 
 When you add a line for a table that has a model, crest writes a new base and a
-new model (`UserBase.php`, `User.php`), and keeps the old files. Move your code
-to the new model, delete the old files, and run `make:model` for the tables that
-have relations with the table. The new base does not get the `PropertyName`
-attributes of the old base: give the names again with `--property`.
+new model (`UserBase.php`, `User.php`), and keeps the old files. A note names
+the old files, and the tables that have relations with the table:
+
+    Note: the old files of users stay: src/Models/Users.php and src/Models/Base/UsersBase.php; move your code to User, delete them, then run make:model for invoices
+
+Move your code to the new model, delete the old files, and run `make:model` for
+the tables of the note. Crest prints the note on each run until you delete the
+old files. With `--all`, the note names only the related tables that the run
+does not write, such as the tables of `--exclude`. The new base does not get the
+`PropertyName` attributes of the old base: give the names again with
+`--property`.
 
 **camelCase.** With `'camelCase' => true`, each property gets the camelCase form
 of its column: crest splits the column at each `_`, makes the first letter of
