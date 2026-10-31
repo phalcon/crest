@@ -141,6 +141,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `route:list` gets the HTTP method from the router, not from the class name. [#1](https://github.com/phalcon/crest/issues/1)
 - `bin/crest` loads the autoloader of its install, not the one in a dev checkout. A global crest from a symlinked path repository passes project commands to the crest of the project. [#33](https://github.com/phalcon/crest/issues/33)
 - The error `no answer; input ended` starts on its own line. [#42](https://github.com/phalcon/crest/issues/42)
+- The `Run make:model ... too` line of `make:model` no longer names a table that gets no class: such a table has no base to change, and `make:model` stops for it. [#71](https://github.com/phalcon/crest/issues/71)
 
 ### Removed
 

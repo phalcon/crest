@@ -25,6 +25,7 @@ use Crest\Tests\Support\Migrations\OrdersMigration;
 use Crest\Tests\Support\Migrations\PeopleMigration;
 use Crest\Tests\Support\Migrations\PetsMigration;
 use Crest\Tests\Support\Migrations\TotalsMigration;
+use Crest\Tests\Support\Migrations\TwoFactorCodesMigration;
 use Crest\Tests\Support\Migrations\UserProfilesDashMigration;
 use Crest\Tests\Support\Migrations\UsersMigration;
 use Crest\Tests\Support\Project\DatabaseFront;
@@ -511,6 +512,29 @@ final class ModelCommandNamesTest extends AbstractDatabaseTestCase
         $this->assertStringContainsString("            'it\\'s_id' => 'authorId',\n", $base);
         $this->assertStringContainsString("            'authorId',\n", $base);
         $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
+    }
+
+    public function testARenamedColumnDoesNotNameATableThatGetsNoClass(): void
+    {
+        // 2fa_codes has a key to users(id), but its name gives no class: it
+        // has no base to change, and make:model stops for it.
+        $this->front(DatabaseFront::class);
+        $this->createTables(UsersMigration::class, TwoFactorCodesMigration::class);
+        $this->runCommand(['users']);
+        $this->freshStreams();
+
+        $status = $this->runCommand(['users', '--property=id=code']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'Updated ' . $this->model('Base/UsersBase.php') . PHP_EOL
+            . 'Renamed $id to $code: change the code that uses it' . PHP_EOL
+            . 'Skipped the relation hasMany 2fa_codes(user_id) -> users(id): '
+            . "'2fa_codes' gives no usable class name; expected a table name like 'users' or 'user_profiles'"
+            . PHP_EOL
+            . 'Kept ' . $this->model('Users.php') . ': it exists; pass --force to replace it' . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testARenamedColumnNamesEachTableThatUsesIt(): void

@@ -36,6 +36,7 @@ use Crest\Project\Database;
 use Crest\Project\Flavor;
 
 use function array_diff;
+use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_values;
@@ -689,8 +690,12 @@ final class ModelCommand extends ProjectCommand
             'relations'     => $relations,
             'renamed'       => $renamed,
             // The tables whose relations use a renamed column, and that this
-            // run does not write (decision 6).
-            'run'           => array_values(array_diff($keys->using($table, self::strings($renamed ?? [])), $written)),
+            // run does not write (decision 6). A table that gives no class has
+            // no base to change.
+            'run'           => array_values(array_filter(
+                array_diff($keys->using($table, self::strings($renamed ?? [])), $written),
+                static fn (string $other): bool => null !== self::classOrNull($names, $other)
+            )),
             'table'         => $table,
         ];
     }
