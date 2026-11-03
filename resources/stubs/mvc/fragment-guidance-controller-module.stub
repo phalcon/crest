@@ -1,0 +1,5 @@
+The {{ module }} module finds it: its Module class sets the default namespace
+of the dispatcher to {{ namespace }}.
+
+With the routes from make:module, GET /{{ module }}/{{ route }}/index runs
+indexAction(). Its view is {{ route }}/index in the views folder of the module.
