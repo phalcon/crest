@@ -78,6 +78,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `models` key to the `crest.php` that `new` and `init` write for an MVC project. `new --camel-case` gives `'camelCase' => true`, and `new` asks for it for an MVC project with a database; `init` writes `false`. [#54](https://github.com/phalcon/crest/issues/54)
 - Added the `models` key to `config:show` in an MVC project: a `camelCase` row with its origin, and a `TABLE CLASS` table with each line of `models.classes`, sorted by table. A wrong key gives one `models` row with the error; `config:show` still exits with 0, and `make:model` stops on the error. Added `Crest\Generator\ModelNames::camelCase()`. [#71](https://github.com/phalcon/crest/issues/71)
 - Added a `Note` line to `make:model` for a table whose class comes from `models.classes`: it names the old model and base, which crest keeps, and the related tables to run `make:model` for again. [#71](https://github.com/phalcon/crest/issues/71)
+- Added `make:module` for MVC projects: it writes `Module.php` (a class that implements `Phalcon\Mvc\ModuleDefinitionInterface`) and the folders `Controllers`, `Models` and `views` in the `module` path (`src/Modules`), and prints how to register the module and its routes. An existing `Module.php` stops the command; `--force` replaces only that file. Added the `module` default path, the MVC stubs `module`, `fragment-guidance-module` and `fragment-guidance-controller-module`, `Crest\Generator\ModuleLocation` and `Crest\Generator\ArtifactWriter::directory()`. [#55](https://github.com/phalcon/crest/issues/55)
+- Added `--module=<name>` to `make:controller` and `make:model`: they write into the module, with its namespace. The relations of a model in a module name models in the same module. [#55](https://github.com/phalcon/crest/issues/55)
 
 ### Changed
 
@@ -130,6 +132,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the lines of `make:model` for an alias with the name of a property of the table: they say `has the name of a property`, not `has the name of a column`, because a property can have a name that is not the name of its column. [#53](https://github.com/phalcon/crest/issues/53)
 - Changed the project stubs `project-compose`, `project-dockerfile`, `project-env`, `project-gitignore`, `project-composer`, `project-config` and `project-front` (ADR and MVC): they have new placeholders. When the project needs one, `new` stops before it writes a file if a published copy does not have it: publish the stub again. Without a database and without `--camel-case`, an old copy works as before. [#54](https://github.com/phalcon/crest/issues/54)
 - Changed `new`: in a terminal, it asks for the database, so a script that sends answers to `new` needs one more line. `Crest\Generator\Project\Answers` has a new last argument `database`, and `Crest\Project\Settings` a new last argument `camelCase`. [#54](https://github.com/phalcon/crest/issues/54)
+- Changed `init`: for an MVC project, it also asks for the `module` folder, so a script that sends answers to `init` needs one more line. `new` writes the `module` path into the `crest.php` of an MVC project. [#55](https://github.com/phalcon/crest/issues/55)
 
 ### Fixed
 

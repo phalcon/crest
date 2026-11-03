@@ -1113,6 +1113,7 @@ final class NewCommandTest extends TestCase
             . "        'command'    => 'src/Command',\n"
             . "        'controller' => 'src/Controllers',\n"
             . "        'model'      => 'src/Models',\n"
+            . "        'module'     => 'src/Modules',\n"
             . "        'provider'   => 'src/Providers',\n"
             . "        'views'      => 'themes/default',\n"
             . "    ],\n"

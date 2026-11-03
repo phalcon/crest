@@ -26,6 +26,7 @@ use Crest\Generator\ModelNames;
 use Crest\Generator\ModelProperties;
 use Crest\Generator\ModelRelations;
 use Crest\Generator\ModelTables;
+use Crest\Generator\ModuleLocation;
 use Crest\Generator\Outcome;
 use Crest\Generator\PropertyNames;
 use Crest\Generator\RelationAliases;
@@ -63,15 +64,15 @@ use function var_export;
  *
  * crest reads the table through the `db` service of the project
  * (Database::adapter()), so crest and the model read the same database. The
- * base that crest owns (<Class>Base in the Base subfolder of the `model` path)
- * has a typed nullable property for each column, the name of the table, and
- * the relations from the foreign keys (ModelRelations, #51). Each relation
- * has a RelationAlias attribute on the base, and the developer can change its
- * alias there (RelationAliases). crest writes the base again when the table
- * or its keys change (ArtifactWriter::renderOwned()). The model extends the
- * base, and crest writes it one time (ArtifactWriter::renderOnce()). So
- * another run brings the model up to date with its table, and the code of the
- * developer does not change.
+ * base that crest owns (<Class>Base in the Base subfolder of the folder of the
+ * models) has a typed nullable property for each column, the name of the
+ * table, and the relations from the foreign keys (ModelRelations, #51). Each
+ * relation has a RelationAlias attribute on the base, and the developer can
+ * change its alias there (RelationAliases). crest writes the base again when
+ * the table or its keys change (ArtifactWriter::renderOwned()). The model
+ * extends the base, and crest writes it one time (ArtifactWriter::renderOnce()).
+ * So another run brings the model up to date with its table, and the code of
+ * the developer does not change.
  *
  * The names (#53) come from ModelNames: the class of a table from
  * models.classes in crest.php, and the property of a column from --property,
@@ -88,6 +89,11 @@ use function var_export;
  * A crest error in the read phase fails only its table: crest prints the
  * reason, goes to the next table, and lists the failed tables in the summary.
  *
+ * With --module (#55), the models and their bases go into the Models folder
+ * of the module, in its namespace (ModuleLocation), and the relations name
+ * models in the same module. The lines that tell the developer to run
+ * make:model again name the option too.
+ *
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
  *
@@ -97,6 +103,7 @@ use function var_export;
  *     baseFile: string,
  *     baseNamespace: string,
  *     class: string,
+ *     command: string,
  *     dropped: list<string>,
  *     file: string,
  *     map: array<string, string>,
@@ -144,7 +151,8 @@ final class ModelCommand extends ProjectCommand
     ];
 
     /**
-     * The base of a class, in the Base subfolder of the `model` path.
+     * The base of a class, in the Base subfolder of the folder of the models:
+     * the `model` path, or the Models folder of the module.
      */
     private static function baseFile(string $path, string $class): string
     {
@@ -194,6 +202,32 @@ final class ModelCommand extends ProjectCommand
         } catch (Exception) {
             return null;
         }
+    }
+
+    /**
+     * The command that the lines of make:model tell the developer to run
+     * again. With --module, it names the module, so that the related models
+     * go into the same module (#55).
+     */
+    private static function command(?ModuleLocation $module): string
+    {
+        return null === $module ? 'make:model' : 'make:model --module=' . $module->key;
+    }
+
+    /**
+     * The folder and the namespace of the models: the `model` path, or the
+     * Models folder of the module (#55). A `model` path that no psr-4 entry
+     * covers stops the command.
+     *
+     * @return array{string, string}
+     */
+    private static function folder(Config $config, ?ModuleLocation $module): array
+    {
+        if (null === $module) {
+            return [$config->path(self::KEY), $config->namespaceFor(self::KEY)];
+        }
+
+        return [$module->folder(ModuleLocation::MODELS), $module->namespaceOf(ModuleLocation::MODELS)];
     }
 
     /**
@@ -265,6 +299,7 @@ final class ModelCommand extends ProjectCommand
      * The line also names the related tables that give a class and that this
      * run does not write: their bases have relations with the old class.
      *
+     * @param string       $command The command to run again (command())
      * @param list<string> $written The tables that this run writes
      */
     private static function oldFiles(
@@ -273,6 +308,7 @@ final class ModelCommand extends ProjectCommand
         string $table,
         string $class,
         string $path,
+        string $command,
         array $written
     ): ?string {
         try {
@@ -306,7 +342,7 @@ final class ModelCommand extends ProjectCommand
             }
         }
 
-        $then  = [] === $run ? '' : ', then run make:model for ' . Sentence::join($run);
+        $then  = [] === $run ? '' : ', then run ' . $command . ' for ' . Sentence::join($run);
         $model = $path . '/' . $default . '.php';
 
         return true === is_file($model)
@@ -334,6 +370,7 @@ final class ModelCommand extends ProjectCommand
             ->option('all', 'Create a model for each table of the database')
             ->option('exclude=s', 'With --all: the tables to skip, separated by commas')
             ->option('force', 'Overwrite an existing model')
+            ->option('module=s', 'Write the models into a module, e.g. admin')
             ->option('property=s', 'For one table: property names, as column=name, separated by commas');
     }
 
@@ -371,15 +408,19 @@ final class ModelCommand extends ProjectCommand
 
         $given  = null === $property ? [] : self::given($property);
         $config = $this->config($input);
+        // The module reads only files, so it comes before crest boots the
+        // project (#55).
+        $value  = $input->optionStringOrNull('module');
+        $module = null === $value ? null : ModuleLocation::existing($config, $value);
         // The models key of crest.php, before crest boots the project (#53).
         $names = ModelNames::of($config->models());
         $force = true === $input->option('force');
 
         if (true === $all) {
-            return $this->all($config, $names, $excluded, $force, $output);
+            return $this->all($config, $module, $names, $excluded, $force, $output);
         }
 
-        $this->one($config, $names->withGiven($table, $given), $table, $force, $output);
+        $this->one($config, $module, $names->withGiven($table, $given), $table, $force, $output);
 
         return 0;
     }
@@ -401,12 +442,17 @@ final class ModelCommand extends ProjectCommand
      *
      * @param list<string> $exclude The names of --exclude, without spaces
      */
-    private function all(Config $config, ModelNames $names, array $exclude, bool $force, Output $output): int
-    {
-        $path      = $config->path(self::KEY);
-        $namespace = $config->namespaceFor(self::KEY);
-        $adapter   = Database::adapter($config);
-        $tables    = ModelTables::of($adapter, $exclude, $names);
+    private function all(
+        Config $config,
+        ?ModuleLocation $module,
+        ModelNames $names,
+        array $exclude,
+        bool $force,
+        Output $output
+    ): int {
+        [$path, $namespace] = self::folder($config, $module);
+        $adapter            = Database::adapter($config);
+        $tables             = ModelTables::of($adapter, $exclude, $names);
 
         foreach ($tables->notes as $note) {
             $output->line($note);
@@ -458,6 +504,7 @@ final class ModelCommand extends ProjectCommand
                     $tables->classes[$table],
                     $path,
                     $namespace,
+                    self::command($module),
                     $written
                 );
             } catch (Exception $exception) {
@@ -558,15 +605,21 @@ final class ModelCommand extends ProjectCommand
      * make:model <table>: the output of #50 to #52, with the names of #53.
      * Each error stops the command.
      */
-    private function one(Config $config, ModelNames $names, string $table, bool $force, Output $output): void
-    {
+    private function one(
+        Config $config,
+        ?ModuleLocation $module,
+        ModelNames $names,
+        string $table,
+        bool $force,
+        Output $output
+    ): void {
         // These checks do not boot the project, so they come first: a table
         // that gives no class, or a `model` path that no psr-4 entry covers,
-        // stops the command before crest boots the project.
-        $class     = $names->classOf($table);
-        $path      = $config->path(self::KEY);
-        $namespace = $config->namespaceFor(self::KEY);
-        $adapter   = Database::adapter($config);
+        // stops the command before crest boots the project. With --module,
+        // ModuleLocation::existing() did the psr-4 check of the module.
+        $class              = $names->classOf($table);
+        [$path, $namespace] = self::folder($config, $module);
+        $adapter            = Database::adapter($config);
 
         // The columns and the names before the keys: a table that does not
         // exist, a base that crest cannot read, or a column with no usable
@@ -595,6 +648,7 @@ final class ModelCommand extends ProjectCommand
                 $class,
                 $path,
                 $namespace,
+                self::command($module),
                 [$table]
             ),
             $force,
@@ -635,6 +689,7 @@ final class ModelCommand extends ProjectCommand
      *
      * @param array<string, string> $columns The column name and its PHP type
      * @param array<string, string> $final   The column name and its property
+     * @param string                $command The command to run again (command())
      * @param list<string>          $written The tables that this run writes
      *
      * @return Parts
@@ -650,6 +705,7 @@ final class ModelCommand extends ProjectCommand
         string $class,
         string $path,
         string $namespace,
+        string $command,
         array $written
     ): array {
         $baseFile = self::baseFile($path, $class);
@@ -680,12 +736,13 @@ final class ModelCommand extends ProjectCommand
             'baseFile'      => $baseFile,
             'baseNamespace' => $namespace . '\\' . self::BASE_FOLDER,
             'class'         => $class,
+            'command'       => $command,
             'dropped'       => $names->dropped($table, $list),
             'file'          => $path . '/' . $class . '.php',
             'map'           => true === $mapped ? $final : [],
             'names'         => $final,
             'namespace'     => $namespace,
-            'note'          => self::oldFiles($names, $keys, $table, $class, $path, $written),
+            'note'          => self::oldFiles($names, $keys, $table, $class, $path, $command, $written),
             'properties'    => $columns,
             'relations'     => $relations,
             'renamed'       => $renamed,
@@ -832,7 +889,8 @@ final class ModelCommand extends ProjectCommand
 
         if ([] !== $parts['run']) {
             $output->line(sprintf(
-                'Run make:model for %s too: %s relations use the property names of %s',
+                'Run %s for %s too: %s relations use the property names of %s',
+                $parts['command'],
                 Sentence::join($parts['run']),
                 1 === count($parts['run']) ? 'its' : 'their',
                 $parts['table']

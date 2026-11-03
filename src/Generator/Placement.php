@@ -32,4 +32,12 @@ final class Placement
         public readonly string $namespace,
     ) {
     }
+
+    /**
+     * A class in a folder: the file is <folder>/<class>.php.
+     */
+    public static function in(string $folder, string $namespace, string $class): self
+    {
+        return new self($class, $folder . '/' . $class . '.php', $namespace);
+    }
 }

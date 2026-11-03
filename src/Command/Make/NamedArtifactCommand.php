@@ -85,13 +85,16 @@ abstract class NamedArtifactCommand extends ProjectCommand
      * A generator with nothing to say has no fragment. A project can add one,
      * or change the packaged one.
      *
+     * A variant gives the stub `fragment-guidance-<key>-<variant>`: for
+     * example, make:controller --module prints `-module` (#55).
+     *
      * @param array<string, string> $values
      */
-    protected function guidance(Config $config, Output $output, array $values): void
+    protected function guidance(Config $config, Output $output, array $values, string $variant = ''): void
     {
         $flavor   = $config->flavor()->value;
         $stub     = $this->stub($config);
-        $guidance = Stub::FRAGMENT_PREFIX . 'guidance-' . $this->key();
+        $guidance = Stub::FRAGMENT_PREFIX . 'guidance-' . $this->key() . ('' === $variant ? '' : '-' . $variant);
 
         if (true === $stub->has($flavor, $guidance)) {
             $output->write($stub->render($flavor, $guidance, $values));

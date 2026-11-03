@@ -301,6 +301,7 @@ final class ShowCommandTest extends TestCase
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
             . 'controller ' . $this->root . '/src/Controllers default' . PHP_EOL
             . 'model ' . $this->root . '/src/Models default' . PHP_EOL
+            . 'module ' . $this->root . '/src/Modules default' . PHP_EOL
             . 'provider ' . $this->root . '/src/Providers default' . PHP_EOL
             . 'views ' . $this->root . '/themes/default default' . PHP_EOL
             . PHP_EOL
@@ -346,6 +347,7 @@ final class ShowCommandTest extends TestCase
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
             . 'controller ' . $this->root . '/src/Controllers default' . PHP_EOL
             . 'model ' . $this->root . '/src/Models default' . PHP_EOL
+            . 'module ' . $this->root . '/src/Modules default' . PHP_EOL
             . 'provider ' . $this->root . '/src/Providers default' . PHP_EOL
             . 'views ' . $this->root . '/templates declared' . PHP_EOL;
 

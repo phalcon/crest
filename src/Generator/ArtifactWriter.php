@@ -57,6 +57,25 @@ final class ArtifactWriter
     }
 
     /**
+     * Makes a folder and its parents when the folder does not exist. Gives
+     * true when it made the folder, so that make:module prints a Created line
+     * only for a new folder (#55). The warning is suppressed for the reason
+     * given at write().
+     */
+    public static function directory(string $directory): bool
+    {
+        if (true === is_dir($directory)) {
+            return false;
+        }
+
+        if (false === @mkdir($directory, 0o775, true)) {
+            throw new Exception(sprintf('could not create %s', $directory));
+        }
+
+        return true;
+    }
+
+    /**
      * Writes contents to a file, creating the directory if it is missing.
      *
      * Both operations are checked. Unchecked, a read-only target produced two
@@ -74,11 +93,7 @@ final class ArtifactWriter
      */
     public static function write(string $file, string $contents): void
     {
-        $directory = dirname($file);
-
-        if (false === is_dir($directory) && false === @mkdir($directory, 0o775, true)) {
-            throw new Exception(sprintf('could not create %s', $directory));
-        }
+        self::directory(dirname($file));
 
         if (false === @file_put_contents($file, $contents)) {
             throw new Exception(sprintf('could not write %s', $file));

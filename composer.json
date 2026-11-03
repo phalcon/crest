@@ -10,7 +10,6 @@
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3",
-        "infection/infection": "^0.29.9",
         "pds/composer-script-names": "^1",
         "pds/skeleton": "^1",
         "phalcon/code-quality": "^1.0",
@@ -28,7 +27,8 @@
         "psr-4": { "Crest\\": "src/" }
     },
     "autoload-dev": {
-        "psr-4": { "Crest\\Tests\\": "tests/" }
+        "psr-4": { "Crest\\Tests\\": "tests/" },
+        "exclude-from-classmap": ["tests/_output/"]
     },
     "bin": ["bin/crest"],
     "config": {

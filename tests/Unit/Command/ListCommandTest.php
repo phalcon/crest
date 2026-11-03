@@ -59,7 +59,7 @@ final class ListCommandTest extends TestCase
     /**
      * The commands that have no ADR or CLI version.
      */
-    private const MVC_ONLY = ['make:controller', 'make:model'];
+    private const MVC_ONLY = ['make:controller', 'make:model', 'make:module'];
 
     /**
      * @var array{

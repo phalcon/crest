@@ -70,6 +70,26 @@ final class ArtifactWriterTest extends TestCase
         $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
     }
 
+    public function testDirectoryMakesAMissingFolderAndSaysSo(): void
+    {
+        // make:module prints a Created line only for a folder that it makes.
+        $folder = $this->root . '/a/b';
+
+        $this->assertTrue(ArtifactWriter::directory($folder));
+        $this->assertDirectoryExists($folder);
+        $this->assertFalse(ArtifactWriter::directory($folder));
+    }
+
+    public function testDirectoryReportsAFolderThatItCannotMake(): void
+    {
+        file_put_contents($this->root . '/a', 'a file, not a folder');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('could not create ' . $this->root . '/a/b');
+
+        ArtifactWriter::directory($this->root . '/a/b');
+    }
+
     public function testRenderCreatesMissingDirectoriesAllTheWayDown(): void
     {
         $file = $this->root . '/a/b/c/Thing.php';

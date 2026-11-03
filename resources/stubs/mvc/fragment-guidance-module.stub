@@ -1,0 +1,29 @@
+Nothing registers it yet. In run() of your front controller, register the
+module before handle():
+
+    $application = new Application($this->boot());
+    $application->registerModules([
+        '{{ module }}' => ['className' => \{{ namespace }}\Module::class],
+    ]);
+    $response = $application->handle($uri);
+
+Then add the routes of the module to the router, for example:
+
+    $router->add('/{{ module }}', [
+        'module'     => '{{ module }}',
+        'controller' => 'index',
+        'action'     => 'index',
+    ]);
+    $router->add('/{{ module }}/:controller', [
+        'module'     => '{{ module }}',
+        'controller' => 1,
+        'action'     => 'index',
+    ]);
+    $router->add('/{{ module }}/:controller/:action/:params', [
+        'module'     => '{{ module }}',
+        'controller' => 1,
+        'action'     => 2,
+        'params'     => 3,
+    ]);
+
+Write its first controller with: crest make:controller Index --module={{ module }}
