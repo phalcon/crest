@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ControllerCommand;
 use Crest\Command\Make\MiddlewareCommand;
+use Crest\Command\Make\ModuleCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Console\PackageVersion;
 use Crest\Paths;
@@ -24,7 +25,9 @@ use Phalcon\ADR\Router\Router;
 use Phalcon\Container\Container;
 use Phalcon\Di\Di;
 use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Mvc\Application;
 use Phalcon\Mvc\Dispatcher;
+use Phalcon\Mvc\Router as MvcRouter;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -99,6 +102,29 @@ final class GuidanceContractsTest extends TestCase
         $this->assertStringContainsString('setMiddlewareMap(', $this->readStdout());
 
         $this->assertSame(['array'], $this->parameterTypes(Router::class, 'setMiddlewareMap'));
+    }
+
+    public function testModuleGuidanceNamesMethodsThatExist(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->runProjectCommand('make:module', ModuleCommand::class, ['admin']);
+
+        $stdout = $this->readStdout();
+
+        $this->assertStringContainsString('$application->registerModules([', $stdout);
+        $this->assertStringContainsString("\$router->add('/admin/:controller/:action/:params', [", $stdout);
+
+        $this->assertSame(['array', 'bool'], $this->parameterTypes(Application::class, 'registerModules'));
+        // Only the pattern: v5 and v6 give the other parameters other types.
+        $this->assertSame('string', $this->parameterTypes(MvcRouter::class, 'add')[0]);
+
+        // The first block of the guidance changes the run() of the front
+        // controller of crest new.
+        $front = (string) file_get_contents(Paths::stubs() . '/mvc/project-front.stub');
+
+        $this->assertStringContainsString('new Application($this->boot())', $front);
+        $this->assertStringContainsString('->handle($uri)', $front);
     }
 
     public function testMvcProviderGuidanceNamesMethodsThatExist(): void

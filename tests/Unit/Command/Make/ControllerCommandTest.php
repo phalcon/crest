@@ -120,6 +120,40 @@ final class ControllerCommandTest extends TestCase
         );
     }
 
+    public function testAControllerGoesIntoTheModule(): void
+    {
+        // Asserted whole: the module guidance replaces the line of the
+        // dispatcher, because Module.php sets the namespace.
+        $this->writeModule('Admin');
+
+        $status = $this->runCommand(['Users', '--module=admin']);
+
+        $controllers = $this->root . '/src/Modules/Admin/Controllers';
+        $expected    = 'Created ' . $controllers . '/Base/CrestControllerBase.php' . PHP_EOL
+            . 'Created ' . $controllers . '/UsersController.php' . PHP_EOL
+            . 'The admin module finds it: its Module class sets the default namespace' . PHP_EOL
+            . 'of the dispatcher to App\\Modules\\Admin\\Controllers.' . PHP_EOL
+            . PHP_EOL
+            . 'With the routes from make:module, GET /admin/users/index runs' . PHP_EOL
+            . 'indexAction(). Its view is users/index in the views folder of the module.' . PHP_EOL;
+
+        $this->assertSame(0, $status);
+        $this->assertSame($expected, $this->readStdout());
+
+        $controller = (string) file_get_contents($controllers . '/UsersController.php');
+
+        $this->assertStringContainsString("namespace App\\Modules\\Admin\\Controllers;\n", $controller);
+        $this->assertStringContainsString(
+            "use App\\Modules\\Admin\\Controllers\\Base\\CrestControllerBase;\n",
+            $controller
+        );
+        $this->assertStringContainsString(
+            "namespace App\\Modules\\Admin\\Controllers\\Base;\n",
+            (string) file_get_contents($controllers . '/Base/CrestControllerBase.php')
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Controllers');
+    }
+
     public function testADeclaredControllerPathIsUsed(): void
     {
         // A project that keeps its classes in app/.
@@ -202,6 +236,29 @@ final class ControllerCommandTest extends TestCase
             'Kept ' . $this->root . self::USERS . ': it exists; pass --force to replace it' . PHP_EOL,
             $this->readStdout()
         );
+    }
+
+    public function testAnUnknownModuleStops(): void
+    {
+        $status = $this->runCommand(['Users', '--module=admin']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: module 'admin' was not found: no Module.php in " . $this->root
+            . '/src/Modules/Admin; run crest make:module admin first' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Modules');
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Controllers');
+    }
+
+    public function testAnUnusableModuleNameStops(): void
+    {
+        $status = $this->runCommand(['Users', '--module=admin-panel']);
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString("'admin-panel' is not a usable module name", $this->readStderr());
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Controllers');
     }
 
     public function testAnUnusableNameIsReported(): void
@@ -343,6 +400,31 @@ final class ControllerCommandTest extends TestCase
         );
     }
 
+    public function testTheModuleIsFoundByItsKey(): void
+    {
+        // The key adminpanel is not the folder AdminPanel. The namespace has
+        // the spelling of the folder.
+        $this->writeModule('AdminPanel');
+
+        foreach (['adminpanel', 'ADMINPANEL'] as $module) {
+            $status = $this->runCommand(['Users', '--module=' . $module, '--force']);
+
+            $this->assertSame(0, $status);
+            $this->assertStringContainsString(
+                "namespace App\\Modules\\AdminPanel\\Controllers;\n",
+                (string) file_get_contents($this->root . '/src/Modules/AdminPanel/Controllers/UsersController.php')
+            );
+        }
+    }
+
+    public function testTheModuleOptionHasItsHelp(): void
+    {
+        $option = (new ControllerCommand())->define()->findOption('module');
+
+        $this->assertNotNull($option);
+        $this->assertSame('Write the controller into a module, e.g. admin', $option->description);
+    }
+
     public function testTheNameBaseDoesNotCollideWithTheBaseFolder(): void
     {
         $status = $this->runCommand(['Base']);
@@ -350,6 +432,21 @@ final class ControllerCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertFileExists($this->root . '/src/Controllers/BaseController.php');
         $this->assertFileExists($this->root . self::BASE);
+    }
+
+    public function testTheNameRulesStillApplyInAModule(): void
+    {
+        $this->writeModule('Admin');
+
+        $status = $this->runCommand(['users', '--module=admin']);
+
+        $this->assertSame(1, $status);
+        $this->assertSame(
+            "crest: 'users' gives usersController, which the dispatcher cannot find from a URL; "
+            . "use a name like 'Users'" . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Modules/Admin/Controllers');
     }
 
     public function testTheSuffixIsNotDoubledWhenTheUserSuppliesIt(): void
@@ -429,5 +526,14 @@ final class ControllerCommandTest extends TestCase
             . "    {\n"
             . "    }\n"
             . "}\n";
+    }
+
+    /**
+     * A module that make:module wrote: --module needs only its Module.php.
+     */
+    private function writeModule(string $folder): void
+    {
+        mkdir($this->root . '/src/Modules/' . $folder, 0o775, true);
+        file_put_contents($this->root . '/src/Modules/' . $folder . '/Module.php', '<?php');
     }
 }

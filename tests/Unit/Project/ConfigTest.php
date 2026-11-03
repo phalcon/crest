@@ -327,6 +327,7 @@ final class ConfigTest extends TestCase
                 'command'    => $this->root . '/src/Command',
                 'controller' => $this->root . '/src/Controllers',
                 'model'      => $this->root . '/src/Models',
+                'module'     => $this->root . '/src/Modules',
                 'provider'   => $this->root . '/src/Providers',
                 'views'      => $this->root . '/themes/default',
             ],
@@ -334,6 +335,7 @@ final class ConfigTest extends TestCase
         );
         $this->assertSame('App\\Controllers', $config->namespaceFor('controller'));
         $this->assertSame('App\\Models', $config->namespaceFor('model'));
+        $this->assertSame('App\\Modules', $config->namespaceFor('module'));
         $this->assertSame('App\\Providers', $config->namespaceFor('provider'));
     }
 
@@ -511,6 +513,7 @@ final class ConfigTest extends TestCase
                 'command'    => 'src/Command',
                 'controller' => 'src/Controllers',
                 'model'      => 'src/Models',
+                'module'     => 'src/Modules',
                 'provider'   => 'src/Providers',
                 'views'      => 'themes/default',
             ],

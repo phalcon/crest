@@ -137,6 +137,28 @@ final class ModelCommandTest extends TestCase
         $this->assertStops(['--all', '--exclude='], '--exclude has an empty table name');
     }
 
+    public function testAnUnknownModuleStopsBeforeTheBoot(): void
+    {
+        // FailingFront fails to boot, so the module check comes first.
+        $this->front(FailingFront::class);
+
+        $this->assertStops(
+            ['users', '--module=admin'],
+            "module 'admin' was not found: no Module.php in " . $this->root
+            . '/src/Modules/Admin; run crest make:module admin first'
+        );
+    }
+
+    public function testAnUnusableModuleNameStopsBeforeTheBoot(): void
+    {
+        $this->front(FailingFront::class);
+
+        $this->assertStops(
+            ['users', '--module=admin-panel'],
+            "'admin-panel' is not a usable module name; expected a single name like 'admin'"
+        );
+    }
+
     public function testAPropertyWithAnEmptyNameStops(): void
     {
         $this->assertStops(
@@ -208,6 +230,14 @@ final class ModelCommandTest extends TestCase
     public function testPropertyWithAllStops(): void
     {
         $this->assertStops(['--all', '--property=a=b'], '--property is only for one table, not --all');
+    }
+
+    public function testTheModuleOptionHasItsHelp(): void
+    {
+        $option = (new ModelCommand())->define()->findOption('module');
+
+        $this->assertNotNull($option);
+        $this->assertSame('Write the models into a module, e.g. admin', $option->description);
     }
 
     public function testThePropertyOptionHasItsHelp(): void

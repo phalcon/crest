@@ -40,6 +40,7 @@ final class CommandsTest extends TestCase
                 'make:controller',
                 'make:middleware',
                 'make:model',
+                'make:module',
                 'make:provider',
                 'make:responder',
                 'new',

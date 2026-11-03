@@ -30,12 +30,16 @@ use Phalcon\Contracts\ADR\Responder\Responder;
 use Phalcon\Contracts\Container\Service\Collection;
 use Phalcon\Contracts\Container\Service\Provider;
 use Phalcon\Contracts\Http\AttributeRequest;
+use Phalcon\Di\Di;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Http\RequestInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Controller;
+use Phalcon\Mvc\Dispatcher;
 use Phalcon\Mvc\Model;
+use Phalcon\Mvc\ModuleDefinitionInterface;
+use Phalcon\Mvc\View;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -92,6 +96,7 @@ final class StubContractsTest extends TestCase
         'entries'       => '',
         'extraKey'      => 'crest',
         'fields'        => "'id'",
+        'module'        => 'generated',
         'name'          => 'id',
         'namespace'     => 'App\\Generated',
         'pairs'         => '',
@@ -144,6 +149,14 @@ final class StubContractsTest extends TestCase
         yield 'action' => [Action::class, '__invoke', [AttributeRequest::class]];
 
         yield 'middleware' => [Middleware::class, '__invoke', [AttributeRequest::class, Handler::class]];
+
+        yield 'mvc module autoloaders' => [
+            ModuleDefinitionInterface::class,
+            'registerAutoloaders',
+            [DiInterface::class],
+        ];
+
+        yield 'mvc module services' => [ModuleDefinitionInterface::class, 'registerServices', [DiInterface::class]];
 
         yield 'mvc provider' => [ServiceProviderInterface::class, 'register', [DiInterface::class]];
 
@@ -470,6 +483,58 @@ final class StubContractsTest extends TestCase
 
         $this->assertSame('id', $property->column);
         $this->assertSame('id', $property->name);
+    }
+
+    /**
+     * The module stub declares a class that implements the interface of the
+     * framework. The declaration fails when a signature does not match the
+     * interface of v5 or v6. registerServices() must change the dispatcher
+     * and the view that the providers of the project set (spec 3.4).
+     */
+    public function testTheMvcModuleSetsTheDispatcherAndTheViews(): void
+    {
+        $namespace = 'Crest\\Tests\\Generated\\MvcModule';
+
+        $this->makeScratchDirectory('stub-contracts');
+
+        try {
+            file_put_contents(
+                $this->root . '/Module.php',
+                (new Stub(Paths::stubs()))->render(
+                    'mvc',
+                    'module',
+                    ['class' => 'Module', 'module' => 'admin', 'namespace' => $namespace]
+                )
+            );
+
+            require $this->root . '/Module.php';
+
+            $class      = $namespace . '\\Module';
+            $dispatcher = new Dispatcher();
+            $view       = new View();
+            $container  = new Di();
+            $container->setShared('dispatcher', $dispatcher);
+            $container->setShared('view', $view);
+
+            // Through the reflection of a method, as the model test does: the
+            // analyzer looks for a literal class name, and this class exists
+            // only at run time.
+            $module = (new ReflectionMethod($class, 'registerServices'))->getDeclaringClass()->newInstance();
+
+            if (false === $module instanceof ModuleDefinitionInterface) {
+                $this->fail('the module does not implement ModuleDefinitionInterface');
+            }
+
+            $module->registerAutoloaders(null);
+            $module->registerServices($container);
+
+            $this->assertSame($namespace . '\\Controllers', $dispatcher->getDefaultNamespace());
+            $this->assertSame($this->root . '/views/', $view->getViewsDir());
+        } finally {
+            // The first DI of the process is the default DI.
+            Di::reset();
+            $this->removeScratchDirectory();
+        }
     }
 
     private function render(string $flavor, string $name): string

@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit\Command;
 
 use Closure;
 use Crest\Command\Make\ControllerCommand;
+use Crest\Command\Make\ModuleCommand;
 use Crest\Command\NewCommand;
 use Crest\Console\Input;
 use Crest\Console\Kernel;
@@ -29,16 +30,19 @@ use Phalcon\Di\Di;
 use Phalcon\Di\DiInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Application;
+use Phalcon\Mvc\Router;
 use PHPUnit\Framework\TestCase;
 use ReflectionFunction;
 
 use function class_exists;
 use function extension_loaded;
 use function file_get_contents;
+use function file_put_contents;
 use function interface_exists;
 use function is_array;
 use function is_file;
 use function method_exists;
+use function mkdir;
 use function preg_match_all;
 use function putenv;
 use function spl_autoload_register;
@@ -147,6 +151,57 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->assertStringNotContainsString('<h1>shop</h1>', $content);
     }
 
+    public function testAModuleFromMakeModuleAnswersItsUrl(): void
+    {
+        // The "Done when" of #55: make:module, make:controller --module, the
+        // registration and the routes of the guidance, and a request reaches
+        // the controller of the module. The module uses only its own views,
+        // so the page has no layout of the project (spec 3.4).
+        $output = new Output($this->stdout, $this->stderr, false);
+        $module = new ModuleCommand();
+
+        $this->assertSame(
+            0,
+            $module->handle(
+                new Input(
+                    'make:module',
+                    $module->define()->merge(Kernel::globals())->bind(['admin', '--directory', $this->project])
+                ),
+                $output
+            )
+        );
+
+        $controller = new ControllerCommand();
+
+        $this->assertSame(
+            0,
+            $controller->handle(
+                new Input(
+                    'make:controller',
+                    $controller->define()
+                        ->merge(Kernel::globals())
+                        ->bind(['Index', '--module=admin', '--directory', $this->project])
+                ),
+                $output
+            )
+        );
+
+        mkdir($this->project . '/src/Modules/Admin/views/index', 0o775, true);
+        file_put_contents($this->project . '/src/Modules/Admin/views/index/index.phtml', '<h1>admin</h1>');
+
+        $content = $this->get('/admin', true);
+
+        $this->assertStringContainsString('<h1>admin</h1>', $content);
+        $this->assertStringNotContainsString('<title>shop</title>', $content);
+
+        // The route /admin/:controller: a controller with no action.
+        $this->assertStringContainsString('<h1>admin</h1>', $this->get('/admin/index', true));
+
+        // With the module registered, a URL outside the module still gets
+        // the page of the project.
+        $this->assertStringContainsString('<h1>shop</h1>', $this->get('/', true));
+    }
+
     public function testAProjectWithADatabaseAnswersGetSlashWithNoDatabase(): void
     {
         // The db service connects at the first use, and GET / does not use
@@ -244,6 +299,8 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->assertSame(self::ROOT_NAMESPACE . '\\AppFront', $config->bootstrap());
         $this->assertSame(self::ROOT_NAMESPACE . '\\Controllers', $config->namespaceFor('controller'));
         $this->assertSame($this->project . '/src/Controllers', $config->path('controller'));
+        $this->assertSame($this->project . '/src/Modules', $config->path('module'));
+        $this->assertSame(self::ROOT_NAMESPACE . '\\Modules', $config->namespaceFor('module'));
         $this->assertSame($this->project . '/src/Providers', $config->path('provider'));
         $this->assertSame($this->project . '/themes/default', $config->path('views'));
     }
@@ -345,8 +402,11 @@ final class GeneratedMvcProjectTest extends TestCase
      * Sends a GET request through the generated application, as
      * public/index.php does, but in this process and with no send(). Gives
      * the content of the response.
+     *
+     * With $modules, the application registers the module admin and its
+     * routes, as the guidance of make:module says.
      */
-    private function get(string $uri): string
+    private function get(string $uri, bool $modules = false): string
     {
         // The class that crest.php names, as Bootstrap reads it. A literal
         // class name here would make PHPStan look for a class that exists only
@@ -372,7 +432,27 @@ final class GeneratedMvcProjectTest extends TestCase
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_SERVER['REQUEST_URI']    = $uri;
 
-        $response = (new Application($container))->handle($uri);
+        $application = new Application($container);
+
+        if (true === $modules) {
+            $router = $container->getShared('router');
+
+            if (false === $router instanceof Router) {
+                $this->fail('the router of the project is not a Phalcon\Mvc\Router');
+            }
+
+            $application->registerModules(
+                ['admin' => ['className' => self::ROOT_NAMESPACE . '\\Modules\\Admin\\Module']]
+            );
+            $router->add('/admin', ['module' => 'admin', 'controller' => 'index', 'action' => 'index']);
+            $router->add('/admin/:controller', ['module' => 'admin', 'controller' => 1, 'action' => 'index']);
+            $router->add(
+                '/admin/:controller/:action/:params',
+                ['module' => 'admin', 'controller' => 1, 'action' => 2, 'params' => 3]
+            );
+        }
+
+        $response = $application->handle($uri);
 
         if (false === $response instanceof ResponseInterface) {
             $this->fail('the application did not return a response');
