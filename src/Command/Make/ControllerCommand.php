@@ -16,11 +16,16 @@ namespace Crest\Command\Make;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
+use Crest\Console\Parsing\Definition;
+use Crest\Generator\ClassName;
 use Crest\Generator\ControllerBase;
+use Crest\Generator\ModuleLocation;
 use Crest\Generator\Outcome;
+use Crest\Generator\Placement;
 use Crest\Project\Flavor;
 
 use function array_map;
+use function dirname;
 use function implode;
 use function preg_replace;
 use function preg_split;
@@ -44,18 +49,39 @@ use function substr;
  * The name must give a class that the dispatcher can find from a URL
  * (route()), because no URL reaches a controller that it cannot find.
  *
+ * With --module (#55), the controller and its base go into the Controllers
+ * folder of the module, in the namespace of the module (ModuleLocation).
+ * The module must exist: make:module writes it. Its Module.php sets the
+ * namespace of the dispatcher, so the guidance is the stub
+ * fragment-guidance-controller-module.
+ *
  * handle() builds the values itself, and does not use replacements(): the
  * checks of the name in route() need the name as the user typed it.
  */
 final class ControllerCommand extends NamedArtifactCommand
 {
+    public function define(): Definition
+    {
+        return parent::define()->option('module=s', 'Write the controller into a module, e.g. admin');
+    }
+
     public function handle(Input $input, Output $output): int
     {
-        $config        = $this->config($input);
-        $name          = $input->argumentString('name');
-        $placement     = $this->placement($config, $name, $this->key(), $this->suffix());
+        $config    = $this->config($input);
+        $name      = $input->argumentString('name');
+        $module    = $input->optionStringOrNull('module');
+        $location  = null === $module ? null : ModuleLocation::existing($config, $module);
+        $placement = null === $location
+            ? $this->placement($config, $name, $this->key(), $this->suffix())
+            : Placement::in(
+                $location->folder(ModuleLocation::CONTROLLERS),
+                $location->namespaceOf(ModuleLocation::CONTROLLERS),
+                ClassName::suffixed($name, $this->suffix())
+            );
+        // The base goes into the folder of the controller, in the module or
+        // in the `controller` path.
         $baseNamespace = ControllerBase::namespace($placement->namespace);
-        $base          = ControllerBase::file($config->path($this->key()));
+        $base          = ControllerBase::file(dirname($placement->file));
         $values        = [
             'base'          => ControllerBase::NAME,
             'baseNamespace' => $baseNamespace,
@@ -86,7 +112,15 @@ final class ControllerCommand extends NamedArtifactCommand
 
         $output->success(sprintf('Created %s', $placement->file));
 
-        $this->guidance($config, $output, $values);
+        if (null === $location) {
+            $this->guidance($config, $output, $values);
+
+            return 0;
+        }
+
+        // Module.php sets the namespace, so the guidance of a module has no
+        // line for the dispatcher.
+        $this->guidance($config, $output, $values + ['module' => $location->key], 'module');
 
         return 0;
     }

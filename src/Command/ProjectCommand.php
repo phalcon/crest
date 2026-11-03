@@ -110,11 +110,7 @@ abstract class ProjectCommand extends Command
     {
         $class = ClassName::suffixed($name, $suffix);
 
-        return new Placement(
-            $class,
-            $config->path($key) . '/' . $class . '.php',
-            $config->namespaceFor($key)
-        );
+        return Placement::in($config->path($key), $config->namespaceFor($key), $class);
     }
 
     /**

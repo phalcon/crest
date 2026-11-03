@@ -117,6 +117,8 @@ final class Config implements ProjectContext
                 Flavor::MVC => [
                     'controller' => Layout::SOURCE . '/Controllers',
                     'model'      => Layout::SOURCE . '/Models',
+                    // One folder for all the modules (#55).
+                    'module'     => Layout::SOURCE . '/Modules',
                     'provider'   => Layout::SOURCE . '/Providers',
                     // The layout of the Phalcon sample applications (vokuro,
                     // invo), with one fixed theme.
