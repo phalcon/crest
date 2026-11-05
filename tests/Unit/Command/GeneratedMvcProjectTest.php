@@ -31,6 +31,7 @@ use Phalcon\Di\DiInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Application;
 use Phalcon\Mvc\Router;
+use Phalcon\Mvc\Url;
 use PHPUnit\Framework\TestCase;
 use ReflectionFunction;
 
@@ -122,6 +123,17 @@ final class GeneratedMvcProjectTest extends TestCase
         $_SERVER = $this->server;
 
         $this->endScratchProject();
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function phpSelfValues(): iterable
+    {
+        yield 'the front file' => ['/index.php'];
+        yield 'a page' => ['/users/create'];
+        yield 'the front file and a page' => ['/index.php/users/create'];
+        yield 'the front file and a page with an id' => ['/index.php/users/edit/5'];
     }
 
     public function testAControllerFromMakeControllerAnswersItsUrl(): void
@@ -237,6 +249,7 @@ final class GeneratedMvcProjectTest extends TestCase
                 'src/Controllers/Base/CrestControllerBase.php',
                 'src/Controllers/IndexController.php',
                 'src/Providers/DispatcherProvider.php',
+                'src/Providers/UrlProvider.php',
                 'src/Providers/ViewProvider.php',
                 'themes/default/index.phtml',
                 'themes/default/index/index.phtml',
@@ -299,10 +312,32 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->assertSame(self::ROOT_NAMESPACE . '\\AppFront', $config->bootstrap());
         $this->assertSame(self::ROOT_NAMESPACE . '\\Controllers', $config->namespaceFor('controller'));
         $this->assertSame($this->project . '/src/Controllers', $config->path('controller'));
+        $this->assertSame($this->project . '/src/Forms', $config->path('form'));
+        $this->assertSame(self::ROOT_NAMESPACE . '\\Forms', $config->namespaceFor('form'));
         $this->assertSame($this->project . '/src/Modules', $config->path('module'));
         $this->assertSame(self::ROOT_NAMESPACE . '\\Modules', $config->namespaceFor('module'));
         $this->assertSame($this->project . '/src/Providers', $config->path('provider'));
         $this->assertSame($this->project . '/themes/default', $config->path('views'));
+    }
+
+    /**
+     * @dataProvider phpSelfValues
+     */
+    public function testTheUrlServiceDoesNotReadPhpSelf(string $phpSelf): void
+    {
+        // With no provider, /users/create gives /users/users.
+        $_SERVER['PHP_SELF'] = $phpSelf;
+
+        $container = Bootstrap::container(Config::discover($this->project));
+
+        if (false === $container instanceof DiInterface) {
+            $this->fail('boot() did not return a DI container');
+        }
+
+        $url = $container->getShared('url');
+
+        $this->assertInstanceOf(Url::class, $url);
+        $this->assertSame('/users', $url->get('users'));
     }
 
     /**

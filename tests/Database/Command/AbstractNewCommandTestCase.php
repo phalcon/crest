@@ -24,8 +24,10 @@ use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\Container\Container;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Di\Di;
+use Phalcon\Talon\Talon;
 
 use function is_file;
+use function is_scalar;
 use function putenv;
 use function spl_autoload_register;
 use function spl_autoload_unregister;
@@ -96,6 +98,27 @@ abstract class AbstractNewCommandTestCase extends AbstractDatabaseTestCase
         $this->assertSame($adapter, $container->get('db'));
 
         return $adapter;
+    }
+
+    /**
+     * The DB_* values of the project, from the DATA_* values of the suite.
+     */
+    protected function databaseValues(bool $real, bool $env): void
+    {
+        $options = Talon::settings()->getDatabaseOptions($this->getDriver());
+        $names   = [
+            'DB_HOST'     => 'host',
+            'DB_PORT'     => 'port',
+            'DB_NAME'     => 'dbname',
+            'DB_USERNAME' => 'username',
+            'DB_PASSWORD' => 'password',
+        ];
+
+        foreach ($names as $name => $key) {
+            $value = $options[$key] ?? '';
+
+            $this->environment($name, true === is_scalar($value) ? (string) $value : '', $real, $env);
+        }
     }
 
     /**

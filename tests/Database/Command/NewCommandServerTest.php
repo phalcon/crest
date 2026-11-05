@@ -16,9 +16,6 @@ namespace Crest\Tests\Database\Command;
 use Crest\Tests\Support\Migrations\CustomersMigration;
 use Phalcon\Db\Adapter\Pdo\Mysql;
 use Phalcon\Db\Adapter\Pdo\Postgresql;
-use Phalcon\Talon\Talon;
-
-use function is_scalar;
 
 /**
  * `crest new --database` with MySQL, MariaDB and PostgreSQL (#54, spec
@@ -85,26 +82,5 @@ final class NewCommandServerTest extends AbstractNewCommandTestCase
         );
 
         $this->makeModel($project, 'customers', 'CustomersBase');
-    }
-
-    /**
-     * The DB_* values of the project, from the DATA_* values of the suite.
-     */
-    private function databaseValues(bool $real, bool $env): void
-    {
-        $options = Talon::settings()->getDatabaseOptions($this->getDriver());
-        $names   = [
-            'DB_HOST'     => 'host',
-            'DB_PORT'     => 'port',
-            'DB_NAME'     => 'dbname',
-            'DB_USERNAME' => 'username',
-            'DB_PASSWORD' => 'password',
-        ];
-
-        foreach ($names as $name => $key) {
-            $value = $options[$key] ?? '';
-
-            $this->environment($name, true === is_scalar($value) ? (string) $value : '', $real, $env);
-        }
     }
 }

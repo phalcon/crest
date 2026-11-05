@@ -91,6 +91,18 @@ final class ConfigTest extends TestCase
         $this->assertSame($this->root, Config::discover('')->root());
     }
 
+    public function testAnMvcProjectWithNoFormKeyGetsTheDefault(): void
+    {
+        // A project from before #56 has no `form` key in crest.php.
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame($this->root . '/src/Forms', $config->path('form'));
+        $this->assertSame('App\\Forms', $config->namespaceFor('form'));
+    }
+
     public function testARelativeDirectoryIsWalkedFromWhereItPoints(): void
     {
         // From project a/, `../b` names b/, which has no crest.php. The walk
@@ -326,6 +338,7 @@ final class ConfigTest extends TestCase
             [
                 'command'    => $this->root . '/src/Command',
                 'controller' => $this->root . '/src/Controllers',
+                'form'       => $this->root . '/src/Forms',
                 'model'      => $this->root . '/src/Models',
                 'module'     => $this->root . '/src/Modules',
                 'provider'   => $this->root . '/src/Providers',
@@ -512,6 +525,7 @@ final class ConfigTest extends TestCase
             [
                 'command'    => 'src/Command',
                 'controller' => 'src/Controllers',
+                'form'       => 'src/Forms',
                 'model'      => 'src/Models',
                 'module'     => 'src/Modules',
                 'provider'   => 'src/Providers',

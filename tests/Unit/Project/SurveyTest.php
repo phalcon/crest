@@ -110,6 +110,13 @@ final class SurveyTest extends TestCase
         $this->assertSame('themes/vokuro', Survey::paths($this->root, 'src', Flavor::MVC)['views']);
     }
 
+    public function testAFormsFolderCountsForMvc(): void
+    {
+        mkdir($this->root . '/src/Forms');
+
+        $this->assertSame(Flavor::MVC, Survey::flavor($this->root, 'src', [Flavor::ADR, Flavor::MVC]));
+    }
+
     public function testAFourSpaceIndentIsRead(): void
     {
         file_put_contents($this->root . '/docker-compose.yml', "services:\n    web:\n        image: php\n");
@@ -365,6 +372,7 @@ final class SurveyTest extends TestCase
             [
                 'command'    => 'lib/Shop/Command',
                 'controller' => 'lib/Shop/Controllers',
+                'form'       => 'lib/Shop/Forms',
                 'model'      => 'lib/Shop/Models',
                 'module'     => 'lib/Shop/Modules',
                 'provider'   => 'lib/Shop/Providers',
@@ -484,6 +492,7 @@ final class SurveyTest extends TestCase
             [
                 'command'    => 'src/Command',
                 'controller' => 'src/Controllers',
+                'form'       => 'src/Forms',
                 'model'      => 'src/Models',
                 'module'     => 'src/Modules',
                 'provider'   => 'src/Providers',

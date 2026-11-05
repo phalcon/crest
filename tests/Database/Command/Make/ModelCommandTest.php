@@ -13,6 +13,10 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database\Command\Make;
 
+use Crest\Command\Make\ModelCommand;
+use Crest\Console\Output;
+use Crest\Generator\ModelNames;
+use Crest\Generator\Outcome;
 use Crest\Project\Config;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\AuthorsMigration;
@@ -410,6 +414,35 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
             'Created ' . $this->root . self::BASE . PHP_EOL
             . 'No relations for users' . self::NO_KEYS . PHP_EOL
             . 'Created ' . $this->root . self::USERS . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testThePhasesOfOneTableRunApart(): void
+    {
+        // make:scaffold reads the table, makes its own checks, and only then
+        // writes (#56).
+        $command = new ModelCommand();
+        $config  = Config::discover($this->root);
+        $parts   = $command->readTable($this->adapter(), $config, null, ModelNames::of([]), 'users');
+
+        $this->assertSame(
+            ['id' => 'id', 'name' => 'name', 'score' => 'score', 'price' => 'price', 'created' => 'created'],
+            $parts['names']
+        );
+        // The read phase changes no file.
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Models');
+
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $this->assertSame(Outcome::Created, $command->writeTable($config, $parts, false, $output));
+        $this->assertFileExists($this->root . self::USERS);
+        $this->assertSame(
+            Outcome::Kept,
+            $command->writeTable($config, $parts, false, $output, 'make:model --force replaces it')
+        );
+        $this->assertStringContainsString(
+            'Kept ' . $this->root . self::USERS . ': it exists; make:model --force replaces it' . PHP_EOL,
             $this->readStdout()
         );
     }

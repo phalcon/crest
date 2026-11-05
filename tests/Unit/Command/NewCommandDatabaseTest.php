@@ -345,13 +345,15 @@ final class NewCommandDatabaseTest extends TestCase
         $this->assertStringContainsString(
             "use App\\Providers\\DbProvider;\n"
             . "use App\\Providers\\DispatcherProvider;\n"
+            . "use App\\Providers\\UrlProvider;\n"
             . "use App\\Providers\\ViewProvider;\n",
             $front
         );
         $this->assertStringContainsString(
             "        return [\n"
             . "            new DbProvider(),\n"
-            . "            new DispatcherProvider(),\n",
+            . "            new DispatcherProvider(),\n"
+            . "            new UrlProvider(),\n",
             $front
         );
         // Asserted whole: this is generated code nobody reviews.
@@ -445,6 +447,7 @@ final class NewCommandDatabaseTest extends TestCase
                 'src/Controllers/IndexController.php',
                 'src/Providers/DbProvider.php',
                 'src/Providers/DispatcherProvider.php',
+                'src/Providers/UrlProvider.php',
                 'src/Providers/ViewProvider.php',
                 'storage/.gitkeep',
                 'storage/database.sqlite',
