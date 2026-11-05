@@ -20,9 +20,9 @@ use Crest\Project\Flavor;
 
 /**
  * The MVC project of `new`: IndexController and its view answer GET /. The
- * controllers extend the base that crest owns (ControllerBase, #46). Two
- * providers set the dispatcher and the view. With a database, DbProvider sets
- * the db service that make:model reads (#54).
+ * controllers extend the base that crest owns (ControllerBase, #46). Three
+ * providers set the dispatcher, the url service and the view. With a database,
+ * DbProvider sets the db service that make:model reads (#54).
  *
  * A stub that depends on the view engine has the engine name after the
  * prefix: project-<engine>-<part>. A view file has the engine name as its
@@ -62,6 +62,7 @@ final class MvcSkeleton implements Skeleton
         $views    = $this->path('views');
         $files    = [
             Stub::PROJECT_PREFIX . 'provider-dispatcher' => $provider . '/DispatcherProvider.php',
+            Stub::PROJECT_PREFIX . 'provider-url'        => $provider . '/UrlProvider.php',
             $prefix . 'provider'                         => $provider . '/ViewProvider.php',
             $prefix . 'layout'                           => $views . '/index.' . $engine,
             $prefix . 'index'                            => $views . '/index/index.' . $engine,

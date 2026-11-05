@@ -29,6 +29,7 @@ use Crest\Command\Make\ModelCommand;
 use Crest\Command\Make\ModuleCommand;
 use Crest\Command\Make\ProviderCommand;
 use Crest\Command\Make\ResponderCommand;
+use Crest\Command\Make\ScaffoldCommand;
 use Crest\Command\NewCommand;
 use Crest\Command\Route\ListCommand as RouteListCommand;
 use Crest\Command\ServeCommand;
@@ -115,6 +116,7 @@ final class Commands
             ->add('make:module', ModuleCommand::class)
             ->add('make:provider', ProviderCommand::class)
             ->add('make:responder', ResponderCommand::class)
+            ->add('make:scaffold', ScaffoldCommand::class)
             ->add('new', NewCommand::class)
             ->add('route:list', RouteListCommand::class)
             ->add('serve', ServeCommand::class, 'server')

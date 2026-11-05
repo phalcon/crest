@@ -35,6 +35,7 @@ use Crest\Generator\Stub;
 use Crest\Project\Config;
 use Crest\Project\Database;
 use Crest\Project\Flavor;
+use Phalcon\Db\Adapter\AdapterInterface;
 
 use function array_diff;
 use function array_filter;
@@ -88,6 +89,8 @@ use function var_export;
  * ModelTables, and reads the foreign keys and the bases one time for the run.
  * A crest error in the read phase fails only its table: crest prints the
  * reason, goes to the next table, and lists the failed tables in the summary.
+ * make:scaffold runs the two phases of one table through readTable() and
+ * writeTable() (#56).
  *
  * With --module (#55), the models and their bases go into the Models folder
  * of the module, in its namespace (ModuleLocation), and the relations name
@@ -126,6 +129,8 @@ final class ModelCommand extends ProjectCommand
     // crest reads relations only from foreign keys, so `crest list` says so.
     private const DESCRIPTION = 'Create an MVC model from a database table, or from each table with --all '
         . '(relations come only from foreign keys)';
+
+    private const KEPT = 'pass --force to replace it';
 
     private const KEY = 'model';
 
@@ -425,6 +430,165 @@ final class ModelCommand extends ProjectCommand
         return 0;
     }
 
+    /**
+     * The read phase of one table. It changes no file. The caller boots the
+     * project, so that a command that also reads the table boots it one time.
+     *
+     * @return Parts
+     */
+    public function readTable(
+        AdapterInterface $adapter,
+        Config $config,
+        ?ModuleLocation $module,
+        ModelNames $names,
+        string $table
+    ): array {
+        $class              = $names->classOf($table);
+        [$path, $namespace] = self::folder($config, $module);
+
+        // The columns and the names before the keys: a table that does not
+        // exist, a base that crest cannot read, or a column with no usable
+        // property name stops the command before crest reads the keys of
+        // each table.
+        $columns  = ModelProperties::of($adapter, $table);
+        $baseFile = self::baseFile($path, $class);
+        $base     = BaseAttributes::read($baseFile);
+        $names    = $names->withStored($table, $base->properties, $baseFile);
+        $final    = $names->properties($table, self::strings($columns));
+        $keys     = ForeignKeys::read($adapter, $table);
+
+        // The relations need the property names of the related tables.
+        [$names] = self::bases($names, $keys->related($table), $path);
+
+        return $this->read(
+            $config,
+            $names,
+            $keys,
+            $base,
+            $columns,
+            $final,
+            $table,
+            $class,
+            $path,
+            $namespace,
+            self::command($module),
+            [$table]
+        );
+    }
+
+    /**
+     * The write phase of one table: the base, its lines, and the model. The
+     * lines are the lines of make:model <table>.
+     *
+     * @param Parts  $parts
+     * @param string $kept  The end of the line for a model that exists
+     */
+    public function writeTable(
+        Config $config,
+        array $parts,
+        bool $force,
+        Output $output,
+        string $kept = self::KEPT
+    ): Outcome {
+        $writer    = $this->writer($config);
+        $relations = $parts['relations'];
+
+        // The base first: a model never exists without its base.
+        $this->reportOwned(
+            $output,
+            $writer->renderOwned(
+                $parts['baseFile'],
+                'model-base',
+                [
+                    'aliases'    => PropertyNames::attributes($parts['attributes'])
+                        . RelationAliases::attributes($relations->relations),
+                    'aliasNote'  => PropertyNames::note($parts['attributes'])
+                        . RelationAliases::note($relations->relations),
+                    'class'      => $parts['base'],
+                    'columnMap'  => $this->columnMap($config, $parts['map']),
+                    'namespace'  => $parts['baseNamespace'],
+                    'properties' => $this->properties($config, $parts['properties'], $parts['names']),
+                    'relations'  => $this->relations($config, $relations),
+                    'table'      => $parts['table'],
+                ]
+            ),
+            $parts['baseFile']
+        );
+
+        // A property with another name breaks the code that uses it, so
+        // crest says so (decision 6).
+        if (null === $parts['renamed']) {
+            $output->line(sprintf(
+                'Note: crest cannot read columnMap() of %s, so it cannot list the renamed properties',
+                $parts['baseFile']
+            ));
+        }
+
+        foreach ($parts['renamed'] ?? [] as [$old, $new]) {
+            $output->line(sprintf('Renamed $%s to $%s: change the code that uses it', $old, $new));
+        }
+
+        foreach ($parts['dropped'] as $line) {
+            $output->line($line);
+        }
+
+        // A relation that crest cannot write is not in the base. The
+        // developer can give it an alias with an attribute, or add it in the
+        // model.
+        foreach ($relations->skipped as $line) {
+            $output->line($line);
+        }
+
+        // An attribute that the next base does not have is dropped, and the
+        // developer must know that its alias is gone.
+        foreach ($relations->dropped as $line) {
+            $output->line($line);
+        }
+
+        // Each key gives a relation or a skipped line, so no relations and no
+        // skipped lines means no keys. crest reads relations only from
+        // foreign keys, and this line tells the user so.
+        if ([] === $relations->relations && [] === $relations->skipped) {
+            $output->line(sprintf(self::NO_KEYS, $parts['table']));
+        }
+
+        if ([] !== $parts['run']) {
+            $output->line(sprintf(
+                'Run %s for %s too: %s relations use the property names of %s',
+                $parts['command'],
+                Sentence::join($parts['run']),
+                1 === count($parts['run']) ? 'its' : 'their',
+                $parts['table']
+            ));
+        }
+
+        $outcome = $writer->renderOnce(
+            $parts['file'],
+            self::KEY,
+            [
+                'base'          => $parts['base'],
+                'baseNamespace' => $parts['baseNamespace'],
+                'class'         => $parts['class'],
+                'namespace'     => $parts['namespace'],
+            ],
+            $force
+        );
+
+        if (Outcome::Kept === $outcome) {
+            $output->line(sprintf('Kept %s: it exists; %s', $parts['file'], $kept));
+        } else {
+            $output->success(sprintf('Created %s', $parts['file']));
+        }
+
+        // The old files of the table stay: the developer moves the code and
+        // deletes them (#71).
+        if (null !== $parts['note']) {
+            $output->line($parts['note']);
+        }
+
+        return $outcome;
+    }
+
     protected function flavors(): array
     {
         // MVC only: an ADR project uses repositories, not Active Record models.
@@ -514,7 +678,7 @@ final class ModelCommand extends ProjectCommand
                 continue;
             }
 
-            if (Outcome::Kept !== $this->write($config, $parts, $force, $output)) {
+            if (Outcome::Kept !== $this->writeTable($config, $parts, $force, $output)) {
                 $created++;
             }
         }
@@ -617,40 +781,12 @@ final class ModelCommand extends ProjectCommand
         // that gives no class, or a `model` path that no psr-4 entry covers,
         // stops the command before crest boots the project. With --module,
         // ModuleLocation::existing() did the psr-4 check of the module.
-        $class              = $names->classOf($table);
-        [$path, $namespace] = self::folder($config, $module);
-        $adapter            = Database::adapter($config);
+        $names->classOf($table);
+        self::folder($config, $module);
 
-        // The columns and the names before the keys: a table that does not
-        // exist, a base that crest cannot read, or a column with no usable
-        // property name stops the command before crest reads the keys of
-        // each table.
-        $columns  = ModelProperties::of($adapter, $table);
-        $baseFile = self::baseFile($path, $class);
-        $base     = BaseAttributes::read($baseFile);
-        $names    = $names->withStored($table, $base->properties, $baseFile);
-        $final    = $names->properties($table, self::strings($columns));
-        $keys     = ForeignKeys::read($adapter, $table);
-
-        // The relations need the property names of the related tables.
-        [$names] = self::bases($names, $keys->related($table), $path);
-
-        $this->write(
+        $this->writeTable(
             $config,
-            $this->read(
-                $config,
-                $names,
-                $keys,
-                $base,
-                $columns,
-                $final,
-                $table,
-                $class,
-                $path,
-                $namespace,
-                self::command($module),
-                [$table]
-            ),
+            $this->readTable(Database::adapter($config), $config, $module, $names, $table),
             $force,
             $output
         );
@@ -815,112 +951,5 @@ final class ModelCommand extends ProjectCommand
         foreach ($failed as $table => $reason) {
             $output->line(sprintf('  %s: %s', $table, $reason));
         }
-    }
-
-    /**
-     * The write phase of one table: the base, its lines, and the model. The
-     * lines are the lines of make:model <table>.
-     *
-     * @param Parts $parts
-     */
-    private function write(Config $config, array $parts, bool $force, Output $output): Outcome
-    {
-        $writer    = $this->writer($config);
-        $relations = $parts['relations'];
-
-        // The base first: a model never exists without its base.
-        $this->reportOwned(
-            $output,
-            $writer->renderOwned(
-                $parts['baseFile'],
-                'model-base',
-                [
-                    'aliases'    => PropertyNames::attributes($parts['attributes'])
-                        . RelationAliases::attributes($relations->relations),
-                    'aliasNote'  => PropertyNames::note($parts['attributes'])
-                        . RelationAliases::note($relations->relations),
-                    'class'      => $parts['base'],
-                    'columnMap'  => $this->columnMap($config, $parts['map']),
-                    'namespace'  => $parts['baseNamespace'],
-                    'properties' => $this->properties($config, $parts['properties'], $parts['names']),
-                    'relations'  => $this->relations($config, $relations),
-                    'table'      => $parts['table'],
-                ]
-            ),
-            $parts['baseFile']
-        );
-
-        // A property with another name breaks the code that uses it, so
-        // crest says so (decision 6).
-        if (null === $parts['renamed']) {
-            $output->line(sprintf(
-                'Note: crest cannot read columnMap() of %s, so it cannot list the renamed properties',
-                $parts['baseFile']
-            ));
-        }
-
-        foreach ($parts['renamed'] ?? [] as [$old, $new]) {
-            $output->line(sprintf('Renamed $%s to $%s: change the code that uses it', $old, $new));
-        }
-
-        foreach ($parts['dropped'] as $line) {
-            $output->line($line);
-        }
-
-        // A relation that crest cannot write is not in the base. The
-        // developer can give it an alias with an attribute, or add it in the
-        // model.
-        foreach ($relations->skipped as $line) {
-            $output->line($line);
-        }
-
-        // An attribute that the next base does not have is dropped, and the
-        // developer must know that its alias is gone.
-        foreach ($relations->dropped as $line) {
-            $output->line($line);
-        }
-
-        // Each key gives a relation or a skipped line, so no relations and no
-        // skipped lines means no keys. crest reads relations only from
-        // foreign keys, and this line tells the user so.
-        if ([] === $relations->relations && [] === $relations->skipped) {
-            $output->line(sprintf(self::NO_KEYS, $parts['table']));
-        }
-
-        if ([] !== $parts['run']) {
-            $output->line(sprintf(
-                'Run %s for %s too: %s relations use the property names of %s',
-                $parts['command'],
-                Sentence::join($parts['run']),
-                1 === count($parts['run']) ? 'its' : 'their',
-                $parts['table']
-            ));
-        }
-
-        $outcome = $writer->renderOnce(
-            $parts['file'],
-            self::KEY,
-            [
-                'base'          => $parts['base'],
-                'baseNamespace' => $parts['baseNamespace'],
-                'class'         => $parts['class'],
-                'namespace'     => $parts['namespace'],
-            ],
-            $force
-        );
-
-        if (Outcome::Kept === $outcome) {
-            $output->line(sprintf('Kept %s: it exists; pass --force to replace it', $parts['file']));
-        } else {
-            $output->success(sprintf('Created %s', $parts['file']));
-        }
-
-        // The old files of the table stay: the developer moves the code and
-        // deletes them (#71).
-        if (null !== $parts['note']) {
-            $output->line($parts['note']);
-        }
-
-        return $outcome;
     }
 }
