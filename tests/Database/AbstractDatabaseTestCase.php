@@ -93,6 +93,22 @@ abstract class AbstractDatabaseTestCase extends TestCase
     }
 
     /**
+     * Skips a binary column test on SQLite with cphalcon before 5.24.0. Its
+     * describeColumns() gives VARCHAR for a BLOB column. The v6 package has the
+     * fix. The test runs again when the CI gets the release with the fix.
+     */
+    protected function skipBinaryColumnOnOldCphalcon(): void
+    {
+        if (
+            Dialect::Sqlite === $this->getDialect()
+            && extension_loaded('phalcon')
+            && version_compare((string) phpversion('phalcon'), '5.24.0', '<')
+        ) {
+            $this->markTestSkipped('cphalcon before 5.24.0 gives VARCHAR for a BLOB column on SQLite.');
+        }
+    }
+
+    /**
      * Skips a composite key test on PostgreSQL with cphalcon before 5.24.0.
      * Its describeReferences() gives each column of the key with each
      * referenced column. The v6 package has the fix. The test runs again when

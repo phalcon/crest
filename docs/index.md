@@ -8,7 +8,9 @@ See the [README](../README.md) for installation, usage and configuration.
 
 Aliases are shown in brackets. Run `crest` with no arguments, or `crest list`,
 for the same listing from the tool itself. In a project, the listing shows only
-the commands for the flavor of the project.
+the commands for the flavor of the project. `crest --help` shows the help of `list`.
+An unknown option with no command, or a `crest.php` that is not valid, stops the
+listing with an error.
 
 | Command | Description |
 |---|---|
@@ -49,6 +51,10 @@ with a stub for each flavor. `make:controller`, `make:model`, `make:module` and
 
     crest new my-app
     crest new my-app --flavor=mvc
+
+An ADR project has `public/index.php`, the front controller `src/AppFront.php`,
+`crest.php`, `composer.json`, the docker files, and `src/Action/Get.php`, which answers
+`GET /`. For an MVC project, see "The MVC project".
 
 | Option | Purpose |
 |---|---|
@@ -194,7 +200,10 @@ the default is `adr`:
 
 The project stubs that are the same in both flavors are in
 `resources/stubs/shared/`, and a publish puts them there. A copy in
-`resources/stubs/<flavor>/` wins over the shared copy for that flavor. When the
+`resources/stubs/<flavor>/` wins over the shared copy for that flavor, and a publish
+of the shared copy prints a note that names it. Crest looks for a stub in the project
+(`resources/stubs/<flavor>/`, then `resources/stubs/shared/`), then in the package, in
+the same order. When the
 flavor does not have the stub and another flavor does, the error names the
 option to use, for example `pass --flavor=mvc`. A
 publish with no name leaves the project stubs out, because they do nothing
@@ -714,8 +723,8 @@ its origin, and a table with each line of `classes`, sorted by table:
     user-profiles  UserProfile
     users          User
 
-When the key is not correct, `config:show` shows the error in a `models` row,
-and `make:model` stops on it:
+When the key is not correct, `config:show` shows the error in a `models` row and
+exits with 0, and `make:model` stops on it:
 
     service    app                                                default
     models     crest.php: models.camelCase must be true or false  declared
@@ -1396,6 +1405,14 @@ A package adds commands to crest in its `composer.json`:
 
 crest reads this block from each installed package, and from the root
 project. `crest make:command` writes a command and prints its block.
+
+An unknown command gives a hint when crest knows the package that provides its
+prefix:
+
+    crest: unknown command 'migration:run'; provided by phalcon/migrations
+
+There is no hint when a registered command has that prefix: the package is
+installed, and only the name is wrong.
 
 A command extends `Crest\Console\Command\Command` and declares two methods:
 

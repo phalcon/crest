@@ -113,6 +113,8 @@ final class ScaffoldCommandTest extends AbstractDatabaseTestCase
 
     public function testABinaryColumnGivesASkippedLine(): void
     {
+        $this->skipBinaryColumnOnOldCphalcon();
+
         $this->createTables(ScaffoldAvatarsMigration::class);
 
         $this->assertSame(0, $this->scaffold(['avatars']));
