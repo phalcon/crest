@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace {{ namespace }};
 
 {{ dbUse }}use {{ providerNamespace }}\DispatcherProvider;
+use {{ providerNamespace }}\UrlProvider;
 use {{ providerNamespace }}\ViewProvider;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\FactoryDefault;
@@ -62,6 +63,7 @@ final class {{ front }}
     {
         return [
 {{ dbProvider }}            new DispatcherProvider(),
+            new UrlProvider(),
             new ViewProvider($this->projectRoot . '/{{ viewsPath }}'),
         ];
     }

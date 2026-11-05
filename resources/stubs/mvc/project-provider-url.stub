@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ providerNamespace }};
+
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Mvc\Url;
+
+/**
+ * The url service. With no base URI, Phalcon makes one from PHP_SELF, and the
+ * links of a page such as /users/edit/5 are not correct. For an application in
+ * a subfolder, change the value, for example to '/shop/'.
+ */
+final class UrlProvider implements ServiceProviderInterface
+{
+    public function register(DiInterface $di): void
+    {
+        // Not a static closure: the container binds each closure to itself,
+        // and a static closure gives a warning there.
+        $di->setShared('url', function (): Url {
+            $url = new Url();
+            $url->setBaseUri('/');
+
+            return $url;
+        });
+    }
+}

@@ -1,0 +1,11 @@
+The {{ module }} module finds the controller: its Module class sets the default namespace
+of the dispatcher to {{ namespace }}.
+
+With the routes from make:module, GET /{{ url }} lists the rows of {{ table }}.
+
+These pages have no login and no CSRF check. Add them before you deploy the pages.
+
+The links and the redirects use the base URI of the url service. A project from crest new
+sets it in UrlProvider. In another project, set it, or the links are not correct:
+
+    $url->setBaseUri('/');

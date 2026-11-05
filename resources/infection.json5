@@ -27,10 +27,10 @@
                 // header row. Both cells are '', so they contribute no width
                 // and dropping one changes nothing that is printed.
                 "Crest\\Console\\Output::usage",
-                // one() gives its table as the table that the run writes.
+                // readTable() gives its table as the table that the run writes.
                 // ForeignKeys::using() never gives the table itself, so an
                 // empty list changes nothing.
-                "Crest\\Command\\Make\\ModelCommand::one"
+                "Crest\\Command\\Make\\ModelCommand::readTable"
             ]
         },
         "CastString": {
