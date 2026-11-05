@@ -29,6 +29,7 @@ final class MvcSkeletonTest extends TestCase
         $this->assertSame(
             [
                 'project-provider-dispatcher' => 'src/Providers/DispatcherProvider.php',
+                'project-provider-url'        => 'src/Providers/UrlProvider.php',
                 'project-phtml-provider'      => 'src/Providers/ViewProvider.php',
                 'project-phtml-layout'        => 'themes/default/index.phtml',
                 'project-phtml-index'         => 'themes/default/index/index.phtml',
@@ -62,6 +63,7 @@ final class MvcSkeletonTest extends TestCase
         $this->assertSame(
             [
                 'project-provider-dispatcher' => 'src/Providers/DispatcherProvider.php',
+                'project-provider-url'        => 'src/Providers/UrlProvider.php',
                 'project-volt-provider'       => 'src/Providers/ViewProvider.php',
                 'project-volt-layout'         => 'themes/default/index.volt',
                 'project-volt-index'          => 'themes/default/index/index.volt',
@@ -104,6 +106,7 @@ final class MvcSkeletonTest extends TestCase
         $this->assertSame(
             [
                 'project-provider-dispatcher' => 'src/Providers/DispatcherProvider.php',
+                'project-provider-url'        => 'src/Providers/UrlProvider.php',
                 'project-phtml-provider'      => 'src/Providers/ViewProvider.php',
                 'project-phtml-layout'        => 'themes/default/index.phtml',
                 'project-phtml-index'         => 'themes/default/index/index.phtml',

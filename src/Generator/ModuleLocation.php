@@ -33,6 +33,7 @@ use const SORT_STRING;
  *
  *     <module path>/Admin/Module.php      App\Modules\Admin\Module
  *     <module path>/Admin/Controllers/    App\Modules\Admin\Controllers
+ *     <module path>/Admin/Forms/          App\Modules\Admin\Forms
  *     <module path>/Admin/Models/         App\Modules\Admin\Models
  *     <module path>/Admin/views/          no classes
  *
@@ -53,6 +54,11 @@ final class ModuleLocation
      * The folder of the controllers of a module.
      */
     public const CONTROLLERS = 'Controllers';
+
+    /**
+     * The folder of the forms of a module. make:module does not write it.
+     */
+    public const FORMS = 'Forms';
 
     /**
      * The folder of the models of a module.
@@ -181,7 +187,7 @@ final class ModuleLocation
     }
 
     /**
-     * A folder of the module: CONTROLLERS, MODELS or VIEWS.
+     * A folder of the module: CONTROLLERS, FORMS, MODELS or VIEWS.
      */
     public function folder(string $part): string
     {
@@ -189,7 +195,7 @@ final class ModuleLocation
     }
 
     /**
-     * The namespace of a folder of the module: CONTROLLERS or MODELS.
+     * The namespace of a folder of the module: CONTROLLERS, FORMS or MODELS.
      */
     public function namespaceOf(string $part): string
     {

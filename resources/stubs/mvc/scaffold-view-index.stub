@@ -1,0 +1,54 @@
+<?= $this->getContent() ?>
+<h1>{{ model }}</h1>
+
+<p><a href="<?= $this->url->get('{{ url }}/new') ?>">New</a></p>
+
+<form method="get" action="<?= $this->url->get('{{ url }}/search') ?>">
+<?php foreach ($form as $element): ?>
+    <p><?= $element->label() ?> <?= $element->render() ?></p>
+<?php endforeach; ?>
+    <button type="submit">Search</button>
+</form>
+
+<?php if (0 === count($page->getItems())): ?>
+<p>No rows.</p>
+<?php else: ?>
+<table>
+    <thead>
+        <tr>
+            <th>{{ keyLabel }}</th>
+<?php foreach ($form as $element): ?>
+<?php if ('{{ key }}' !== $element->getName()): ?>
+            <th><?= $this->escaper->html((string) $element->getLabel()) ?></th>
+<?php endif; ?>
+<?php endforeach; ?>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+<?php foreach ($page->getItems() as $row): ?>
+        <tr>
+            <td><?= $this->escaper->html((string) $row->{{ key }}) ?></td>
+<?php foreach ($form as $element): ?>
+<?php if ('{{ key }}' !== $element->getName()): ?>
+            <td><?= $this->escaper->html((string) $row->{$element->getName()}) ?></td>
+<?php endif; ?>
+<?php endforeach; ?>
+            <td>
+                <a href="<?= $this->url->get('{{ url }}/edit/' . rawurlencode((string) $row->{{ key }})) ?>">Edit</a>
+                <form method="post" action="<?= $this->url->get('{{ url }}/delete/' . rawurlencode((string) $row->{{ key }})) ?>">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+<?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
+
+<?php if (1 < $page->getCurrent()): ?>
+<a href="<?= $this->url->get('{{ url }}/search', $search + ['page' => $page->getPrevious()]) ?>">Previous</a>
+<?php endif; ?>
+<?php if ($page->getCurrent() < $page->getLast()): ?>
+<a href="<?= $this->url->get('{{ url }}/search', $search + ['page' => $page->getNext()]) ?>">Next</a>
+<?php endif; ?>

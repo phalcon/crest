@@ -272,6 +272,7 @@ final class NewCommandTest extends TestCase
                 'src/Controllers/Base/CrestControllerBase.php',
                 'src/Controllers/IndexController.php',
                 'src/Providers/DispatcherProvider.php',
+                'src/Providers/UrlProvider.php',
                 'src/Providers/ViewProvider.php',
                 'themes/default/index.phtml',
                 'themes/default/index/index.phtml',
@@ -1112,6 +1113,7 @@ final class NewCommandTest extends TestCase
             . "    'paths'     => [\n"
             . "        'command'    => 'src/Command',\n"
             . "        'controller' => 'src/Controllers',\n"
+            . "        'form'       => 'src/Forms',\n"
             . "        'model'      => 'src/Models',\n"
             . "        'module'     => 'src/Modules',\n"
             . "        'provider'   => 'src/Providers',\n"
@@ -1136,6 +1138,7 @@ final class NewCommandTest extends TestCase
             . "namespace App;\n"
             . "\n"
             . "use App\\Providers\\DispatcherProvider;\n"
+            . "use App\\Providers\\UrlProvider;\n"
             . "use App\\Providers\\ViewProvider;\n"
             . "use Phalcon\\Di\\DiInterface;\n"
             . "use Phalcon\\Di\\FactoryDefault;\n"
@@ -1193,6 +1196,7 @@ final class NewCommandTest extends TestCase
             . "    {\n"
             . "        return [\n"
             . "            new DispatcherProvider(),\n"
+            . "            new UrlProvider(),\n"
             . "            new ViewProvider(\$this->projectRoot . '/themes/default'),\n"
             . "        ];\n"
             . "    }\n"

@@ -115,6 +115,7 @@ final class ProjectStubsTest extends TestCase
         yield 'mvc/project-provider-db' => ['mvc', 'project-provider-db'];
         yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
+        yield 'mvc/project-provider-url' => ['mvc', 'project-provider-url'];
     }
 
     /**
@@ -132,6 +133,7 @@ final class ProjectStubsTest extends TestCase
         yield 'mvc/project-provider-db' => ['mvc', 'project-provider-db'];
         yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
+        yield 'mvc/project-provider-url' => ['mvc', 'project-provider-url'];
         yield 'shared/project-config' => ['adr', 'project-config'];
         yield 'shared/project-htrouter' => ['adr', 'project-htrouter'];
         yield 'shared/project-index' => ['adr', 'project-index'];
@@ -351,6 +353,7 @@ final class ProjectStubsTest extends TestCase
                 'mvc/project-provider-db-sqlite',
                 'mvc/project-provider-db',
                 'mvc/project-provider-dispatcher',
+                'mvc/project-provider-url',
                 'mvc/project-readme',
             ],
             array_keys(self::packagedNames())

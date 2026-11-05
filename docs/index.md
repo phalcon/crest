@@ -8,7 +8,9 @@ See the [README](../README.md) for installation, usage and configuration.
 
 Aliases are shown in brackets. Run `crest` with no arguments, or `crest list`,
 for the same listing from the tool itself. In a project, the listing shows only
-the commands for the flavor of the project.
+the commands for the flavor of the project. `crest --help` shows the help of `list`.
+An unknown option with no command, or a `crest.php` that is not valid, stops the
+listing with an error.
 
 | Command | Description |
 |---|---|
@@ -28,6 +30,7 @@ the commands for the flavor of the project.
 | `make:module` | create an MVC module |
 | `make:provider` | create a service provider |
 | `make:responder` | create an ADR responder |
+| `make:scaffold` | create MVC CRUD pages for a database table |
 | `new` | create an ADR or MVC project |
 | `route:list` | every route the application answers |
 | `serve` (`server`) | start PHP's built-in web server for the project |
@@ -35,8 +38,8 @@ the commands for the flavor of the project.
 | `up` | start the project containers |
 
 `make:command` works in each flavor. `make:provider` works in ADR and MVC projects,
-with a stub for each flavor. `make:controller`, `make:model` and `make:module`
-are for MVC projects only. These commands are for ADR projects only: `make:action`,
+with a stub for each flavor. `make:controller`, `make:model`, `make:module` and
+`make:scaffold` are for MVC projects only. These commands are for ADR projects only: `make:action`,
 `make:middleware`, `make:responder`, `route:list`, `container:list` and
 `event:list`. In a project of a different flavor, they stop with an error:
 
@@ -48,6 +51,10 @@ are for MVC projects only. These commands are for ADR projects only: `make:actio
 
     crest new my-app
     crest new my-app --flavor=mvc
+
+An ADR project has `public/index.php`, the front controller `src/AppFront.php`,
+`crest.php`, `composer.json`, the docker files, and `src/Action/Get.php`, which answers
+`GET /`. For an MVC project, see "The MVC project".
 
 | Option | Purpose |
 |---|---|
@@ -193,7 +200,10 @@ the default is `adr`:
 
 The project stubs that are the same in both flavors are in
 `resources/stubs/shared/`, and a publish puts them there. A copy in
-`resources/stubs/<flavor>/` wins over the shared copy for that flavor. When the
+`resources/stubs/<flavor>/` wins over the shared copy for that flavor, and a publish
+of the shared copy prints a note that names it. Crest looks for a stub in the project
+(`resources/stubs/<flavor>/`, then `resources/stubs/shared/`), then in the package, in
+the same order. When the
 flavor does not have the stub and another flavor does, the error names the
 option to use, for example `pass --flavor=mvc`. A
 publish with no name leaves the project stubs out, because they do nothing
@@ -228,12 +238,12 @@ applications (vokuro, invo):
 |---|---|
 | `public/index.php` | the web entry point, as in an ADR project |
 | `src/AppFront.php` | the front controller: `FactoryDefault`, the providers and `Phalcon\Mvc\Application` |
-| `src/Providers/` | `DispatcherProvider` (the default namespace of the controllers) and `ViewProvider` (the views folder and the phtml engine) |
+| `src/Providers/` | `DispatcherProvider` (the default namespace of the controllers), `UrlProvider` (the base URI of the links and the redirects) and `ViewProvider` (the views folder and the phtml engine) |
 | `src/Controllers/` | `IndexController`, which answers `GET /` |
 | `src/Controllers/Base/` | `CrestControllerBase`, the base that crest owns (see "Generated bases") |
 | `themes/default/` | the layout `index.phtml` and the view `index/index.phtml` |
 
-`crest.php` has `'flavor' => 'mvc'` and the paths `controller`, `model`,
+`crest.php` has `'flavor' => 'mvc'` and the paths `controller`, `form`, `model`,
 `module`, `provider` and `views`. To add a service, run `crest make:provider Mailer`. It
 writes `src/Providers/MailerProvider.php`, a provider that implements
 `Phalcon\Di\ServiceProviderInterface`, and prints the line to add to
@@ -403,8 +413,8 @@ questions, in this order, each with a proposal:
 3. The front controller: `<namespace>\AppFront` when `AppFront.php` is in that folder.
    Answer `none` for no front controller.
 4. A folder for each path of the flavor: `action`, `command`, `middleware`, `provider`
-   and `responder` for ADR; `command`, `controller`, `model`, `module`, `provider` and
-   `views` for MVC. The question says if the folder exists. A class folder is in the
+   and `responder` for ADR; `command`, `controller`, `form`, `model`, `module`, `provider`
+   and `views` for MVC. The question says if the folder exists. A class folder is in the
    folder of the namespace.
    An answer must be a relative folder in a psr-4 folder, and its folder names must give
    a usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use. A
@@ -433,8 +443,9 @@ namespaces from it. Without one, `init` stops and tells you to add one, for exam
 
 ## Commands that boot the project
 
-`container:list`, `event:list` and `make:model` read state that exists only
-once the application has registered it, so they start your front controller.
+`container:list`, `event:list`, `make:model` and `make:scaffold` read state that
+exists only once the application has registered it, so they start your front
+controller.
 Name it in `crest.php`:
 
 ```php
@@ -474,7 +485,7 @@ the command:
 |---|---|
 | `container:list` | implement `Phalcon\Contracts\Container\Service\Collection` and `Enumerable` |
 | `event:list` | implement `Collection`, and hold a registered `Phalcon\Events\Manager` |
-| `make:model` | implement `Phalcon\Di\DiInterface`, and hold a `db` service that is a `Phalcon\Db\Adapter\AdapterInterface` |
+| `make:model`, `make:scaffold` | implement `Phalcon\Di\DiInterface`, and hold a `db` service that is a `Phalcon\Db\Adapter\AdapterInterface` |
 
 `Phalcon\Container\Container` implements both contracts, so returning one is
 enough for `container:list`.
@@ -712,8 +723,8 @@ its origin, and a table with each line of `classes`, sorted by table:
     user-profiles  UserProfile
     users          User
 
-When the key is not correct, `config:show` shows the error in a `models` row,
-and `make:model` stops on it:
+When the key is not correct, `config:show` shows the error in a `models` row and
+exits with 0, and `make:model` stops on it:
 
     service    app                                                default
     models     crest.php: models.camelCase must be true or false  declared
@@ -1214,6 +1225,170 @@ models between modules, keep them in the `model` path: run `make:model` with
 no `--module`. `make:model --module` reads the tables through the `db` service
 of the project, also when the module sets its own `db`.
 
+## Generating scaffolds
+
+In an MVC project, `make:scaffold` writes CRUD pages for one table of the
+database: a model, a form, a controller and three views. In a project from
+`crest new --flavor=mvc --database=<choice>`, with a table `users`:
+
+    crest make:scaffold users
+
+    Created src/Models/Base/UsersBase.php
+    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+    Created src/Models/Users.php
+    Created src/Forms/Base/UsersFormBase.php
+    Created src/Forms/UsersForm.php
+    Created src/Controllers/UsersController.php
+    Created themes/default/users/index.phtml
+    Created themes/default/users/new.phtml
+    Created themes/default/users/edit.phtml
+
+Crest then prints what the pages need: the default namespace of the dispatcher,
+the URL of the list, and the base URI.
+
+| File | Owner | A second run |
+|---|---|---|
+| `src/Models/Base/UsersBase.php` | crest | writes it again |
+| `src/Models/Users.php` | you | keeps it, also with `--force` |
+| `src/Forms/Base/UsersFormBase.php` | crest | writes it again |
+| `src/Forms/UsersForm.php` | you | keeps it, unless `--force` |
+| `src/Controllers/Base/CrestControllerBase.php` | crest | writes it again when its stub changes |
+| `src/Controllers/UsersController.php` | you | keeps it, unless `--force` |
+| `themes/default/users/index.phtml` | you | keeps it, unless `--force` |
+| `themes/default/users/new.phtml` | you | keeps it, unless `--force` |
+| `themes/default/users/edit.phtml` | you | keeps it, unless `--force` |
+
+So when the table gets a new column, run `make:scaffold` again. Crest writes the
+two bases again, and the list and the `new` and `edit` pages show the column,
+because the views loop over the form. The rules of "Generated bases" apply to the
+two bases. `make:model --force` replaces the model.
+
+### The names of the pages
+
+All the names come from the class of the model, so one line of `models.classes`
+changes all of them (see "Names"):
+
+| Name | `users` | `user_profiles` | `users` with `'users' => 'User'` |
+|---|---|---|---|
+| Model | `Users` | `UserProfiles` | `User` |
+| Form | `UsersForm` | `UserProfilesForm` | `UserForm` |
+| Form base | `UsersFormBase` | `UserProfilesFormBase` | `UserFormBase` |
+| Controller | `UsersController` | `UserProfilesController` | `UserController` |
+| URL and views folder | `users` | `user-profiles` | `user` |
+
+The name of a field is the property of its column, and its label comes from the
+column: `first_name` gives the label `First name`.
+
+### The pages
+
+| URL | Method | Result |
+|---|---|---|
+| `/users` | any | the list, with 10 rows on each page, and the search form |
+| `/users/search` | any | the list of the rows that match the query |
+| `/users/new` | any | an empty form |
+| `/users/create` | POST | adds a row, and goes to the list |
+| `/users/edit/<id>` | any | the form of the row |
+| `/users/save/<id>` | POST | changes the row, and goes to the list |
+| `/users/delete/<id>` | POST | deletes the row, and goes to the list |
+
+- A request to `create`, `save` or `delete` that is not a POST goes to the list,
+  and changes nothing.
+- When the model refuses a value, the form shows again, with the messages of the
+  model and the values that the user typed. When the model refuses a delete, the
+  list shows its messages.
+- `create` does not change a row that exists: a primary key that is in the table
+  gives the message of the model, and the form shows again.
+- A row that does not exist gives `Users was not found`, and the list.
+
+To write the pages into a module, add `--module` (see "Generating modules"):
+
+    crest make:scaffold users --module=admin
+
+The model, the form and the controller go into the `Models`, `Forms` and
+`Controllers` folders of the module, in its namespace, and the views go into
+`views/users/`. The pages are at `/admin/users`, after you add the registration
+and the routes that `make:module` prints. The module must exist.
+
+### What stops the command
+
+Crest does these checks before it writes a file, so a run that stops changes
+nothing. It stops when:
+
+- the project is not an MVC project;
+- `--module` names a module that does not exist;
+- the table name gives no class name, and `models.classes` gives it no class;
+- the dispatcher cannot find a controller of that class from a URL (see "Generating
+  controllers");
+- no psr-4 entry covers the `form`, `controller` or `model` path;
+- the table does not exist;
+- the table has no primary key, or its primary key has more than one column;
+- `make:model` stops on the table (see "Generating models");
+- a property has the name of an accessor of `Phalcon\Mvc\Model` (see below);
+- the `edit` form has no fields, for example when the table has only its primary
+  key.
+
+**A column with the name of a `Model` accessor.** `Phalcon\Mvc\Model` has methods
+such as `setSource()`, `getSchema()` and `getMessages()`. A form calls
+`set<Name>()` and `get<Name>()` when they exist, so a column `source` calls
+`Model::setSource()`, and each save fails. Crest stops, and gives the command that
+gives the column another property name:
+
+    crest: column 'source' gives the property 'source', and Phalcon\Mvc\Model has a method with that name; give it another name with make:model sources --property=source=<name>
+
+Run that `make:model` command, then run `make:scaffold` again.
+
+### The form
+
+The form has one field for each column, in the order of the table:
+
+| Column | Field | Filter | Other |
+|---|---|---|---|
+| The identity column | none | | |
+| A primary key that is not identity | as the rows below | as the rows below | on the `new` form only |
+| Name is `email` (any case) | `Email` | `email` | |
+| `BIGINTEGER`, `INTEGER`, `MEDIUMINTEGER`, `SMALLINTEGER`, `TINYINTEGER` | `Numeric` | `int` | |
+| `DOUBLE`, `FLOAT` | `Numeric` | `float` | `step="any"` |
+| `DECIMAL` | `Numeric` | `trim` | `step="any"` |
+| `BOOLEAN` | `Select` | `bool` | the options `No` and `Yes`, and an empty option |
+| `DATE` | `Date` | `trim` | |
+| `TEXT`, `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT`, `JSON`, `JSONB` | `TextArea` | `trim` | |
+| `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB`, `BINARY`, `VARBINARY`, `BYTEA` | none | | crest prints `Skipped <column>: a binary column has no field in the form` |
+| Each other type | `Text` | `trim` | |
+
+The column type is the type that Phalcon reads from the database (see "Generating
+models"). An input that is empty or has only whitespace is null, and the model decides
+if the column can be null: a `NOT NULL` column gives the message `<property> is required`.
+
+### Search
+
+The search form has the fields of the `new` form, and uses the rules of
+`Phalcon\Mvc\Model\Criteria::fromInput()`: `LIKE` for a `VARCHAR` column, and `=`
+for each other type. An empty field is not in the search. On PostgreSQL, partial
+text for a `DATE`, a `TIMESTAMP` or a `UUID` column gives an error page.
+
+### The base URI
+
+The links and the redirects use the `url` service. With no base URI, Phalcon makes
+one from `PHP_SELF`, and the links of a page such as `/users/edit/5` are not
+correct. A project from `crest new` sets `/` in `UrlProvider`. For an application in
+a subfolder, change that line, for example to `/shop/`. Another project must set
+the base URI:
+
+    $url->setBaseUri('/');
+
+### Limits
+
+- The pages have no login and no CSRF check. Add them before you deploy the pages.
+- There is no success message after a redirect, because a message that survives a
+  redirect needs a session. When your project has a `session` service, call
+  `$this->flashSession->success('Saved')` before the redirect, and add
+  `<?php $this->flashSession->output() ?>` to the view.
+- A foreign key is a number field, not a list of the related rows.
+- A `DELETE` that a foreign key refuses gives an error page.
+- A column with the name `page` is also the parameter of the page in the URL.
+- With the `phalcon/phalcon` package (Phalcon v6), a project needs `phalcon/phql`.
+  `crest new --database` adds it (see "Generating models").
+
 ## Adding commands from a package
 
 A package adds commands to crest in its `composer.json`:
@@ -1230,6 +1405,14 @@ A package adds commands to crest in its `composer.json`:
 
 crest reads this block from each installed package, and from the root
 project. `crest make:command` writes a command and prints its block.
+
+An unknown command gives a hint when crest knows the package that provides its
+prefix:
+
+    crest: unknown command 'migration:run'; provided by phalcon/migrations
+
+There is no hint when a registered command has that prefix: the package is
+installed, and only the name is wrong.
 
 A command extends `Crest\Console\Command\Command` and declares two methods:
 

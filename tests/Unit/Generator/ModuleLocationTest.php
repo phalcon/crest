@@ -205,9 +205,11 @@ final class ModuleLocationTest extends TestCase
             $this->root . '/src/Modules/Admin/Controllers',
             $location->folder(ModuleLocation::CONTROLLERS)
         );
+        $this->assertSame($this->root . '/src/Modules/Admin/Forms', $location->folder(ModuleLocation::FORMS));
         $this->assertSame($this->root . '/src/Modules/Admin/Models', $location->folder(ModuleLocation::MODELS));
         $this->assertSame($this->root . '/src/Modules/Admin/views', $location->folder(ModuleLocation::VIEWS));
         $this->assertSame('App\\Modules\\Admin\\Controllers', $location->namespaceOf(ModuleLocation::CONTROLLERS));
+        $this->assertSame('App\\Modules\\Admin\\Forms', $location->namespaceOf(ModuleLocation::FORMS));
         $this->assertSame('App\\Modules\\Admin\\Models', $location->namespaceOf(ModuleLocation::MODELS));
         $this->assertSame('Module', ModuleLocation::NAME);
     }

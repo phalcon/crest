@@ -1,0 +1,193 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ baseNamespace }}\{{ base }};
+use {{ formNamespace }}\{{ form }};
+use {{ modelNamespace }}\{{ model }};
+use Phalcon\Http\ResponseInterface;
+use Phalcon\Mvc\Model\Criteria;
+use Phalcon\Paginator\Adapter\QueryBuilder;
+
+use function array_filter;
+use function array_intersect_key;
+use function array_keys;
+use function is_bool;
+use function is_string;
+
+/**
+ * The pages of the table {{ table }}. These pages have no login and no CSRF
+ * check. Add them before you deploy the pages.
+ */
+final class {{ class }} extends {{ base }}
+{
+    public function createAction(): ?ResponseInterface
+    {
+        if (false === $this->request->isPost()) {
+            return $this->response->redirect('{{ url }}');
+        }
+
+        return $this->store(new {{ form }}(), new {{ model }}(), 'new');
+    }
+
+    public function deleteAction(string $id = ''): ?ResponseInterface
+    {
+        if (false === $this->request->isPost()) {
+            return $this->response->redirect('{{ url }}');
+        }
+
+        $row = $this->row($id);
+
+        if (null === $row) {
+            $this->notFound();
+
+            return null;
+        }
+
+        if (true === $row->delete()) {
+            return $this->response->redirect('{{ url }}');
+        }
+
+        $this->messages($row);
+        $this->dispatcher->forward(['action' => 'index']);
+
+        return null;
+    }
+
+    public function editAction(string $id = ''): void
+    {
+        $row = $this->row($id);
+
+        if (null === $row) {
+            $this->notFound();
+
+            return;
+        }
+
+        $this->view->form = new {{ form }}($row);
+        $this->view->id   = $row->{{ key }};
+    }
+
+    public function indexAction(): void
+    {
+        $this->list([]);
+    }
+
+    public function newAction(): void
+    {
+        $this->view->form = new {{ form }}();
+    }
+
+    public function saveAction(string $id = ''): ?ResponseInterface
+    {
+        if (false === $this->request->isPost()) {
+            return $this->response->redirect('{{ url }}');
+        }
+
+        $row = $this->row($id);
+
+        if (null === $row) {
+            $this->notFound();
+
+            return null;
+        }
+
+        $this->view->id = $row->{{ key }};
+
+        return $this->store(new {{ form }}($row), $row, 'edit');
+    }
+
+    public function searchAction(): void
+    {
+        $this->list($this->request->getQuery());
+    }
+
+    /**
+     * The list, for index and search. The search uses only the names of the
+     * form, because Criteria::fromInput() stops on a name that is not a
+     * property. It uses the filtered values, because on PostgreSQL 'abc' for
+     * an integer column gives an error.
+     *
+     * @param array<array-key, mixed> $input
+     */
+    private function list(array $input): void
+    {
+        $form   = new {{ form }}();
+        $search = array_filter(
+            array_intersect_key($input, $form->getElements()),
+            static fn (mixed $value): bool => true === is_string($value) && '' !== $value
+        );
+
+        $form->bind($search);
+
+        foreach (array_keys($search) as $name) {
+            $value         = $form->getFilteredValue($name);
+            $search[$name] = true === is_bool($value) ? (int) $value : $value;
+        }
+
+        $builder = Criteria::fromInput($this->getDI(), {{ model }}::class, $search)->createBuilder();
+        $builder->orderBy('[{{ key }}]');
+
+        $paginator = new QueryBuilder([
+            'builder' => $builder,
+            'limit'   => 10,
+            'page'    => $this->request->getQuery('page', 'int', 1),
+        ]);
+
+        $this->view->form   = $form;
+        $this->view->page   = $paginator->paginate();
+        $this->view->search = $search;
+        $this->view->pick('{{ route }}/index');
+    }
+
+    private function messages({{ model }} $row): void
+    {
+        foreach ($row->getMessages() as $message) {
+            $this->flash->error((string) $message->getMessage());
+        }
+    }
+
+    private function notFound(): void
+    {
+        $this->flash->error('{{ model }} was not found');
+        $this->dispatcher->forward(['action' => 'index']);
+    }
+
+    private function row(string $id): ?{{ model }}
+    {
+        $row = {{ model }}::findFirst([
+            'conditions' => '[{{ key }}] = :id:',
+            'bind'       => ['id' => {{ keyValue }}],
+        ]);
+
+        return $row instanceof {{ model }} ? $row : null;
+    }
+
+    /**
+     * Binds the input to the row, and saves it. A row that the model refuses
+     * shows the form again, with the messages and the typed values. A forward
+     * would make a new form, with no typed values.
+     *
+     * create() and update(), not save(): save() finds a row with the same key,
+     * and changes it, so a new row could replace a row that exists.
+     */
+    private function store({{ form }} $form, {{ model }} $row, string $view): ?ResponseInterface
+    {
+        $form->bind($this->request->getPost(), $row);
+
+        $stored = 'new' === $view ? $row->create() : $row->update();
+
+        if (true === $stored) {
+            return $this->response->redirect('{{ url }}');
+        }
+
+        $this->messages($row);
+
+        $this->view->form = $form;
+        $this->view->pick('{{ route }}/' . $view);
+
+        return null;
+    }
+}

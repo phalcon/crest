@@ -43,6 +43,7 @@ final class CommandsTest extends TestCase
                 'make:module',
                 'make:provider',
                 'make:responder',
+                'make:scaffold',
                 'new',
                 'route:list',
                 'serve',

@@ -28,6 +28,7 @@ use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Mvc\Application;
 use Phalcon\Mvc\Dispatcher;
 use Phalcon\Mvc\Router as MvcRouter;
+use Phalcon\Mvc\Url;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -162,6 +163,27 @@ final class GuidanceContractsTest extends TestCase
         $this->assertSame(
             [Container::class],
             $this->parameterTypes(AbstractHttpFront::class, 'registerProviders')
+        );
+    }
+
+    public function testScaffoldGuidanceNamesMethodsThatExist(): void
+    {
+        $guidance = (string) file_get_contents(Paths::stubs() . '/mvc/fragment-guidance-scaffold.stub');
+
+        $this->assertStringContainsString('$dispatcher->setDefaultNamespace(', $guidance);
+        $this->assertStringContainsString("\$url->setBaseUri('/');", $guidance);
+        $this->assertStringContainsString(
+            "\$url->setBaseUri('/');",
+            (string) file_get_contents(Paths::stubs() . '/mvc/fragment-guidance-scaffold-module.stub')
+        );
+        $this->assertSame(['string'], $this->parameterTypes(Dispatcher::class, 'setDefaultNamespace'));
+        $this->assertSame(['string'], $this->parameterTypes(Url::class, 'setBaseUri'));
+
+        // The line that the guidance tells the developer to copy is the line
+        // of a project from crest new.
+        $this->assertStringContainsString(
+            "\$url->setBaseUri('/');",
+            (string) file_get_contents(Paths::stubs() . '/mvc/project-provider-url.stub')
         );
     }
 

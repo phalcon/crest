@@ -47,7 +47,8 @@ folder `<name>` in the working directory. `--directory` is not supported, and a 
 folder such as `/usr` is refused as the working directory. `--help` shows the options of
 `new`.
 
-The script runs `crest new` in a one-off `composer:2` container. It writes your user and
+The script runs `crest new` in a one-off `composer:2` container. The working directory
+has the same path in that container, so the errors of `new` show host paths. It writes your user and
 group IDs into the project `.env`, then runs `./crest up` and `./crest install`. Then
 GET / answers on http://localhost:8080/. A v5 project compiles the Phalcon extension in
 `./crest up`. This takes some minutes. On Windows, run it in WSL2.
@@ -58,8 +59,8 @@ For another port, set `APP_PORT`. The script writes it into the project `.env`:
 
 If `./crest up` or `./crest install` fails, for example because the port is in use, the
 project stays. The script prints the commands to run after you fix the problem. With
-rootless docker, the script writes `UID=0` and `GID=0` into `.env`: rootless docker maps
-root in the container to your user.
+rootless docker, the script writes `UID=0` and `GID=0` into `.env` and does no `chown`:
+rootless docker maps root in the container to your user.
 
 Do not add a `new` key to a published `project-config` stub for this command. `new` runs
 in a container without docker, so `crest up` fails there. The script runs `./crest up`

@@ -33,6 +33,7 @@ use Phalcon\Contracts\Http\AttributeRequest;
 use Phalcon\Di\Di;
 use Phalcon\Di\DiInterface;
 use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Forms\Form;
 use Phalcon\Http\RequestInterface;
 use Phalcon\Http\ResponseInterface;
 use Phalcon\Mvc\Controller;
@@ -82,33 +83,43 @@ final class StubContractsTest extends TestCase
      * no-placeholder-left assertion rather than quietly emitting `{{ name }}`.
      */
     private const REPLACEMENTS = [
-        'alias'         => 'Generated',
-        'aliases'       => '',
-        'aliasNote'     => '',
-        'attributes'    => '',
-        'base'          => 'GeneratedBase',
-        'baseNamespace' => 'App\\Generated\\Base',
-        'class'         => 'GeneratedArtifact',
-        'classJson'     => 'App\\\\Generated\\\\GeneratedArtifact',
-        'column'        => 'id',
-        'columnMap'     => '',
-        'command'       => 'generated',
-        'entries'       => '',
-        'extraKey'      => 'crest',
-        'fields'        => "'id'",
-        'module'        => 'generated',
-        'name'          => 'id',
-        'namespace'     => 'App\\Generated',
-        'pairs'         => '',
-        'params'        => '',
-        'properties'    => '',
-        'property'      => 'id',
-        'referenced'    => "'id'",
-        'relations'     => '',
-        'route'         => 'generated',
-        'table'         => 'generated',
-        'template'      => 'generated/index',
-        'type'          => 'int',
+        'alias'          => 'Generated',
+        'aliases'        => '',
+        'aliasNote'      => '',
+        'attributes'     => '',
+        'base'           => 'GeneratedBase',
+        'baseNamespace'  => 'App\\Generated\\Base',
+        'class'          => 'GeneratedArtifact',
+        'classJson'      => 'App\\\\Generated\\\\GeneratedArtifact',
+        'column'         => 'id',
+        'columnMap'      => '',
+        'command'        => 'generated',
+        'elements'       => '',
+        'entries'        => '',
+        'extraKey'       => 'crest',
+        'fields'         => "'id'",
+        'form'           => 'GeneratedForm',
+        'formNamespace'  => 'App\\Generated\\Forms',
+        'imports'        => '',
+        'key'            => 'id',
+        'keyLabel'       => 'Id',
+        'keyValue'       => '(int) $id',
+        'model'          => 'GeneratedModel',
+        'modelNamespace' => 'App\\Generated\\Models',
+        'module'         => 'generated',
+        'name'           => 'id',
+        'namespace'      => 'App\\Generated',
+        'pairs'          => '',
+        'params'         => '',
+        'properties'     => '',
+        'property'       => 'id',
+        'referenced'     => "'id'",
+        'relations'      => '',
+        'route'          => 'generated',
+        'table'          => 'generated',
+        'template'       => 'generated/index',
+        'type'           => 'int',
+        'url'            => 'generated',
     ];
 
     protected function setUp(): void
@@ -181,12 +192,24 @@ final class StubContractsTest extends TestCase
             if (
                 true === str_starts_with($name, Stub::PROJECT_PREFIX)
                 || true === str_starts_with($name, Stub::FRAGMENT_PREFIX)
+                // A view has no class.
+                || true === str_starts_with($name, 'scaffold-view-')
             ) {
                 continue;
             }
 
             yield $key => [$flavor, $name];
         }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function viewStubs(): iterable
+    {
+        yield 'scaffold-view-index' => ['scaffold-view-index'];
+        yield 'scaffold-view-new' => ['scaffold-view-new'];
+        yield 'scaffold-view-edit' => ['scaffold-view-edit'];
     }
 
     /**
@@ -219,6 +242,17 @@ final class StubContractsTest extends TestCase
             str_contains($this->render($flavor, $name), '{{'),
             sprintf("fragment '%s' left a placeholder unrendered", $name)
         );
+    }
+
+    /**
+     * @dataProvider viewStubs
+     */
+    public function testAViewStubParsesAndLeavesNoPlaceholder(string $name): void
+    {
+        $rendered = $this->render('mvc', $name);
+
+        $this->assertNotEmpty(token_get_all($rendered, TOKEN_PARSE));
+        $this->assertFalse(str_contains($rendered, '{{'), sprintf("view '%s' left a placeholder unrendered", $name));
     }
 
     /**
@@ -534,6 +568,64 @@ final class StubContractsTest extends TestCase
             // The first DI of the process is the default DI.
             Di::reset();
             $this->removeScratchDirectory();
+        }
+    }
+
+    /**
+     * The two form stubs declare classes that extend the form of the
+     * framework. The declaration fails when a signature does not match the
+     * form of v5 or v6.
+     */
+    public function testTheScaffoldFormExtendsTheFrameworkForm(): void
+    {
+        $namespace = 'Crest\\Tests\\Generated\\MvcForm';
+        $stub      = new Stub(Paths::stubs());
+
+        $this->makeScratchDirectory('stub-contracts');
+
+        try {
+            file_put_contents(
+                $this->root . '/Base.php',
+                $stub->render(
+                    'mvc',
+                    'scaffold-form-base',
+                    [
+                        'class'     => 'GeneratedFormBase',
+                        'command'   => 'make:scaffold generated',
+                        'elements'  => '',
+                        'imports'   => '',
+                        'namespace' => $namespace . '\\Base',
+                    ]
+                )
+            );
+            file_put_contents(
+                $this->root . '/Form.php',
+                $stub->render(
+                    'mvc',
+                    'scaffold-form',
+                    [
+                        'base'          => 'GeneratedFormBase',
+                        'baseNamespace' => $namespace . '\\Base',
+                        'class'         => 'GeneratedForm',
+                        'namespace'     => $namespace,
+                    ]
+                )
+            );
+
+            require $this->root . '/Base.php';
+            require $this->root . '/Form.php';
+        } finally {
+            $this->removeScratchDirectory();
+        }
+
+        $base = $namespace . '\\Base\\GeneratedFormBase';
+        $form = $namespace . '\\GeneratedForm';
+
+        $this->assertSame(Form::class, get_parent_class($base));
+        $this->assertSame($base, get_parent_class($form));
+
+        foreach (['initialize', 'afterBind', 'getValue'] as $method) {
+            $this->assertTrue((new ReflectionMethod($base, $method))->isPublic());
         }
     }
 

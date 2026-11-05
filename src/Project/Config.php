@@ -116,6 +116,7 @@ final class Config implements ProjectContext
                 Flavor::CLI => [],
                 Flavor::MVC => [
                     'controller' => Layout::SOURCE . '/Controllers',
+                    'form'       => Layout::SOURCE . '/Forms',
                     'model'      => Layout::SOURCE . '/Models',
                     // One folder for all the modules (#55).
                     'module'     => Layout::SOURCE . '/Modules',
