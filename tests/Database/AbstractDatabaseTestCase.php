@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Database;
 
+use Crest\Tests\Support\Migrations\BillingMigration;
 use Crest\Tests\Support\TestDatabase;
 use PDO;
 use Phalcon\Db\Adapter\AdapterInterface;
@@ -31,12 +32,19 @@ use function version_compare;
  * and has only its own tables: the base removes each table of that database
  * before and after each test. So the DATA_* values must name a database for
  * the tests only.
+ *
+ * A test of a second schema (#69) calls createSchema(). The base removes that
+ * schema, with its tables, after the test: BillingMigration::SCHEMA, a
+ * database on MySQL and a schema on PostgreSQL. So the server must have no
+ * other schema with that name.
  */
 abstract class AbstractDatabaseTestCase extends TestCase
 {
     use DatabaseTrait;
 
     private ?AdapterInterface $adapter = null;
+
+    private bool $schema = false;
 
     protected function setUp(): void
     {
@@ -48,6 +56,12 @@ abstract class AbstractDatabaseTestCase extends TestCase
         // The adapter goes with the test, so its connection closes.
         $this->adapter = null;
 
+        // The schema goes first: a table of the default schema can have a
+        // key to it.
+        if (true === $this->schema) {
+            $this->dropSchema();
+        }
+
         $this->dropAllTables();
         self::resetConnections();
     }
@@ -58,6 +72,28 @@ abstract class AbstractDatabaseTestCase extends TestCase
     protected function adapter(): AdapterInterface
     {
         return $this->adapter ??= TestDatabase::adapter();
+    }
+
+    /**
+     * Creates the second schema of the tests, with no tables. A schema that
+     * a failed run did not remove goes first.
+     */
+    protected function createSchema(): void
+    {
+        $dialect = $this->getDialect();
+
+        if (Dialect::Sqlite === $dialect) {
+            $this->fail('SQLite has no schemas');
+        }
+
+        $this->dropSchema();
+
+        $this->getConnection()->getPdo()->exec(
+            (Dialect::Pgsql === $dialect ? 'CREATE SCHEMA ' : 'CREATE DATABASE ')
+            . $dialect->quoteIdentifier(BillingMigration::SCHEMA)
+        );
+
+        $this->schema = true;
     }
 
     /**
@@ -171,6 +207,28 @@ abstract class AbstractDatabaseTestCase extends TestCase
         if (Dialect::Mysql === $dialect) {
             $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
         }
+    }
+
+    /**
+     * Removes the second schema of the tests, with its tables. MySQL and
+     * MariaDB do not check the keys for it, and PostgreSQL removes the keys
+     * of the other tables (CASCADE).
+     */
+    private function dropSchema(): void
+    {
+        $pdo     = $this->getConnection()->getPdo();
+        $dialect = $this->getDialect();
+        $schema  = $dialect->quoteIdentifier(BillingMigration::SCHEMA);
+
+        if (Dialect::Pgsql === $dialect) {
+            $pdo->exec('DROP SCHEMA IF EXISTS ' . $schema . ' CASCADE');
+
+            return;
+        }
+
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+        $pdo->exec('DROP DATABASE IF EXISTS ' . $schema);
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     }
 
     /**

@@ -21,10 +21,17 @@ use PHPUnit\Framework\TestCase;
 use function strtolower;
 
 /**
- * The key map of make:model (#52, spec 3.3), with no database.
+ * The key map of make:model (#52, spec 3.3), with no database. The keys to a
+ * table of another schema (#69, spec 3.6) use a stub adapter, so the unit
+ * suite holds them too.
  */
 final class ForeignKeysTest extends TestCase
 {
+    public function testElsewhereGivesNothingForATableWithNoSuchKeys(): void
+    {
+        $this->assertSame([], (new ForeignKeys(['invoices' => []]))->elsewhere('invoices'));
+    }
+
     public function testOfGivesNothingForATableThatTheMapDoesNotHave(): void
     {
         $this->assertSame([], (new ForeignKeys(['customers' => []]))->of('invoices'));
@@ -63,6 +70,91 @@ final class ForeignKeysTest extends TestCase
         );
 
         $this->assertSame([$reference], ForeignKeys::read($adapter, 'Invoices')->of('Invoices'));
+    }
+
+    public function testReadComparesTheTableNamesWithoutRegardToCase(): void
+    {
+        // MySQL with lower_case_table_names 1 or 2 can give the referenced
+        // table in another case than listTables() gives it, in each
+        // direction.
+        $key  = $this->key('invoices', 'customer_id', 'customers');
+        $keys = ForeignKeys::read($this->adapter('mysql', ['Customers', 'invoices'], ['invoices' => [$key]]));
+
+        $this->assertSame([$key], $keys->of('invoices'));
+        $this->assertSame([], $keys->elsewhere('invoices'));
+
+        $key  = $this->key('invoices', 'customer_id', 'Customers');
+        $keys = ForeignKeys::read($this->adapter('mysql', ['customers', 'invoices'], ['invoices' => [$key]]));
+
+        $this->assertSame([$key], $keys->of('invoices'));
+        $this->assertSame([], $keys->elsewhere('invoices'));
+    }
+
+    public function testReadGivesAListForTheTypedNameOnSqlite(): void
+    {
+        // Phalcon gives the keys by name. SQLite finds a table without regard
+        // to case, so a typed name in another case gets its keys from the
+        // server, and of() gives them as a list.
+        $key     = $this->key('invoices', 'customer_id', 'customers');
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $adapter->method('getType')->willReturn('sqlite');
+        $adapter->method('listTables')->willReturn(['invoices']);
+        $adapter->method('describeReferences')->willReturnCallback(
+            static fn (string $table): array => 'Invoices' === $table ? ['invoices_customer_id' => $key] : []
+        );
+
+        $this->assertSame([$key], ForeignKeys::read($adapter, 'Invoices')->of('Invoices'));
+    }
+
+    public function testReadGivesTheSchemaToEachRead(): void
+    {
+        // Also to the read of a typed name that listTables() does not give.
+        $key     = $this->key('bills', 'vendor_id', 'vendors');
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $adapter->method('getType')->willReturn('pgsql');
+        $adapter->method('listTables')->willReturnCallback(
+            static fn (?string $schema = null): array => 'billing' === $schema ? ['bills', 'vendors'] : []
+        );
+        $adapter->method('describeReferences')->willReturnCallback(
+            static fn (string $table, ?string $schema = null): array => 'bills' === strtolower($table)
+                && 'billing' === $schema ? [$key] : []
+        );
+
+        $this->assertSame([$key], ForeignKeys::read($adapter, '', 'billing')->of('bills'));
+        $this->assertSame([$key], ForeignKeys::read($adapter, 'Bills', 'billing')->of('Bills'));
+    }
+
+    public function testReadKeepsEachKeyOnSqlite(): void
+    {
+        // SQLite has no schemas: a key to a table that does not exist stays
+        // (spec 3.6).
+        $key  = $this->key('invoices', 'customer_id', 'customers');
+        $keys = ForeignKeys::read($this->adapter('sqlite', ['invoices'], ['invoices' => [$key]]));
+
+        $this->assertSame([$key], $keys->of('invoices'));
+        $this->assertSame([], $keys->elsewhere('invoices'));
+    }
+
+    public function testReadPutsAKeyToAnotherSchemaElsewhere(): void
+    {
+        $key  = $this->key('invoices', 'customer_id', 'customers');
+        $keys = ForeignKeys::read($this->adapter('mysql', ['invoices'], ['invoices' => [$key]]));
+
+        $this->assertSame([], $keys->of('invoices'));
+        $this->assertSame([$key], $keys->elsewhere('invoices'));
+        $this->assertSame([], $keys->related('invoices'));
+        $this->assertSame(['invoices'], $keys->tables());
+    }
+
+    public function testReadSplitsTheKeysOfTheTypedName(): void
+    {
+        $key  = $this->key('Bills', 'customer_id', 'customers');
+        $keys = ForeignKeys::read($this->adapter('mysql', ['bills', 'vendors'], ['Bills' => [$key]]), 'Bills');
+
+        $this->assertSame([$key], $keys->elsewhere('Bills'));
+        $this->assertSame([], $keys->of('Bills'));
     }
 
     public function testRelatedGivesTheOtherTablesInBothDirections(): void
@@ -113,6 +205,25 @@ final class ForeignKeysTest extends TestCase
         );
 
         $this->assertSame(['invoices', 'payments'], $keys->using('customers', ['id']));
+    }
+
+    /**
+     * An adapter that gives the type, the tables, and the keys of each table.
+     *
+     * @param list<string>                   $tables
+     * @param array<string, list<Reference>> $keys
+     */
+    private function adapter(string $type, array $tables, array $keys): AdapterInterface
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $adapter->method('getType')->willReturn($type);
+        $adapter->method('listTables')->willReturn($tables);
+        $adapter->method('describeReferences')->willReturnCallback(
+            static fn (string $table): array => $keys[$table] ?? []
+        );
+
+        return $adapter;
     }
 
     /**
