@@ -86,7 +86,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `--module=<name>` to `make:controller` and `make:model`: they write into the module, with its namespace. [#55](https://github.com/phalcon/crest/issues/55)
 - Added `make:scaffold` for MVC projects: it writes a model, a form, a controller and the views `index`, `new` and `edit` for one table. `--module` writes into a module. [#56](https://github.com/phalcon/crest/issues/56)
 - Added the `form` default path (`src/Forms`), the MVC stubs `scaffold-form-base`, `scaffold-form`, `scaffold-controller`, `scaffold-view-index`, `scaffold-view-new`, `scaffold-view-edit`, `fragment-guidance-scaffold` and `fragment-guidance-scaffold-module`, `Crest\Generator\FormElements`, `Crest\Generator\ControllerRoute`, `ModelCommand::readTable()` and `ModelCommand::writeTable()`. [#56](https://github.com/phalcon/crest/issues/56)
-- Added the `models.schema` key to `crest.php`: `make:model` and `make:scaffold` read the tables of that schema, and the base calls `setSchema()`. One schema applies to all the tables. [#69](https://github.com/phalcon/crest/issues/69)
+- Added the `models.schema` key to `crest.php`: `make:model` and `make:scaffold` read the tables of that schema, and the base calls `setSchema()`. One schema applies to all the tables. `config:show` shows it in a `schema` row. [#69](https://github.com/phalcon/crest/issues/69)
 - Added `ModelNames::schemaOf()`, `schema()` and `checkSchema()`, `ForeignKeys::elsewhere()` and the MVC stub `fragment-model-schema`. [#69](https://github.com/phalcon/crest/issues/69)
 
 ### Changed

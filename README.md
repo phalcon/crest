@@ -215,6 +215,10 @@ return [
 ];
 ```
 
+`models.schema` gives the schema of the tables: `make:model` and `make:scaffold`
+then read the tables of that schema, and each base calls `setSchema()`. See "The
+schema" in [docs/index.md](docs/index.md).
+
 ## Booting the project
 
 `container:list` and `event:list` report services and listeners, which exist only once the

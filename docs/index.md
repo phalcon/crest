@@ -1141,11 +1141,11 @@ public function initialize(): void
 }
 ```
 
-The value must be a string that is not empty. Crest uses it as you write it:
-on PostgreSQL, write the name with the case that the server keeps. A `null`
-value is the same as no value. The schema applies to all the tables of the
-project, also with `--module`. `config:show` shows it in the `schema` row (see
-"Names").
+The value must be a string that is not empty and not only white space. Crest
+uses it as you write it: on PostgreSQL, write the name with the case that the
+server keeps. A `null` value is the same as no value. The schema applies to all
+the tables of the project, also with `--module`. `config:show` shows it in the
+`schema` row (see "Names").
 
 When you change the value, the next run reads the tables of the new schema, and
 writes the base of each table of the run with the new value. A table that the
@@ -1184,9 +1184,9 @@ If you need the relation, write it in your model.
 
 The limits:
 
-- When the schema also has a table with the name of the referenced table, crest
-  cannot see the difference. It writes the relation to the model of the table
-  in the schema.
+- When the schema also has a table or a view with the name of the referenced
+  table, crest cannot see the difference. It writes the relation to the model
+  of that table or view in the schema.
 - A key from a table of another schema to a table of this schema gives no
   `hasMany()`: crest does not read the other schemas.
 - On PostgreSQL, until cphalcon 5.24.0 and the tag of `phalcon/phalcon` after

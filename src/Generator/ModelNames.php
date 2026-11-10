@@ -271,7 +271,7 @@ final class ModelNames
 
     /**
      * Stops when models.schema has a value and the db service is SQLite,
-     * which has no schemas (spec 3.1). The check needs the adapter, so it
+     * which has no schemas (spec 3.4). The check needs the adapter, so it
      * runs after the boot.
      */
     public function checkSchema(AdapterInterface $adapter): void
