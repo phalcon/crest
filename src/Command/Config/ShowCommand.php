@@ -38,8 +38,9 @@ use const SORT_STRING;
  * project actually asked for, and which took a default.
  *
  * In an MVC project, the report also shows the models key (#71): camelCase
- * with its origin, and each line of models.classes. A wrong key gives a row
- * with the error, so the report never stops on it.
+ * with its origin, the schema (#69) with its origin, and each line of
+ * models.classes. A wrong key gives a row with the error, so the report never
+ * stops on it.
  */
 final class ShowCommand extends ProjectCommand
 {
@@ -73,9 +74,11 @@ final class ShowCommand extends ProjectCommand
         $classes = [];
 
         if (Flavor::MVC === $config->flavor()) {
-            [$row, $classes] = $this->models($config);
+            [$models, $classes] = $this->models($config);
 
-            $items[] = $row;
+            foreach ($models as $row) {
+                $items[] = $row;
+            }
         }
 
         $output->table(['ITEM', 'VALUE', 'ORIGIN'], $items);
@@ -105,13 +108,13 @@ final class ShowCommand extends ProjectCommand
     }
 
     /**
-     * The models key of an MVC project (#71): the camelCase row, and a row
-     * for each line of models.classes, sorted by table. The origin comes from
-     * the key, because ModelNames does not keep it. A wrong key gives one
-     * models row with the error, and no lines: make:model stops on the error,
-     * but config:show does not.
+     * The models key of an MVC project (#71): the camelCase row and the
+     * schema row (#69), and a row for each line of models.classes, sorted by
+     * table. The origin of camelCase comes from the key, because ModelNames
+     * does not keep it. A wrong key gives one models row with the error, and
+     * no lines: make:model stops on the error, but config:show does not.
      *
-     * @return array{list<string>, list<list<string>>}
+     * @return array{list<list<string>>, list<list<string>>}
      */
     private function models(Config $config): array
     {
@@ -120,7 +123,7 @@ final class ShowCommand extends ProjectCommand
         try {
             $names = ModelNames::of($models);
         } catch (Exception $exception) {
-            return [['models', $exception->getMessage(), self::DECLARED], []];
+            return [[['models', $exception->getMessage(), self::DECLARED]], []];
         }
 
         // mapped() gives each table as a string: PHP makes a numeric table an
@@ -137,11 +140,16 @@ final class ShowCommand extends ProjectCommand
         // A null value counts as no value, as in ModelNames::of() (#53).
         $declared = true === is_array($models) && true === isset($models['camelCase']);
 
+        $schema = $names->schema();
+
         return [
             [
-                'camelCase',
-                var_export($names->camelCase(), true),
-                true === $declared ? self::DECLARED : self::DEFAULTED,
+                [
+                    'camelCase',
+                    var_export($names->camelCase(), true),
+                    true === $declared ? self::DECLARED : self::DEFAULTED,
+                ],
+                ['schema', $schema ?? 'none', null === $schema ? self::DEFAULTED : self::DECLARED],
             ],
             $rows,
         ];

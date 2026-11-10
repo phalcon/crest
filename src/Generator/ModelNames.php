@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Mvc\Model;
 
 use function array_keys;
@@ -30,6 +31,7 @@ use function property_exists;
 use function sort;
 use function sprintf;
 use function strtolower;
+use function trim;
 
 use const SORT_STRING;
 
@@ -50,6 +52,10 @@ use const SORT_STRING;
  * the bases (withStored()). ModelTables and ModelRelations get the names
  * here, so the relations use the property names of both tables.
  *
+ * models.schema (#69) is the schema of each table of the project. The reads
+ * get it through schemaOf() for one table, and through schema() for the
+ * list of the tables.
+ *
  * @phpstan-import-type Names from BaseAttributes
  */
 final class ModelNames
@@ -57,12 +63,13 @@ final class ModelNames
     /**
      * The keys of models in crest.php.
      */
-    private const KEYS = ['classes', 'camelCase'];
+    private const KEYS = ['classes', 'camelCase', 'schema'];
 
     private const MODEL = 'has the name of a property of ' . Model::class;
 
     /**
      * @param array<string, string>                   $classes models.classes: the table and its class
+     * @param string|null                             $schema  models.schema: the schema of the tables, or null
      * @param array<string, Names>                    $stored  The PropertyName attributes of each base, by table
      * @param array<string, string>                   $files   The base of each table of $stored, for the errors
      * @param array<string, array<array-key, string>> $given   --property: the column and its name, by table
@@ -72,6 +79,7 @@ final class ModelNames
     private function __construct(
         private readonly array $classes,
         private readonly bool $camelCase,
+        private readonly ?string $schema,
         private readonly array $stored = [],
         private readonly array $files = [],
         private readonly array $given = [],
@@ -93,7 +101,10 @@ final class ModelNames
         foreach (array_keys($models) as $key) {
             if (false === in_array($key, self::KEYS, true)) {
                 throw new Exception(
-                    sprintf("crest.php: models has an unknown key '%s'; the keys are classes and camelCase", $key)
+                    sprintf(
+                        "crest.php: models has an unknown key '%s'; the keys are classes, camelCase and schema",
+                        $key
+                    )
                 );
             }
         }
@@ -109,7 +120,15 @@ final class ModelNames
             throw new Exception('crest.php: models.camelCase must be true or false');
         }
 
-        return new self(self::classes($classes), $camelCase);
+        // A null value counts as no value. Crest keeps the value as the file
+        // gives it.
+        $schema = $models['schema'] ?? null;
+
+        if (null !== $schema && (false === is_string($schema) || '' === trim($schema))) {
+            throw new Exception('crest.php: models.schema must be the name of a schema');
+        }
+
+        return new self(self::classes($classes), $camelCase, $schema);
     }
 
     /**
@@ -251,6 +270,21 @@ final class ModelNames
     }
 
     /**
+     * Stops when models.schema has a value and the db service is SQLite,
+     * which has no schemas (spec 3.1). The check needs the adapter, so it
+     * runs after the boot.
+     */
+    public function checkSchema(AdapterInterface $adapter): void
+    {
+        if (null !== $this->schema && 'sqlite' === $adapter->getType()) {
+            throw new Exception(sprintf(
+                "crest.php: models.schema is '%s', but SQLite has no schemas; remove the key",
+                $this->schema
+            ));
+        }
+    }
+
+    /**
      * The line of models.classes, else ClassName::fromTable(), which stops
      * for a table that gives no usable class.
      */
@@ -381,6 +415,26 @@ final class ModelNames
     }
 
     /**
+     * The schema of the run, for the reads that list the tables (spec 3.2),
+     * or null for the default schema of the connection.
+     */
+    public function schema(): ?string
+    {
+        return $this->schema;
+    }
+
+    /**
+     * The schema of one table, or null for the default schema of the
+     * connection. For now each table has the one schema of models.schema,
+     * so the table is not used. A later issue gives each table its own
+     * schema here (spec 3.12).
+     */
+    public function schemaOf(string $table): ?string
+    {
+        return $this->schema;
+    }
+
+    /**
      * The table has a base that crest cannot read. Each name of the table
      * stops with the reason, so a relation that needs a name is skipped.
      */
@@ -389,7 +443,15 @@ final class ModelNames
         $failed         = $this->failed;
         $failed[$table] = $reason;
 
-        return new self($this->classes, $this->camelCase, $this->stored, $this->files, $this->given, $failed);
+        return new self(
+            $this->classes,
+            $this->camelCase,
+            $this->schema,
+            $this->stored,
+            $this->files,
+            $this->given,
+            $failed
+        );
     }
 
     /**
@@ -402,7 +464,15 @@ final class ModelNames
         $all         = $this->given;
         $all[$table] = $given;
 
-        return new self($this->classes, $this->camelCase, $this->stored, $this->files, $all, $this->failed);
+        return new self(
+            $this->classes,
+            $this->camelCase,
+            $this->schema,
+            $this->stored,
+            $this->files,
+            $all,
+            $this->failed
+        );
     }
 
     /**
@@ -418,7 +488,15 @@ final class ModelNames
         $all[$table]   = $stored;
         $files[$table] = $file;
 
-        return new self($this->classes, $this->camelCase, $all, $files, $this->given, $this->failed);
+        return new self(
+            $this->classes,
+            $this->camelCase,
+            $this->schema,
+            $all,
+            $files,
+            $this->given,
+            $this->failed
+        );
     }
 
     /**

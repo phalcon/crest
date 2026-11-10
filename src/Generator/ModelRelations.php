@@ -35,8 +35,10 @@ use function strtolower;
  * table that points to this table.
  *
  * The related class is in the namespace of the `model` path, also when crest
- * did not write its model yet. crest gives no schema, so it reads the default
- * schema of the connection. SQLite gives one reference for each column of a
+ * did not write its model yet. The keys come from the schema of the run
+ * (models.schema, #69), or from the default schema of the connection. A key
+ * to a table of another schema gives a skipped line, and no hasMany() on the
+ * other side (spec 3.6). SQLite gives one reference for each column of a
  * composite key, so there each column gives one relation. Identical keys give
  * one relation.
  *
@@ -113,6 +115,23 @@ final class ModelRelations
                 $stored,
                 $file,
                 ''
+            );
+        }
+
+        // The model of the other schema is not a model of the run, so crest
+        // writes no relation to it.
+        foreach (self::unique($keys->elsewhere($table)) as $reference) {
+            $drafts[] = self::draft(
+                self::BELONGS_TO,
+                $table,
+                $reference,
+                $names,
+                $namespace,
+                $properties,
+                $stored,
+                $file,
+                '',
+                sprintf('the table %s is in another schema', $reference->getReferencedTable())
             );
         }
 
@@ -235,6 +254,7 @@ final class ModelRelations
      *
      * @param list<string> $properties The property names of the table
      * @param Stored       $stored     The attributes in the base, by key
+     * @param string|null  $skip       The reason to skip the relation before the checks, or null
      *
      * @return Draft
      */
@@ -247,7 +267,8 @@ final class ModelRelations
         array $properties,
         array $stored,
         string $file,
-        string $by
+        string $by,
+        ?string $skip = null
     ): array {
         $belongsTo  = self::BELONGS_TO === $kind;
         $keys       = array_values($reference->getColumns());
@@ -267,6 +288,10 @@ final class ModelRelations
                 implode(', ', $referenced)
             ),
         ];
+
+        if (null !== $skip) {
+            return self::skip($relation, $skip);
+        }
 
         // SQLite accepts `REFERENCES customers` with no column. crest does not
         // find the primary key of the table itself.

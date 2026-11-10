@@ -16,6 +16,7 @@ namespace Crest\Tests\Unit\Generator;
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ModelNames;
 use Crest\Generator\ModelTables;
+use PDOException;
 use Phalcon\Db\Adapter\AdapterInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -27,6 +28,11 @@ use PHPUnit\Framework\TestCase;
  */
 final class ModelTablesTest extends TestCase
 {
+    /**
+     * The error of MySQL for a schema that does not exist.
+     */
+    private const UNKNOWN = "SQLSTATE[42000]: Syntax error or access violation: 1049 Unknown database 'billing'";
+
     public function testAMapClassCanFailTheSameClassCheck(): void
     {
         $tables = ModelTables::of(
@@ -146,6 +152,30 @@ final class ModelTablesTest extends TestCase
         $this->assertSame(['customers'], $tables->names());
     }
 
+    public function testAReadErrorWithNoSchemaIsNotChanged(): void
+    {
+        $this->expectException(PDOException::class);
+        $this->expectExceptionMessage(self::UNKNOWN);
+
+        ModelTables::of($this->failingAdapter(new PDOException(self::UNKNOWN)), [], ModelNames::of([]));
+    }
+
+    public function testASchemaThatCannotBeReadStops(): void
+    {
+        $previous = new PDOException(self::UNKNOWN);
+
+        try {
+            ModelTables::of($this->failingAdapter($previous), [], ModelNames::of(['schema' => 'billing']));
+        } catch (Exception $exception) {
+            $this->assertSame("the schema 'billing' cannot be read: " . self::UNKNOWN, $exception->getMessage());
+            $this->assertSame($previous, $exception->getPrevious());
+
+            return;
+        }
+
+        $this->fail('The schema read did not stop.');
+    }
+
     public function testASqliteNameIsATableOnAServer(): void
     {
         $tables = ModelTables::of($this->adapter('pgsql', ['customers', 'sqlite_cache']), [], ModelNames::of([]));
@@ -227,6 +257,24 @@ final class ModelTablesTest extends TestCase
         $this->assertSame(['10', '9', 'customers', 'users'], $tables->names());
     }
 
+    public function testTheReadsAskForTheSchema(): void
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('getType')->willReturn('pgsql');
+        $adapter->method('listTables')->willReturnCallback(
+            static fn (?string $schema = null): array => 'billing' === $schema
+                ? ['invoices', 'invoice_totals']
+                : ['users']
+        );
+        $adapter->method('listViews')->willReturnCallback(
+            static fn (?string $schema = null): array => 'billing' === $schema ? ['invoice_totals'] : []
+        );
+
+        $tables = ModelTables::of($adapter, [], ModelNames::of(['schema' => 'billing']));
+
+        $this->assertSame(['invoices'], $tables->names());
+    }
+
     public function testThreeTablesWithTheSameClassAllFail(): void
     {
         $tables = ModelTables::of($this->adapter('mysql', ['a_b', 'aB', 'A_b', 'users']), [], ModelNames::of([]));
@@ -269,5 +317,17 @@ final class ModelTablesTest extends TestCase
             AdapterInterface::class,
             ['getType' => $type, 'listTables' => $tables, 'listViews' => $views]
         );
+    }
+
+    /**
+     * An adapter of MySQL whose list of the tables throws the exception.
+     */
+    private function failingAdapter(PDOException $exception): AdapterInterface
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('getType')->willReturn('mysql');
+        $adapter->method('listTables')->willThrowException($exception);
+
+        return $adapter;
     }
 }

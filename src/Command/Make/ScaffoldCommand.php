@@ -61,6 +61,10 @@ use function ucfirst;
  *
  * With --module, the files go into the module, in its namespace
  * (ModuleLocation). The module must exist: make:module writes it.
+ *
+ * With models.schema (#69), the pages read the table of that schema. Only the
+ * model needs the schema: its base calls setSchema(), and the controller and
+ * the form use the model.
  */
 final class ScaffoldCommand extends ProjectCommand
 {
@@ -119,9 +123,13 @@ final class ScaffoldCommand extends ProjectCommand
 
         $adapter = Database::adapter($config);
 
-        ModelProperties::of($adapter, $table);
+        $names->checkSchema($adapter);
 
-        $columns = $adapter->describeColumns($table);
+        $schema = $names->schemaOf($table);
+
+        ModelProperties::of($adapter, $table, $schema);
+
+        $columns = $adapter->describeColumns($table, $schema);
 
         $key    = $this->primaryKey($columns, $table);
         $models = new ModelCommand();

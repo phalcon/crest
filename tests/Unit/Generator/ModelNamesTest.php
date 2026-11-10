@@ -15,6 +15,7 @@ namespace Crest\Tests\Unit\Generator;
 
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ModelNames;
+use Phalcon\Db\Adapter\AdapterInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -31,9 +32,12 @@ final class ModelNamesTest extends TestCase
         yield 'not an array' => ['yes', 'crest.php: models must be an array'];
         yield 'an unknown key' => [
             ['camelcase' => true],
-            "crest.php: models has an unknown key 'camelcase'; the keys are classes and camelCase",
+            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase and schema",
         ];
-        yield 'a list' => [[true], "crest.php: models has an unknown key '0'; the keys are classes and camelCase"];
+        yield 'a list' => [
+            [true],
+            "crest.php: models has an unknown key '0'; the keys are classes, camelCase and schema",
+        ];
         yield 'classes that are not an array' => [
             ['classes' => 'users'],
             'crest.php: models.classes must be an array of table => class',
@@ -67,6 +71,13 @@ final class ModelNamesTest extends TestCase
             ['camelCase' => 'yes'],
             'crest.php: models.camelCase must be true or false',
         ];
+
+        $message = 'crest.php: models.schema must be the name of a schema';
+
+        yield 'a schema that is not a string' => [['schema' => 1], $message];
+        yield 'an empty schema' => [['schema' => ''], $message];
+        yield 'a schema of spaces' => [['schema' => '  '], $message];
+        yield 'a schema for each table' => [['schema' => ['invoices' => 'billing']], $message];
     }
 
     /**
@@ -221,6 +232,14 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('Orders', $names->classOf('orders'));
     }
 
+    public function testANullSchemaIsNoSchema(): void
+    {
+        $names = ModelNames::of(['schema' => null]);
+
+        $this->assertNull($names->schema());
+        $this->assertNull($names->schemaOf('invoices'));
+    }
+
     public function testANumericColumnCanGetAName(): void
     {
         // PHP makes the key 2024 an integer.
@@ -279,6 +298,33 @@ final class ModelNamesTest extends TestCase
     {
         $this->assertSame('first_name', ModelNames::of([])->propertyOf('t', 'first_name'));
         $this->assertSame('first_name', ModelNames::of(['camelCase' => false])->propertyOf('t', 'first_name'));
+    }
+
+    public function testCheckSchemaPassesOnAServer(): void
+    {
+        $names = ModelNames::of(['schema' => 'billing']);
+
+        $names->checkSchema($this->adapter('mysql'));
+        $this->addToAssertionCount(1);
+
+        $names->checkSchema($this->adapter('pgsql'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function testCheckSchemaPassesOnSqliteWithNoSchema(): void
+    {
+        ModelNames::of([])->checkSchema($this->adapter('sqlite'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function testCheckSchemaStopsOnSqlite(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "crest.php: models.schema is 'billing', but SQLite has no schemas; remove the key"
+        );
+
+        ModelNames::of(['schema' => 'billing'])->checkSchema($this->adapter('sqlite'));
     }
 
     public function testDroppedGivesALineForEachColumnThatIsGone(): void
@@ -345,6 +391,14 @@ final class ModelNamesTest extends TestCase
         $this->assertSame([], $names->mapped());
     }
 
+    public function testNoSchemaKeyIsNoSchema(): void
+    {
+        $names = ModelNames::of([]);
+
+        $this->assertNull($names->schema());
+        $this->assertNull($names->schemaOf('invoices'));
+    }
+
     public function testPropertiesGivesTheNameOfEachColumn(): void
     {
         $this->assertSame(
@@ -369,6 +423,24 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('cCol', $names->propertyOf('t', 'c_col'));
     }
 
+    public function testTheSchemaIsTheSchemaOfEachTable(): void
+    {
+        $names = ModelNames::of(['schema' => 'billing']);
+
+        $this->assertSame('billing', $names->schema());
+        $this->assertSame('billing', $names->schemaOf('invoices'));
+        $this->assertSame('billing', $names->schemaOf('users'));
+    }
+
+    public function testTheWithMethodsKeepTheSchema(): void
+    {
+        $names = ModelNames::of(['schema' => 'billing']);
+
+        $this->assertSame('billing', $names->withGiven('t', [])->schema());
+        $this->assertSame('billing', $names->withStored('t', [], '/b.php')->schema());
+        $this->assertSame('billing', $names->withFailed('t', 'x')->schema());
+    }
+
     public function testTwoNamesThatDifferOnlyInCasePass(): void
     {
         // PHP property names are case-sensitive.
@@ -376,5 +448,13 @@ final class ModelNamesTest extends TestCase
             ['name' => 'name', 'Name' => 'Name'],
             ModelNames::of([])->properties('t', ['name', 'Name'])
         );
+    }
+
+    /**
+     * An adapter that gives only its type.
+     */
+    private function adapter(string $type): AdapterInterface
+    {
+        return $this->createConfiguredStub(AdapterInterface::class, ['getType' => $type]);
     }
 }

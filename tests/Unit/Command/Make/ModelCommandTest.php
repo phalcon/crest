@@ -56,6 +56,13 @@ final class ModelCommandTest extends TestCase
         $this->assertStops(['users'], 'crest.php: models must be an array');
     }
 
+    public function testABadSchemaStopsBeforeTheBoot(): void
+    {
+        $this->front(FailingFront::class, "['schema' => '']");
+
+        $this->assertStops(['users'], 'crest.php: models.schema must be the name of a schema');
+    }
+
     public function testAColumnTwoTimesInPropertyStops(): void
     {
         $this->assertStops(['users', '--property=a=b, a=c'], "--property: the column 'a' is in the list two times");

@@ -22,7 +22,9 @@ use function array_keys;
 use function array_map;
 use function array_unique;
 use function array_values;
+use function in_array;
 use function sort;
+use function strtolower;
 
 use const SORT_STRING;
 
@@ -35,41 +37,89 @@ use const SORT_STRING;
  *
  * The map has the tables of listTables(): on MySQL and PostgreSQL also the
  * views, on SQLite also sqlite_sequence. They have no keys.
+ *
+ * The tables and the keys are those of the schema of the run (#69), or of
+ * the default schema. A key whose referenced table is not a table of the run
+ * points to a table of another schema: it is in elsewhere(), not in of()
+ * (spec 3.6).
  */
 final class ForeignKeys
 {
     /**
-     * @param array<array-key, list<ReferenceInterface>> $keys The keys of each table, in the order of
-     *                                                         listTables(). PHP makes a numeric name an
-     *                                                         integer key.
+     * @param array<array-key, list<ReferenceInterface>> $keys      The keys of each table, in the order of
+     *                                                              listTables(). PHP makes a numeric name an
+     *                                                              integer key.
+     * @param array<array-key, list<ReferenceInterface>> $elsewhere The keys of each table to a table of another
+     *                                                              schema
      */
-    public function __construct(private readonly array $keys)
+    public function __construct(private readonly array $keys, private readonly array $elsewhere = [])
     {
     }
 
     /**
-     * listTables() one time, and describeReferences() one time for each table.
+     * listTables() one time, and describeReferences() one time for each table,
+     * in the schema of the run. A null schema is the default schema.
      *
      * MySQL with lower_case_table_names 1 or 2 finds a table without regard
      * to case, but listTables() gives the stored name. So a table name that
      * the user typed, and that listTables() does not give, gets its keys from
      * the server, as before #52.
      *
+     * Then each key whose referenced table is not in listTables() goes to
+     * elsewhere(). The compare is without regard to case: MySQL with
+     * lower_case_table_names 1 or 2 can give the referenced table in another
+     * case. SQLite has no schemas, so there each key stays. crest does not use
+     * getReferencedSchema(): on PostgreSQL, Phalcon gives the name of the
+     * database there (spec 2.2).
+     *
      * @param string $table The table name that the user typed, or '' for --all
      */
-    public static function read(AdapterInterface $adapter, string $table = ''): self
+    public static function read(AdapterInterface $adapter, string $table = '', ?string $schema = null): self
     {
-        $keys = [];
+        $keys   = [];
+        $listed = $adapter->listTables($schema);
 
-        foreach ($adapter->listTables() as $listed) {
-            $keys[$listed] = array_values($adapter->describeReferences($listed));
+        foreach ($listed as $name) {
+            $keys[$name] = array_values($adapter->describeReferences($name, $schema));
         }
 
         if ('' !== $table && false === isset($keys[$table])) {
-            $keys[$table] = array_values($adapter->describeReferences($table));
+            $keys[$table] = array_values($adapter->describeReferences($table, $schema));
         }
 
-        return new self($keys);
+        if ('sqlite' === $adapter->getType()) {
+            return new self($keys);
+        }
+
+        $tables    = array_map('strtolower', $listed);
+        $elsewhere = [];
+
+        foreach ($keys as $name => $references) {
+            $here = [];
+
+            foreach ($references as $reference) {
+                if (true === in_array(strtolower($reference->getReferencedTable()), $tables, true)) {
+                    $here[] = $reference;
+                } else {
+                    $elsewhere[$name][] = $reference;
+                }
+            }
+
+            $keys[$name] = $here;
+        }
+
+        return new self($keys, $elsewhere);
+    }
+
+    /**
+     * The keys of the table to a table of another schema. ModelRelations
+     * skips them.
+     *
+     * @return list<ReferenceInterface>
+     */
+    public function elsewhere(string $table): array
+    {
+        return $this->elsewhere[$table] ?? [];
     }
 
     /**

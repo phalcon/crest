@@ -1201,12 +1201,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/phalcon/phalcon.git",
-                "reference": "a45d3ee8047705b88124d300fc4380ea7cf410cc"
+                "reference": "bfe63ff336df47201c4d445b4fb792c45f7e5e8c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/a45d3ee8047705b88124d300fc4380ea7cf410cc",
-                "reference": "a45d3ee8047705b88124d300fc4380ea7cf410cc",
+                "url": "https://api.github.com/repos/phalcon/phalcon/zipball/bfe63ff336df47201c4d445b4fb792c45f7e5e8c",
+                "reference": "bfe63ff336df47201c4d445b4fb792c45f7e5e8c",
                 "shasum": ""
             },
             "require": {
@@ -1283,8 +1283,8 @@
                     "type": "open_collective"
                 }
             ],
-            "time": "2026-11-04T14:12:07+00:00",
-            "published-time": "2026-11-04T14:12:17+00:00"
+            "time": "2026-11-05T01:19:55+00:00",
+            "published-time": "2026-11-05T01:20:03+00:00"
         },
         {
             "name": "phalcon/phql",

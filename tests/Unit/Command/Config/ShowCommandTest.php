@@ -70,7 +70,7 @@ final class ShowCommandTest extends TestCase
         yield 'not an array' => ["'yes'", 'crest.php: models must be an array'];
         yield 'an unknown key' => [
             "['camelcase' => true]",
-            "crest.php: models has an unknown key 'camelcase'; the keys are classes and camelCase",
+            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase and schema",
         ];
         yield 'classes that are not an array' => [
             "['classes' => 'users']",
@@ -101,6 +101,22 @@ final class ShowCommandTest extends TestCase
             'crest.php: models.classes: the tables members and users give the classes USER and User, '
             . 'which PHP sees as the same class',
         ];
+        yield 'a schema that is not a name' => [
+            "['schema' => '']",
+            'crest.php: models.schema must be the name of a schema',
+        ];
+    }
+
+    public function testADeclaredSchemaIsShown(): void
+    {
+        $this->writeModels("['schema' => 'billing']");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(
+            'camelCase false default' . PHP_EOL . 'schema billing declared' . PHP_EOL,
+            $this->normalized()
+        );
     }
 
     public function testADefaultPathIsNotReportedAsDeclared(): void
@@ -133,7 +149,7 @@ final class ShowCommandTest extends TestCase
         $output = $this->readStdout();
 
         $this->assertSame(0, $status);
-        $this->assertDoesNotMatchRegularExpression('/^(camelCase|models|TABLE) /m', $output);
+        $this->assertDoesNotMatchRegularExpression('/^(camelCase|models|schema|TABLE) /m', $output);
         $this->assertSame('', $this->readStderr());
     }
 
@@ -178,6 +194,18 @@ final class ShowCommandTest extends TestCase
         );
     }
 
+    public function testANullSchemaIsTheDefault(): void
+    {
+        $this->writeModels("['schema' => null]");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(
+            'camelCase false default' . PHP_EOL . 'schema none default' . PHP_EOL,
+            $this->normalized()
+        );
+    }
+
     /**
      * @dataProvider wrongModelsKeys
      */
@@ -197,7 +225,7 @@ final class ShowCommandTest extends TestCase
             . 'PATH LOCATION ORIGIN' . PHP_EOL,
             $output
         );
-        $this->assertDoesNotMatchRegularExpression('/^(camelCase|TABLE) /m', $output);
+        $this->assertDoesNotMatchRegularExpression('/^(camelCase|schema|TABLE) /m', $output);
         $this->assertSame('', $this->readStderr());
     }
 
@@ -296,6 +324,7 @@ final class ShowCommandTest extends TestCase
             . 'runtime host default' . PHP_EOL
             . 'service app default' . PHP_EOL
             . 'camelCase true declared' . PHP_EOL
+            . 'schema none default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
@@ -342,6 +371,7 @@ final class ShowCommandTest extends TestCase
             . 'runtime host default' . PHP_EOL
             . 'service app default' . PHP_EOL
             . 'camelCase false default' . PHP_EOL
+            . 'schema none default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL

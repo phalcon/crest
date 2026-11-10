@@ -26,6 +26,7 @@ use Crest\Tests\Support\Migrations\ScaffoldUsersMigration;
 use Crest\Tests\Support\Project\DatabaseFront;
 use Crest\Tests\Support\RunsMakeModel;
 use Phalcon\Di\Di;
+use Phalcon\Talon\Database\Dialect;
 
 use function file_get_contents;
 use function file_put_contents;
@@ -265,6 +266,23 @@ final class ScaffoldCommandTest extends AbstractDatabaseTestCase
         $this->assertStringContainsString(
             "new Text('origin')",
             (string) file_get_contents($this->root . '/src/Forms/Base/SourcesFormBase.php')
+        );
+    }
+
+    public function testASchemaStopsOnSqlite(): void
+    {
+        // SQLite has no schemas (#69). The servers read the schema:
+        // ScaffoldPagesTest holds that.
+        if (Dialect::Sqlite !== $this->getDialect()) {
+            $this->markTestSkipped('SQLite only: the servers have schemas.');
+        }
+
+        $this->front(DatabaseFront::class, "['schema' => 'crest_billing']");
+        $this->createTables(ScaffoldUsersMigration::class);
+
+        $this->assertScaffoldStops(
+            ['users'],
+            "crest.php: models.schema is 'crest_billing', but SQLite has no schemas; remove the key"
         );
     }
 

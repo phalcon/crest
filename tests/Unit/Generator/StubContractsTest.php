@@ -116,6 +116,9 @@ final class StubContractsTest extends TestCase
         'referenced'     => "'id'",
         'relations'      => '',
         'route'          => 'generated',
+        // The schema fragment in model-base, as columnMap and relations.
+        // testTheMvcModelExtendsTheFrameworkModel() renders the fragment.
+        'schema'         => '',
         'table'          => 'generated',
         'template'       => 'generated/index',
         'type'           => 'int',
@@ -469,6 +472,11 @@ final class StubContractsTest extends TestCase
                         'namespace'  => $namespace . '\\Base',
                         'properties' => "    public ?int \$id = null;\n",
                         'relations'  => $relations,
+                        'schema'     => $stub->render(
+                            'mvc',
+                            Stub::FRAGMENT_PREFIX . 'model-schema',
+                            ['schema' => "'generated'"]
+                        ),
                         'table'      => 'generated',
                     ]
                 )

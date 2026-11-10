@@ -97,6 +97,11 @@ use function var_export;
  * models in the same module. The lines that tell the developer to run
  * make:model again name the option too.
  *
+ * With models.schema (#69), crest reads the tables, the columns and the keys
+ * of that schema, and the base calls setSchema(). A key to a table of another
+ * schema gives a Skipped line. SQLite has no schemas, so there the key stops
+ * the command after the boot.
+ *
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
  *
@@ -117,6 +122,7 @@ use function var_export;
  *     relations: ModelRelations,
  *     renamed: array<string, array{string, string}>|null,
  *     run: list<string>,
+ *     schema: string|null,
  *     table: string
  * }
  */
@@ -154,6 +160,12 @@ final class ModelCommand extends ProjectCommand
         'model-base'                             => 'columnMap',
         Stub::FRAGMENT_PREFIX . 'model-property' => 'property',
     ];
+
+    /**
+     * The stub that a base with setSchema() needs, with the placeholder of
+     * #69.
+     */
+    private const SCHEMA_PLACEHOLDERS = ['model-base' => 'schema'];
 
     /**
      * The base of a class, in the Base subfolder of the folder of the models:
@@ -450,12 +462,12 @@ final class ModelCommand extends ProjectCommand
         // exist, a base that crest cannot read, or a column with no usable
         // property name stops the command before crest reads the keys of
         // each table.
-        $columns  = ModelProperties::of($adapter, $table);
+        $columns  = ModelProperties::of($adapter, $table, $names->schemaOf($table));
         $baseFile = self::baseFile($path, $class);
         $base     = BaseAttributes::read($baseFile);
         $names    = $names->withStored($table, $base->properties, $baseFile);
         $final    = $names->properties($table, self::strings($columns));
-        $keys     = ForeignKeys::read($adapter, $table);
+        $keys     = ForeignKeys::read($adapter, $table, $names->schema());
 
         // The relations need the property names of the related tables.
         [$names] = self::bases($names, $keys->related($table), $path);
@@ -509,6 +521,7 @@ final class ModelCommand extends ProjectCommand
                     'namespace'  => $parts['baseNamespace'],
                     'properties' => $this->properties($config, $parts['properties'], $parts['names']),
                     'relations'  => $this->relations($config, $relations),
+                    'schema'     => $this->schema($config, $parts['schema']),
                     'table'      => $parts['table'],
                 ]
             ),
@@ -616,19 +629,26 @@ final class ModelCommand extends ProjectCommand
     ): int {
         [$path, $namespace] = self::folder($config, $module);
         $adapter            = Database::adapter($config);
-        $tables             = ModelTables::of($adapter, $exclude, $names);
+
+        $names->checkSchema($adapter);
+
+        $tables = ModelTables::of($adapter, $exclude, $names);
 
         foreach ($tables->notes as $note) {
             $output->line($note);
         }
 
         if ([] === $tables->names()) {
-            $output->line('No tables to write.');
+            $output->line(
+                null === $names->schema()
+                    ? 'No tables to write.'
+                    : sprintf("No tables to write in the schema '%s'.", $names->schema())
+            );
 
             return 0;
         }
 
-        $keys            = ForeignKeys::read($adapter);
+        $keys            = ForeignKeys::read($adapter, '', $names->schema());
         [$names, $bases] = self::bases($names, $keys->tables(), $path);
         $written         = self::strings($tables->classes);
         $created         = 0;
@@ -656,7 +676,7 @@ final class ModelCommand extends ProjectCommand
                     throw $base;
                 }
 
-                $columns = ModelProperties::of($adapter, $table);
+                $columns = ModelProperties::of($adapter, $table, $names->schemaOf($table));
                 $parts   = $this->read(
                     $config,
                     $names,
@@ -692,14 +712,17 @@ final class ModelCommand extends ProjectCommand
      * A base with a columnMap() needs the placeholders of #53 in the stubs
      * that crest uses. A copy that the project published before #53 does not
      * have them, and crest would write a base with renamed properties and no
-     * columnMap() (spec 3.4).
+     * columnMap() (spec 3.4). A base with setSchema() needs the placeholder of
+     * #69: with no setSchema(), the model would read the default schema.
+     *
+     * @param array<string, string> $placeholders The stub and its placeholder
      */
-    private function checkStubs(Config $config): void
+    private function checkStubs(Config $config, array $placeholders): void
     {
         $flavor = $config->flavor()->value;
         $stub   = $this->stub($config);
 
-        foreach (self::PLACEHOLDERS as $name => $placeholder) {
+        foreach ($placeholders as $name => $placeholder) {
             if (false === $stub->hasPlaceholder($flavor, $name, $placeholder)) {
                 throw new Exception(sprintf(
                     'the published stub %s has no {{ %s }}; publish it again with crest stub:publish %s --force, '
@@ -784,12 +807,11 @@ final class ModelCommand extends ProjectCommand
         $names->classOf($table);
         self::folder($config, $module);
 
-        $this->writeTable(
-            $config,
-            $this->readTable(Database::adapter($config), $config, $module, $names, $table),
-            $force,
-            $output
-        );
+        $adapter = Database::adapter($config);
+
+        $names->checkSchema($adapter);
+
+        $this->writeTable($config, $this->readTable($adapter, $config, $module, $names, $table), $force, $output);
     }
 
     /**
@@ -861,7 +883,13 @@ final class ModelCommand extends ProjectCommand
         );
 
         if (true === $mapped) {
-            $this->checkStubs($config);
+            $this->checkStubs($config, self::PLACEHOLDERS);
+        }
+
+        $schema = $names->schemaOf($table);
+
+        if (null !== $schema) {
+            $this->checkStubs($config, self::SCHEMA_PLACEHOLDERS);
         }
 
         $renamed = $base->renamed($final);
@@ -889,6 +917,7 @@ final class ModelCommand extends ProjectCommand
                 array_diff($keys->using($table, self::strings($renamed ?? [])), $written),
                 static fn (string $other): bool => null !== self::classOrNull($names, $other)
             )),
+            'schema'        => $schema,
             'table'         => $table,
         ];
     }
@@ -918,6 +947,24 @@ final class ModelCommand extends ProjectCommand
         }
 
         return $text;
+    }
+
+    /**
+     * The setSchema() line of the base (#69): '' with no schema, so the base
+     * is the same as before #69. var_export() escapes a quote in the name. A
+     * project can publish the fragment and change it.
+     */
+    private function schema(Config $config, ?string $schema): string
+    {
+        if (null === $schema) {
+            return '';
+        }
+
+        return $this->stub($config)->render(
+            $config->flavor()->value,
+            Stub::FRAGMENT_PREFIX . 'model-schema',
+            ['schema' => var_export($schema, true)]
+        );
     }
 
     /**

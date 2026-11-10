@@ -17,6 +17,8 @@ use Crest\Command\Make\ModuleCommand;
 use Crest\Command\Make\ScaffoldCommand;
 use Crest\Project\Config;
 use Crest\Tests\Database\Command\AbstractNewCommandTestCase;
+use Crest\Tests\Support\Migrations\BillingMigration;
+use Crest\Tests\Support\Migrations\BillingVendorsMigration;
 use Crest\Tests\Support\Migrations\ScaffoldCountriesMigration;
 use Crest\Tests\Support\Migrations\ScaffoldProfilesMigration;
 use Crest\Tests\Support\Migrations\ScaffoldSlotsMigration;
@@ -516,6 +518,50 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
             2,
             substr_count($this->page($project, '/users/search?name=ann&page=2'), '/users/edit/')
         );
+    }
+
+    public function testTheTableOfASchemaWorksOnEachPage(): void
+    {
+        // models.schema (#69): the model reads the table of the schema. The
+        // default schema has no table vendors, so a model with no
+        // setSchema() fails.
+        if ('sqlite' === $this->getDriver()) {
+            $this->markTestSkipped('SQLite has no schemas');
+        }
+
+        $this->createSchema();
+
+        $project = $this->project('Schema', BillingVendorsMigration::class);
+        $file    = $project . '/crest.php';
+        $table   = BillingMigration::SCHEMA . '.vendors';
+
+        file_put_contents(
+            $file,
+            str_replace(
+                "        'classes'   => [],\n",
+                "        'classes'   => [],\n        'schema'    => '" . BillingMigration::SCHEMA . "',\n",
+                (string) file_get_contents($file)
+            )
+        );
+
+        $this->assertSame(
+            0,
+            $this->runThroughKernel('make:scaffold', ScaffoldCommand::class, ['vendors', '--directory', $project]),
+            $this->readStderr()
+        );
+        $this->assertRedirect($this->request($project, 'POST', '/vendors/create', ['name' => 'acme']), '/vendors');
+        $this->assertSame('acme', $this->value($project, 'SELECT name FROM ' . $table));
+        $this->assertStringContainsString('<td>acme</td>', $this->page($project, '/vendors'));
+
+        $id = $this->number($project, 'SELECT id FROM ' . $table);
+
+        $this->assertRedirect(
+            $this->request($project, 'POST', '/vendors/save/' . $id, ['name' => 'bolt']),
+            '/vendors'
+        );
+        $this->assertSame('bolt', $this->value($project, 'SELECT name FROM ' . $table));
+        $this->assertRedirect($this->request($project, 'POST', '/vendors/delete/' . $id), '/vendors');
+        $this->assertSame(0, $this->rows($project, $table));
     }
 
     private function assertRedirect(ResponseInterface $response, string $location): void

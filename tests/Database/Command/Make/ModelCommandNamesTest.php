@@ -495,6 +495,22 @@ final class ModelCommandNamesTest extends AbstractDatabaseTestCase
         $this->assertSame(0, $this->runCommand(['users']));
     }
 
+    public function testAPublishedStubWithNoSchemaWorksWithNoSchema(): void
+    {
+        // A copy that the project published before #69 has no {{ schema }}.
+        // With no models.schema, the base needs no setSchema().
+        $this->front(DatabaseFront::class);
+        $this->createTables(UsersMigration::class);
+        $this->publishOldBaseStub('schema');
+
+        $this->assertSame(0, $this->runCommand(['users']));
+
+        $base = (string) file_get_contents($this->root . '/src/Models/Base/UsersBase.php');
+
+        $this->assertStringContainsString("        \$this->setSource('users');\n    }\n", $base);
+        $this->assertStringNotContainsString('setSchema', $base);
+    }
+
     public function testAQuoteInAColumnIsEscaped(): void
     {
         $this->front(DatabaseFront::class);
@@ -720,17 +736,22 @@ final class ModelCommandNamesTest extends AbstractDatabaseTestCase
     }
 
     /**
-     * The packaged model-base.stub with no {{ columnMap }}, published into
-     * the scratch project, as a project that published it before #53.
+     * The packaged model-base.stub with no {{ columnMap }} (#53), or with no
+     * other placeholder, published into the scratch project, as a project
+     * that published it before that placeholder.
      */
-    private function publishOldBaseStub(): string
+    private function publishOldBaseStub(string $placeholder = 'columnMap'): string
     {
         $published = $this->root . '/resources/stubs/mvc/model-base.stub';
 
         mkdir($this->root . '/resources/stubs/mvc', 0o775, true);
         file_put_contents(
             $published,
-            str_replace('{{ columnMap }}', '', (string) file_get_contents(Paths::stubs() . '/mvc/model-base.stub'))
+            str_replace(
+                '{{ ' . $placeholder . ' }}',
+                '',
+                (string) file_get_contents(Paths::stubs() . '/mvc/model-base.stub')
+            )
         );
 
         return $published;
