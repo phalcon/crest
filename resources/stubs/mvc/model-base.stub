@@ -16,5 +16,5 @@ use Phalcon\Mvc\Model;
     public function initialize(): void
     {
         $this->setSource('{{ table }}');
-{{ relations }}    }
+{{ schema }}{{ relations }}    }
 {{ columnMap }}}
