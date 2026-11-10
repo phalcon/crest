@@ -86,6 +86,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `--module=<name>` to `make:controller` and `make:model`: they write into the module, with its namespace. [#55](https://github.com/phalcon/crest/issues/55)
 - Added `make:scaffold` for MVC projects: it writes a model, a form, a controller and the views `index`, `new` and `edit` for one table. `--module` writes into a module. [#56](https://github.com/phalcon/crest/issues/56)
 - Added the `form` default path (`src/Forms`), the MVC stubs `scaffold-form-base`, `scaffold-form`, `scaffold-controller`, `scaffold-view-index`, `scaffold-view-new`, `scaffold-view-edit`, `fragment-guidance-scaffold` and `fragment-guidance-scaffold-module`, `Crest\Generator\FormElements`, `Crest\Generator\ControllerRoute`, `ModelCommand::readTable()` and `ModelCommand::writeTable()`. [#56](https://github.com/phalcon/crest/issues/56)
+- Added the `models.schema` key to `crest.php`: `make:model` and `make:scaffold` read the tables of that schema, and the base calls `setSchema()`. One schema applies to all the tables. [#69](https://github.com/phalcon/crest/issues/69)
+- Added `ModelNames::schemaOf()`, `schema()` and `checkSchema()`, `ForeignKeys::elsewhere()` and the MVC stub `fragment-model-schema`. [#69](https://github.com/phalcon/crest/issues/69)
 
 ### Changed
 
@@ -143,6 +145,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `init`: for an MVC project, it also asks for the `module` folder, so a script that sends answers to `init` needs one more line. `new` writes the `module` path into the `crest.php` of an MVC project. [#55](https://github.com/phalcon/crest/issues/55)
 - Changed `init`: for an MVC project, it also asks for the `form` folder, so a script that sends answers to `init` needs one more line. `new` writes the `form` path into the `crest.php` of an MVC project. [#56](https://github.com/phalcon/crest/issues/56)
 - Changed `new`: an MVC project gets `UrlProvider`, which sets the base URI to `/`. Added the stub `project-provider-url`. A published copy of `project-front` needs the `use` line of `UrlProvider` and the line `new UrlProvider(),`. [#56](https://github.com/phalcon/crest/issues/56)
+- Changed `make:model`: with `models.schema`, a published `model-base` needs `{{ schema }}`. Publish it again with `crest stub:publish model-base --force`. [#69](https://github.com/phalcon/crest/issues/69)
+- Changed `ModelProperties::of()` and `ForeignKeys::read()`: each one takes the schema as an optional last parameter. [#69](https://github.com/phalcon/crest/issues/69)
 
 ### Fixed
 
@@ -155,6 +159,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - `bin/crest` loads the autoloader of its install, not the one in a dev checkout. A global crest from a symlinked path repository passes project commands to the crest of the project. [#33](https://github.com/phalcon/crest/issues/33)
 - The error `no answer; input ended` starts on its own line. [#42](https://github.com/phalcon/crest/issues/42)
 - The `Run make:model ... too` line of `make:model` no longer names a table that gets no class. [#71](https://github.com/phalcon/crest/issues/71)
+- Fixed `make:model`: a foreign key to a table of another schema no longer gives a relation to a model of the wrong table. It gives a `Skipped` line. [#69](https://github.com/phalcon/crest/issues/69)
 
 ### Removed
 

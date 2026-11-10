@@ -659,7 +659,9 @@ Crest stops, and writes no file, when:
   reserves (`list`), and `models.classes` gives it no class (see "Names");
 - the project has no `db` service, the service is not a Phalcon database
   adapter, or it cannot connect;
-- the table does not exist;
+- the table does not exist (in the schema of `models.schema`, when you set it);
+- `models.schema` has a value, and the `db` service is SQLite (see "The
+  schema");
 - a column name is not a property name (`first name`), or it is the name of a
   property of `Phalcon\Mvc\Model` (`container`), and no `--property` or
   attribute gives it another name: the error gives the `--property` to use;
@@ -668,7 +670,8 @@ Crest stops, and writes no file, when:
 - the `models` key of `crest.php` is not correct, or `--property` names a
   column that the table does not have (see "Names");
 - a published stub has no `{{ columnMap }}` or `{{ property }}`, and the base
-  needs a `columnMap()` (see "Names");
+  needs a `columnMap()` (see "Names"), or the published `model-base` has no
+  `{{ schema }}`, and `models.schema` has a value (see "The schema");
 - `--module` names a module that does not exist (see "Generating modules").
 
 `make:model` is for MVC projects. An ADR project uses repositories, not Active
@@ -708,13 +711,18 @@ return [
 ];
 ```
 
-In an MVC project, `crest config:show` shows the key: the row `camelCase`, with
-its origin, and a table with each line of `classes`, sorted by table:
+The `models` key has a third setting, `schema`, which does not change the names
+(see "The schema").
+
+In an MVC project, `crest config:show` shows the key: the rows `camelCase` and
+`schema`, each with its origin, and a table with each line of `classes`, sorted
+by table:
 
     ITEM       VALUE          ORIGIN
     ...
     service    app            default
     camelCase  true           declared
+    schema     none           default
 
     PATH        LOCATION                   ORIGIN
     ...
@@ -868,6 +876,17 @@ Each table works as with `make:model <table>`: another run writes the bases
 again and keeps the models, and `--force` replaces the models. When the
 database has no tables to write, crest prints `No tables to write.`, and the
 exit status is 0.
+
+With `models.schema`, `--all` writes the tables of that schema (see "The
+schema"), and the line names the schema:
+
+    No tables to write in the schema 'billing'.
+
+PostgreSQL gives no tables for a schema that does not exist, so a schema name
+with a typo gives this line. On MySQL and MariaDB, a schema that does not exist
+stops crest:
+
+    crest: the schema 'billing' cannot be read: SQLSTATE[42000]: Syntax error or access violation: 1049 Unknown database 'billing'
 
 `--all` writes no models for views, and no models for the internal tables of
 SQLite (for example, `sqlite_sequence`). For a view, run `make:model <view>`.
@@ -1062,7 +1081,9 @@ Crest skips a relation when:
   `--property` or attribute gives it one (see "Names");
 - the alias has the name of a property of the table (the case is ignored);
 - two or more relations have the same alias (the case is ignored). Crest skips
-  all of them, but not a relation whose alias comes from an attribute.
+  all of them, but not a relation whose alias comes from an attribute;
+- the key points to a table of another schema: the reason is
+  `the table customers is in another schema` (see "The schema").
 
 Crest writes the other relations. When the reason is the alias (the name of a
 column, or two relations with the same alias), you can give the skipped
@@ -1095,6 +1116,85 @@ An alias with the name of a `get` method of `Phalcon\Mvc\Model`, for example
 `Messages` (`getMessages()`) or `Source` (`getSource()`), works as a property
 (`$user->Messages`) and through `getRelated('Messages')`, but not as
 `$user->getMessages()`: PHP calls the method of the model.
+
+### The schema
+
+Crest reads the tables of the default schema of the connection. To read the
+tables of another schema, give its name in the `models` key of `crest.php`:
+
+```php
+'models' => [
+    'schema' => 'billing',
+],
+```
+
+Then `make:model`, `make:model --all` and `make:scaffold` read the tables, the
+columns and the foreign keys of that schema, and each base calls `setSchema()`
+after `setSource()`. So the model reads and writes the rows of
+`billing.invoices`:
+
+```php
+public function initialize(): void
+{
+    $this->setSource('invoices');
+    $this->setSchema('billing');
+}
+```
+
+The value must be a string that is not empty. Crest uses it as you write it:
+on PostgreSQL, write the name with the case that the server keeps. A `null`
+value is the same as no value. The schema applies to all the tables of the
+project, also with `--module`. `config:show` shows it in the `schema` row (see
+"Names").
+
+When you change the value, the next run reads the tables of the new schema, and
+writes the base of each table of the run with the new value. A table that the
+new schema does not have stops `make:model`:
+
+    crest: table 'invoices' was not found in the schema 'billing' of the 'db' service
+
+Crest deletes no file. When you remove the key, the next run writes each base
+with no `setSchema()`.
+
+A model keeps its schema until crest writes its base again. So after you add,
+change or remove the key, run `make:model --all`: a related model whose base
+crest did not write again reads the old schema, with no error.
+
+SQLite has no schemas. When the `db` service is SQLite, and `models.schema` has
+a value, crest stops:
+
+    crest: crest.php: models.schema is 'billing', but SQLite has no schemas; remove the key
+
+When `models.schema` has a value, a published `model-base` must have the
+placeholder `{{ schema }}`. A copy that you published before does not have it,
+and crest stops with the message of "Published stubs" (see "Names"). With no
+`models.schema`, a published copy works as before.
+
+**A key to another schema.** Crest writes a relation only to a table of the
+schema that it reads. A foreign key to a table of another schema gives no
+relation, also with no `models.schema`:
+
+    Skipped the relation belongsTo invoices(customer_id) -> customers(id): the table customers is in another schema
+
+Crest finds such a key from the list of the tables: the referenced table is not
+a table of the schema. A base from an older version of crest can have a
+relation like that. The next run removes it, and the code that uses its alias
+stops working. A `RelationAlias` attribute for the key gets a `Dropped` line.
+If you need the relation, write it in your model.
+
+The limits:
+
+- When the schema also has a table with the name of the referenced table, crest
+  cannot see the difference. It writes the relation to the model of the table
+  in the schema.
+- A key from a table of another schema to a table of this schema gives no
+  `hasMany()`: crest does not read the other schemas.
+- On PostgreSQL, until cphalcon 5.24.0 and the tag of `phalcon/phalcon` after
+  `v6.0.0RC4`: when two schemas have the same table with the same key column,
+  Phalcon gives one key with the columns of the two keys. Crest then writes a
+  relation with the column two times, or a `Skipped` line, for that key. To
+  fix it, give one of the two keys another name, or use the release with the
+  fix.
 
 ## Generating modules
 
@@ -1262,6 +1362,9 @@ So when the table gets a new column, run `make:scaffold` again. Crest writes the
 two bases again, and the list and the `new` and `edit` pages show the column,
 because the views loop over the form. The rules of "Generated bases" apply to the
 two bases. `make:model --force` replaces the model.
+
+With `models.schema`, the pages read the table of that schema (see "The
+schema").
 
 ### The names of the pages
 
