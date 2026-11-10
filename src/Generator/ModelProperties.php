@@ -32,21 +32,24 @@ final class ModelProperties
 {
     /**
      * The column name and its PHP type, in the order of the table. The
-     * property names come from ModelNames, which checks them (#53).
+     * property names come from ModelNames, which checks them (#53). A null
+     * schema is the default schema of the connection (#69).
      *
      * @return array<string, string>
      */
-    public static function of(AdapterInterface $adapter, string $table): array
+    public static function of(AdapterInterface $adapter, string $table, ?string $schema = null): array
     {
-        if (false === $adapter->tableExists($table)) {
+        if (false === $adapter->tableExists($table, $schema)) {
             throw new Exception(
-                sprintf("table '%s' was not found in the database of the 'db' service", $table)
+                null === $schema
+                    ? sprintf("table '%s' was not found in the database of the 'db' service", $table)
+                    : sprintf("table '%s' was not found in the schema '%s' of the 'db' service", $table, $schema)
             );
         }
 
         $properties = [];
 
-        foreach ($adapter->describeColumns($table) as $column) {
+        foreach ($adapter->describeColumns($table, $schema) as $column) {
             $properties[$column->getName()] = self::type($column->getType());
         }
 

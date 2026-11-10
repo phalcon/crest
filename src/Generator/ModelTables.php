@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use PDOException;
 use Phalcon\Db\Adapter\AdapterInterface;
 
 use function array_diff;
@@ -32,7 +33,8 @@ use const SORT_STRING;
 /**
  * The tables that make:model --all writes (#52, spec 3.2): the tables of the
  * database, with no views, no internal tables of SQLite, and no tables of
- * --exclude. Each table gets its class here, before crest writes a file. A
+ * --exclude. With models.schema (#69), the tables and the views are those of
+ * the schema. Each table gets its class here, before crest writes a file. A
  * table that gives no class, or that gives the class of another table,
  * fails: crest writes the other tables, and lists the failed tables at the
  * end.
@@ -72,8 +74,25 @@ final class ModelTables
      */
     public static function of(AdapterInterface $adapter, array $exclude, ModelNames $names): self
     {
-        $listed = $adapter->listTables();
-        $views  = $adapter->listViews();
+        $schema = $names->schema();
+
+        // MySQL and MariaDB throw for a schema that does not exist.
+        // PostgreSQL gives no tables (spec 3.7). With no schema, the error
+        // does not change.
+        try {
+            $listed = $adapter->listTables($schema);
+        } catch (PDOException $exception) {
+            if (null === $schema) {
+                throw $exception;
+            }
+
+            throw new Exception(
+                sprintf("the schema '%s' cannot be read: %s", $schema, $exception->getMessage()),
+                previous: $exception
+            );
+        }
+
+        $views  = $adapter->listViews($schema);
         $sqlite = 'sqlite' === $adapter->getType();
         $tables = [];
 
