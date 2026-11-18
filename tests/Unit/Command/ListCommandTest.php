@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command;
 
-use Composer\InstalledVersions;
 use Crest\Command\ListCommand;
 use Crest\Commands;
 use Crest\Console\Command\Command;
@@ -21,6 +20,7 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Console\PackageVersion;
 use Crest\Tests\Support\Console\FakeCommand;
+use Crest\Tests\Support\InstalledPackages;
 use Crest\Tests\Support\RunsACommandDirectly;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
@@ -35,6 +35,7 @@ use const PHP_EOL;
 
 final class ListCommandTest extends TestCase
 {
+    use InstalledPackages;
     use RunsACommandDirectly;
     use ScratchDirectory;
 
@@ -61,29 +62,15 @@ final class ListCommandTest extends TestCase
      */
     private const MVC_ONLY = ['make:controller', 'make:model', 'make:module', 'make:scaffold'];
 
-    /**
-     * @var array{
-     *     root: array{
-     *         name: string, pretty_version: string, version: string,
-     *         reference: string|null, type: string, install_path: string,
-     *         aliases: string[], dev: bool
-     *     },
-     *     versions: array<string, array{dev_requirement: bool, extra?: array<string, mixed>}>
-     * }
-     */
-    private array $installed;
-
     protected function setUp(): void
     {
         $this->captureStreams();
         $this->makeScratchDirectory('list', 'src');
-
-        $this->installed = InstalledVersions::getAllRawData()[0];
     }
 
     protected function tearDown(): void
     {
-        InstalledVersions::reload($this->installed);
+        $this->uninstallPackages();
 
         $this->closeStreams();
         $this->removeScratchDirectory();
@@ -263,15 +250,7 @@ final class ListCommandTest extends TestCase
      */
     private function contribute(string $name, string $class): void
     {
-        InstalledVersions::reload([
-            'root'     => $this->installed['root'],
-            'versions' => [
-                'vendor/pkg' => [
-                    'dev_requirement' => false,
-                    'extra'           => [Commands::KEY => ['commands' => [$name => $class]]],
-                ],
-            ],
-        ]);
+        $this->installPackages($this->root . '/installed', [[Commands::KEY => ['commands' => [$name => $class]]]]);
     }
 
     /**

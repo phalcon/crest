@@ -13,14 +13,17 @@ declare(strict_types=1);
 
 namespace Crest\Console;
 
-use Composer\InstalledVersions;
+use Composer\Autoload\ClassLoader;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 
 use function array_keys;
 use function class_exists;
+use function file_get_contents;
 use function is_array;
+use function is_file;
 use function is_string;
+use function json_decode;
 use function ksort;
 use function sprintf;
 use function str_starts_with;
@@ -67,6 +70,57 @@ final class Registry
         foreach ($map as $name => $class) {
             $this->add($name, $class);
         }
+    }
+
+    /**
+     * The array under a key of $data, or an empty array when $data or the
+     * value is not an array.
+     *
+     * @return array<mixed>
+     */
+    private static function entry(mixed $data, string $key): array
+    {
+        $value = true === is_array($data) ? $data[$key] ?? null : null;
+
+        return true === is_array($value) ? $value : [];
+    }
+
+    /**
+     * The `extra` block of each package in a vendor folder, then the one of
+     * the root project. Composer keeps the blocks of the packages in
+     * `composer/installed.json` and the one of the root in the root
+     * composer.json. `composer/installed.php`, which InstalledVersions reads,
+     * has no `extra`; it gives the path of the root.
+     *
+     * @return list<array<mixed>>
+     */
+    private static function extras(string $vendor): array
+    {
+        $extras = [];
+
+        foreach (self::entry(self::json($vendor . '/composer/installed.json'), 'packages') as $package) {
+            $extras[] = self::entry($package, 'extra');
+        }
+
+        $installed = $vendor . '/composer/installed.php';
+        $root      = true === is_file($installed) ? self::entry(require $installed, 'root') : [];
+        $path      = $root['install_path'] ?? null;
+
+        if (true === is_string($path)) {
+            $extras[] = self::entry(self::json($path . '/composer.json'), 'extra');
+        }
+
+        return $extras;
+    }
+
+    /**
+     * The decoded JSON of a file, or null when the file does not exist.
+     */
+    private static function json(string $file): mixed
+    {
+        $content = true === is_file($file) ? file_get_contents($file) : null;
+
+        return true === is_string($content) ? json_decode($content, true) : null;
     }
 
     /**
@@ -237,9 +291,10 @@ final class Registry
     }
 
     /**
-     * Folds in commands contributed by installed packages through
-     * `extra.<key>.commands` in their composer.json. Runs at most once, and
-     * only when something actually needs it.
+     * Folds in commands contributed by installed packages and by the root
+     * project through `extra.<key>.commands` in their composer.json. Reads
+     * each vendor folder that has a registered composer class loader. Runs at
+     * most once, and only when something actually needs it.
      */
     private function discover(): void
     {
@@ -250,18 +305,9 @@ final class Registry
         $this->discovered = true;
         $key              = $this->discoveryKey;
 
-        if (false === class_exists(InstalledVersions::class)) {
-            return;
-        }
-
-        foreach (InstalledVersions::getAllRawData() as $dataset) {
-            /** @var array<string, array{extra?: array<string, mixed>}> $versions */
-            $versions = $dataset['versions'] ?? [];
-
-            foreach ($versions as $package) {
-                // `extra` holds mixed values, so the key is read one offset at
-                // a time and the rest of the unwrapping happens in the helper.
-                $this->addContributed($package['extra'][$key] ?? null);
+        foreach (array_keys(ClassLoader::getRegisteredLoaders()) as $vendor) {
+            foreach (self::extras($vendor) as $extra) {
+                $this->addContributed($extra[$key] ?? null);
             }
         }
     }

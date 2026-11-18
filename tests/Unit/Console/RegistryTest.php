@@ -13,44 +13,38 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Console;
 
-use Composer\InstalledVersions;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Registry;
 use Crest\Tests\Support\Console\FakeCommand;
 use Crest\Tests\Support\Console\ThrowingCommand;
+use Crest\Tests\Support\InstalledPackages;
+use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
+
+use function file_put_contents;
+use function json_encode;
+use function unlink;
 
 final class RegistryTest extends TestCase
 {
-    private const KEY = 'crest-registry-test-key';
+    use InstalledPackages;
+    use ScratchDirectory;
 
-    /**
-     * The real composer dataset, kept so tearDown can put it back. The shape
-     * mirrors what getAllRawData() returns and reload() demands.
-     *
-     * @var array{
-     *     root: array{
-     *         name: string, pretty_version: string, version: string,
-     *         reference: string|null, type: string, install_path: string,
-     *         aliases: string[], dev: bool
-     *     },
-     *     versions: array<string, array{dev_requirement: bool, extra?: array<string, mixed>}>
-     * }
-     */
-    private array $installed;
+    private const KEY = 'crest-registry-test-key';
 
     protected function setUp(): void
     {
-        // getAllRawData() is global state; every discovery test swaps in its
-        // own dataset and setUp/tearDown put the real one back so the rest of
-        // the suite still sees genuine composer metadata.
-        $this->installed = InstalledVersions::getAllRawData()[0];
+        // A discovery test writes a vendor folder in the scratch folder and
+        // registers its class loader; tearDown unregisters it, so the rest of
+        // the suite reads only the vendor folder of crest.
+        $this->makeScratchDirectory('registry');
     }
 
     protected function tearDown(): void
     {
-        InstalledVersions::reload($this->installed);
+        $this->uninstallPackages();
+        $this->removeScratchDirectory();
     }
 
     public function testAliasesDoNotAppearInAll(): void
@@ -123,6 +117,15 @@ final class RegistryTest extends TestCase
         );
     }
 
+    public function testDiscoveryAddsACommandOfTheRootProject(): void
+    {
+        // The root project has no entry in installed.json: its own
+        // composer.json gives its `extra` block.
+        $this->installPackages($this->root, [], [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
     public function testDiscoveryAddsAContributedCommand(): void
     {
         $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
@@ -139,9 +142,47 @@ final class RegistryTest extends TestCase
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
+    public function testDiscoveryIgnoresANonArrayExtraBlock(): void
+    {
+        $this->installPackages(
+            $this->root,
+            ['nonsense', [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]]
+        );
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
     public function testDiscoveryIgnoresANonArrayExtraEntry(): void
     {
         $this->installExtra([self::KEY => 'nonsense']);
+
+        $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIgnoresANonArrayPackage(): void
+    {
+        $this->installExtra([]);
+        $this->writeVendorFile(
+            'installed.json',
+            (string) json_encode([
+                'packages' => ['nonsense', ['extra' => [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]]],
+            ])
+        );
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIgnoresANonArrayPackageList(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        $this->writeVendorFile('installed.json', '{"packages": "nonsense"}');
+
+        $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIgnoresANonArrayRootExtra(): void
+    {
+        $this->installPackages($this->root, [], 'nonsense');
 
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
@@ -162,9 +203,33 @@ final class RegistryTest extends TestCase
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
+    public function testDiscoveryIgnoresAPackageWithNoExtraBlock(): void
+    {
+        $this->installExtra([]);
+        $this->writeVendorFile(
+            'installed.json',
+            (string) json_encode([
+                'packages' => [
+                    ['name' => 'vendor/plain'],
+                    ['extra' => [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]],
+                ],
+            ])
+        );
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
     public function testDiscoveryIgnoresAPackageWithNoMatchingExtraKey(): void
     {
         $this->installExtra(['some-other-tool' => ['commands' => ['x' => FakeCommand::class]]]);
+
+        $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIgnoresARootWithNoInstallPath(): void
+    {
+        $this->installPackages($this->root, [], [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        $this->writeVendorFile('installed.php', "<?php return ['root' => []];\n");
 
         $this->assertSame([], (new Registry())->withDiscovery(self::KEY)->all());
     }
@@ -175,6 +240,36 @@ final class RegistryTest extends TestCase
 
         // No withDiscovery() call, so the contributed command stays invisible.
         $this->assertSame([], (new Registry())->all());
+    }
+
+    public function testDiscoveryReadsThePackagesBeforeTheRootProject(): void
+    {
+        $this->installPackages(
+            $this->root,
+            [[self::KEY => ['commands' => ['fake' => FakeCommand::class]]]],
+            [self::KEY => ['commands' => ['boom' => ThrowingCommand::class]]]
+        );
+
+        $this->assertSame(
+            ['fake' => FakeCommand::class, 'boom' => ThrowingCommand::class],
+            (new Registry())->withDiscovery(self::KEY)->all()
+        );
+    }
+
+    public function testDiscoveryReadsThePackagesWithNoInstalledPhp(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        unlink($this->root . '/vendor/composer/installed.php');
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryReadsTheRootProjectWithNoInstalledJson(): void
+    {
+        $this->installPackages($this->root, [], [self::KEY => ['commands' => ['fake' => FakeCommand::class]]]);
+        unlink($this->root . '/vendor/composer/installed.json');
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
     public function testDiscoveryRunsOnlyOnce(): void
@@ -357,17 +452,13 @@ final class RegistryTest extends TestCase
     }
 
     /**
-     * Replaces the installed-package set with a single synthetic package
-     * carrying the given composer `extra` block.
+     * One installed package with the given composer `extra` block.
      *
      * @param array<string, mixed> $extra
      */
     private function installExtra(array $extra): void
     {
-        InstalledVersions::reload([
-            'root'     => $this->installed['root'],
-            'versions' => ['vendor/pkg' => ['dev_requirement' => false, 'extra' => $extra]],
-        ]);
+        $this->installPackages($this->root, [$extra]);
     }
 
     /**
@@ -379,12 +470,15 @@ final class RegistryTest extends TestCase
      */
     private function installTwoPackages(array $first, array $second): void
     {
-        InstalledVersions::reload([
-            'root'     => $this->installed['root'],
-            'versions' => [
-                'vendor/bad'  => ['dev_requirement' => false, 'extra' => $first],
-                'vendor/good' => ['dev_requirement' => false, 'extra' => $second],
-            ],
-        ]);
+        $this->installPackages($this->root, [$first, $second]);
+    }
+
+    /**
+     * Replaces a file of the vendor folder, to give a shape that composer
+     * does not write.
+     */
+    private function writeVendorFile(string $file, string $content): void
+    {
+        file_put_contents($this->root . '/vendor/composer/' . $file, $content);
     }
 }
