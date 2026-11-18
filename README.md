@@ -115,6 +115,7 @@ the defaults:
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [docs/index.md](docs/index.md#the-database) |
 | `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`) |
+| `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`) |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 `new` also writes `./crest`, a launcher for a host with docker and no PHP. `./crest up`,
@@ -201,16 +202,19 @@ return [
 ```
 
 `models` changes the names that `make:model` gives in an MVC project: `classes`
-gives a class to a table, and `camelCase` gives camelCase property names. `crest new`
-and `crest init` write the key for an MVC project, with `'camelCase' => false`;
-`crest new --camel-case` gives `true`. `crest config:show` shows the key. See
-"Names" in [docs/index.md](docs/index.md):
+gives a class to a table, and `camelCase` gives camelCase property names. `getSet`
+gives protected properties with a getter and a setter for each, as devtools
+`--get-set`. `crest new` and `crest init` write the key for an MVC project, with
+`'camelCase' => false` and `'getSet' => false`; `crest new --camel-case` and
+`--get-set` give `true`. `crest config:show` shows the key. See "Names" and
+"Getters and setters" in [docs/index.md](docs/index.md):
 
 ```php
 return [
     'models' => [
         'classes'   => ['users' => 'User'],
         'camelCase' => true,
+        'getSet'    => true,
     ],
 ];
 ```

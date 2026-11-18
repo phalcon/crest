@@ -26,6 +26,7 @@ use function is_array;
 use function is_bool;
 use function is_string;
 use function lcfirst;
+use function method_exists;
 use function preg_match;
 use function property_exists;
 use function sort;
@@ -63,13 +64,15 @@ final class ModelNames
     /**
      * The keys of models in crest.php.
      */
-    private const KEYS = ['classes', 'camelCase', 'schema'];
+    private const KEYS = ['classes', 'camelCase', 'getSet', 'schema'];
 
     private const MODEL = 'has the name of a property of ' . Model::class;
 
     /**
      * @param array<string, string>                   $classes models.classes: the table and its class
      * @param string|null                             $schema  models.schema: the schema of the tables, or null
+     * @param bool                                    $getSet  models.getSet: a getter and a setter for each
+     *                                                         property (#70)
      * @param array<string, Names>                    $stored  The PropertyName attributes of each base, by table
      * @param array<string, string>                   $files   The base of each table of $stored, for the errors
      * @param array<string, array<array-key, string>> $given   --property: the column and its name, by table
@@ -80,6 +83,7 @@ final class ModelNames
         private readonly array $classes,
         private readonly bool $camelCase,
         private readonly ?string $schema,
+        private readonly bool $getSet,
         private readonly array $stored = [],
         private readonly array $files = [],
         private readonly array $given = [],
@@ -102,7 +106,8 @@ final class ModelNames
             if (false === in_array($key, self::KEYS, true)) {
                 throw new Exception(
                     sprintf(
-                        "crest.php: models has an unknown key '%s'; the keys are classes, camelCase and schema",
+                        "crest.php: models has an unknown key '%s'; "
+                        . 'the keys are classes, camelCase, getSet and schema',
                         $key
                     )
                 );
@@ -120,6 +125,13 @@ final class ModelNames
             throw new Exception('crest.php: models.camelCase must be true or false');
         }
 
+        // A null value counts as no value, as for camelCase (#70).
+        $getSet = $models['getSet'] ?? false;
+
+        if (false === is_bool($getSet)) {
+            throw new Exception('crest.php: models.getSet must be true or false');
+        }
+
         // A null value counts as no value. Crest keeps the value as the file
         // gives it.
         $schema = $models['schema'] ?? null;
@@ -128,7 +140,7 @@ final class ModelNames
             throw new Exception('crest.php: models.schema must be the name of a schema');
         }
 
-        return new self(self::classes($classes), $camelCase, $schema);
+        return new self(self::classes($classes), $camelCase, $schema, $getSet);
     }
 
     /**
@@ -337,6 +349,15 @@ final class ModelNames
     }
 
     /**
+     * models.getSet: protected properties with a getter and a setter for
+     * each (#70).
+     */
+    public function getSet(): bool
+    {
+        return $this->getSet;
+    }
+
+    /**
      * The tables of models.classes, as strings: for the notes of --all
      * (ModelTables), for config:show, and for the old files of make:model
      * (#71).
@@ -398,6 +419,10 @@ final class ModelNames
             $properties[$column] = $name;
         }
 
+        if (true === $this->getSet) {
+            $this->checkMethods($table, $properties);
+        }
+
         return $properties;
     }
 
@@ -447,6 +472,7 @@ final class ModelNames
             $this->classes,
             $this->camelCase,
             $this->schema,
+            $this->getSet,
             $this->stored,
             $this->files,
             $this->given,
@@ -468,6 +494,7 @@ final class ModelNames
             $this->classes,
             $this->camelCase,
             $this->schema,
+            $this->getSet,
             $this->stored,
             $this->files,
             $all,
@@ -492,6 +519,7 @@ final class ModelNames
             $this->classes,
             $this->camelCase,
             $this->schema,
+            $this->getSet,
             $all,
             $files,
             $this->given,
@@ -539,6 +567,70 @@ final class ModelNames
             true === $model ? 'another name' : 'one',
             $column
         ));
+    }
+
+    /**
+     * The checks of the getters and the setters (#70, spec 3.4), with the key
+     * only. A method of Phalcon\Mvc\Model (conflict a) names its source, as
+     * check() does. Two properties that give one method name (conflict b)
+     * stop too: PHP method names are not case-sensitive.
+     *
+     * @param array<string, string> $properties The column and its property
+     */
+    private function checkMethods(string $table, array $properties): void
+    {
+        $owners = [];
+
+        foreach ($properties as $column => $name) {
+            $method = ClassName::studly($name);
+            $taken  = true === method_exists(Model::class, 'get' . $method)
+                ? 'get' . $method
+                : (true === method_exists(Model::class, 'set' . $method) ? 'set' . $method : null);
+
+            if (null !== $taken) {
+                $has = sprintf('gives the method %s(), which %s has', $taken, Model::class);
+
+                if (true === isset($this->given[$table][$column])) {
+                    throw new Exception(sprintf("--property: '%s' %s", $name, $has));
+                }
+
+                if (true === isset($this->stored[$table][$column])) {
+                    throw new Exception(sprintf(
+                        "%s, line %d: the property name '%s' %s; change it",
+                        $this->files[$table] ?? '',
+                        $this->stored[$table][$column]['line'],
+                        $name,
+                        $has
+                    ));
+                }
+
+                throw new Exception(sprintf(
+                    "column '%s' of table '%s' %s; give it another name with --property=\"%s=<name>\"",
+                    $column,
+                    $table,
+                    $has,
+                    $column
+                ));
+            }
+
+            $key = strtolower($method);
+
+            if (true === isset($owners[$key])) {
+                [$first, $firstMethod] = $owners[$key];
+
+                throw new Exception(sprintf(
+                    "columns '%s' and '%s' of table '%s' give the same methods get%s() and set%s(); "
+                    . 'give one of them another name with --property',
+                    $first,
+                    $column,
+                    $table,
+                    $firstMethod,
+                    $firstMethod
+                ));
+            }
+
+            $owners[$key] = [$column, $method];
+        }
     }
 
     /**

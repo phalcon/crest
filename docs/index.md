@@ -67,12 +67,14 @@ An ADR project has `public/index.php`, the front controller `src/AppFront.php`,
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
 | `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See "The database" |
 | `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`). See "Names" |
+| `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`). See "Getters and setters" |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
 
 In a terminal, `new` asks for each value that no option gives: the flavor, the
 namespace, the PHP version, the Phalcon version, the runtime (`docker` with the
 service `app`, or `host`), and the database. For an MVC project with a database, it
-also asks if the property names of the models are in camelCase. There is no question
+also asks if the property names of the models are in camelCase, and then if the
+properties are protected, with a getter and a setter. There is no question
 for the view engine while there is only one. An empty answer takes the default.
 `--no-interaction`, or a run without a terminal (CI, a pipe), asks nothing and takes
 the defaults. The options stay, for CI.
@@ -434,8 +436,9 @@ overwrites an existing `crest.php`. If the project does not require crest, `init
 the `composer require` line.
 
 For an MVC project, `init` also writes the `models` key of `crest.php`, with
-`'camelCase' => false`, so the models of the project keep their property names. See
-"Names".
+`'camelCase' => false`, so the models of the project keep their property names, and
+`'getSet' => false`, so their properties stay public. See "Names" and "Getters and
+setters".
 
 `init` needs a psr-4 entry in `composer.json`, because the generators get their
 namespaces from it. Without one, `init` stops and tells you to add one, for example
@@ -672,6 +675,10 @@ Crest stops, and writes no file, when:
 - a published stub has no `{{ columnMap }}` or `{{ property }}`, and the base
   needs a `columnMap()` (see "Names"), or the published `model-base` has no
   `{{ schema }}`, and `models.schema` has a value (see "The schema");
+- `models.getSet` is `true`, and a getter or a setter is a method of
+  `Phalcon\Mvc\Model`, two properties give one method name, or a published
+  stub has no `{{ visibility }}` or `{{ methods }}` (see "Getters and
+  setters");
 - `--module` names a module that does not exist (see "Generating modules").
 
 `make:model` is for MVC projects. An ADR project uses repositories, not Active
@@ -714,14 +721,15 @@ return [
 The `models` key has a third setting, `schema`, which does not change the names
 (see "The schema").
 
-In an MVC project, `crest config:show` shows the key: the rows `camelCase` and
-`schema`, each with its origin, and a table with each line of `classes`, sorted
-by table:
+In an MVC project, `crest config:show` shows the key: the rows `camelCase`,
+`getSet` and `schema`, each with its origin, and a table with each line of
+`classes`, sorted by table:
 
     ITEM       VALUE          ORIGIN
     ...
     service    app            default
     camelCase  true           declared
+    getSet     false          default
     schema     none           default
 
     PATH        LOCATION                   ORIGIN
@@ -1196,6 +1204,157 @@ The limits:
   fix it, give one of the two keys another name, or use the release with the
   fix.
 
+### Getters and setters
+
+phalcon-devtools with `--get-set` wrote models with protected properties, and a
+getter and a setter for each column. With `'getSet' => true` in the `models`
+key of `crest.php`, each base that `make:model` writes has protected typed
+properties, and a getter and a setter for each property. The base of the table
+`people` (`id`, `first_name`) is:
+
+```php
+abstract class PeopleBase extends Model
+{
+    protected ?int $id = null;
+    protected ?string $first_name = null;
+
+    public function initialize(): void
+    {
+        $this->setSource('people');
+    }
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function setId(?int $value): static
+    {
+        $this->id = $value;
+
+        return $this;
+    }
+
+    public function getFirstName(): ?string
+    {
+        return $this->first_name;
+    }
+
+    public function setFirstName(?string $value): static
+    {
+        $this->first_name = $value;
+
+        return $this;
+    }
+}
+```
+
+The default is `false`, and a `null` value counts as no value. A value that is
+not `true` or `false` stops `make:model` and `make:scaffold`. The setting
+applies to each table of the project.
+
+**The names.** The methods are `get<Name>()` and `set<Name>()`. Crest makes
+`<Name>` from the property: it splits the property at each `_`, and makes the
+first letter of each part uppercase. `first_name` gives `getFirstName()`. With
+`camelCase`, `firstName` also gives `getFirstName()`, so a change of
+`camelCase` does not change the methods. `--property=first_name=givenName`
+gives `getGivenName()`. A setter returns the model, so you can chain the
+setters: `$user->setFirstName('Ann')->setAge(30)`.
+
+Phalcon uses the methods in `toArray()`, in `assign()` (when
+`disableAssignSetters` is off), in the forms, and for `$user->first_name` from
+outside the model. `findFirst()` and `save()` do not use the methods: they read
+and write the protected properties directly. So a getter or a setter that you
+change in your model does not run when Phalcon reads a row or saves it. (With
+the `orm.call_setters_on_hydration` setting, `findFirst()` calls the setters.)
+Two things change for the code outside the model:
+
+- `isset($user->first_name)` is true also when the value is null, and
+  `$user->first_name ?? 'none'` gives null;
+- `get_object_vars()`, `(array)` and `foreach` do not show the columns.
+
+**What stops the command.** With the key, these names stop `make:model` before
+it writes a file. With `--all`, only the table of the name fails.
+
+- The getter or the setter is a method of `Phalcon\Mvc\Model`. For example, the
+  column `source` gives `getSource()`:
+
+      column 'source' of table 'pages' gives the method getSource(), which Phalcon\Mvc\Model has; give it another name with --property="source=<name>"
+
+  A name from `--property` or from a `PropertyName` attribute gives the same
+  error, with its source.
+- Two properties give one method name, without regard to case, for example
+  `first_name` and `firstName`.
+
+Phalcon gives the related records of an alias through `get<Alias>()`, and a
+getter of the base would hide them. So crest skips a relation whose alias is
+the `<Name>` of a property, without regard to case. For example, the column
+`billing_address` of `invoices` gives `getBillingAddress()`, the getter of the
+alias `BillingAddress`:
+
+    Skipped the relation belongsTo invoices(billing_address_id) -> addresses(id): the alias BillingAddress has the name of a getter
+
+An alias from a `RelationAlias` attribute stops the command, and you change
+it.
+
+**A change of the key.** When a property gets another name, crest prints a
+line for its methods after the `Renamed` line of the property:
+
+    Renamed getFname() and setFname() to getGivenName() and setGivenName(): change the code that uses them
+
+From `true` to `false`, the base gets public properties and no methods, and
+crest prints a line for each property:
+
+    Removed getFirstName() and setFirstName(): change the code that uses them
+
+From `false` to `true`, crest prints a line for each base:
+
+    Note: the properties of <base file> are protected now; code outside the model goes through the getters and setters
+
+**Published stubs.** The getter and the setter come from the stub
+`fragment-model-get-set`. With the key, `fragment-model-property` needs the
+placeholder `{{ visibility }}`, and `model-base` needs `{{ methods }}`. A copy
+that you published before #70 does not have them: publish it again with
+`crest stub:publish <name> --force`, and make your changes in it again. With no
+key, an old copy works.
+
+**Moving a devtools `--get-set` model.**
+
+1. Set `'getSet' => true` in the `models` key of `crest.php`. If devtools used
+   `camelize`, also set `'camelCase' => true`.
+2. Run `crest make:model --all`. Crest writes each base. A model file that
+   exists stays as it is, because crest writes a model one time.
+3. In each model:
+   - change `extends Model` to `extends <Class>Base`, with the `use` line of
+     the `Base` namespace;
+   - delete the properties, the getters and the setters that devtools wrote;
+   - delete `columnMap()` and the `setSource()` line, because the base has
+     them;
+   - keep your own code. If the model keeps `initialize()`, call
+     `parent::initialize()` first.
+
+A property, a getter or a setter of devtools that stays in the model stops PHP
+when it loads the model, for example:
+
+    Fatal error: Declaration of Users::getAge() must be compatible with UsersBase::getAge(): ?int
+    Fatal error: Type of Users::$age must be ?int (as in class UsersBase)
+
+Delete them. To change a getter or a setter, keep the declaration of the base.
+
+The code that calls the methods keeps working: the names are the same, and you
+can chain the setters. There are two differences:
+
+- A setter accepts only the type of the column, or null. In a file with
+  `strict_types`, another type is a `TypeError`. A write through `__set()`
+  (`$user->age = '42'`) and `assign()` use the weak rules of PHP: `'42'`
+  converts, but `'abc'` for an `int` is a `TypeError`. The setters of devtools
+  had no types, so they accepted each value.
+- A getter gives the typed value.
+
+On `phalcon/phalcon` `v6.0.0RC4` and before, a write through `__set()` or
+`assign()` gives a `TypeError` when the value does not have the type of the
+column, also for `'42'`.
+
 ## Generating modules
 
 In an MVC project, `make:module` writes a module: a part of the application
@@ -1461,6 +1620,9 @@ The form has one field for each column, in the order of the table:
 The column type is the type that Phalcon reads from the database (see "Generating
 models"). An input that is empty or has only whitespace is null, and the model decides
 if the column can be null: a `NOT NULL` column gives the message `<property> is required`.
+
+The pages also work with `models.getSet`: the form and the views go through the getters
+and the setters (see "Getters and setters").
 
 ### Search
 

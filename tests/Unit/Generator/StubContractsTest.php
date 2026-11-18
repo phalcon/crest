@@ -104,6 +104,8 @@ final class StubContractsTest extends TestCase
         'key'            => 'id',
         'keyLabel'       => 'Id',
         'keyValue'       => '(int) $id',
+        'method'         => 'Id',
+        'methods'        => '',
         'model'          => 'GeneratedModel',
         'modelNamespace' => 'App\\Generated\\Models',
         'module'         => 'generated',
@@ -123,6 +125,7 @@ final class StubContractsTest extends TestCase
         'template'       => 'generated/index',
         'type'           => 'int',
         'url'            => 'generated',
+        'visibility'     => 'public',
     ];
 
     protected function setUp(): void
@@ -468,6 +471,12 @@ final class StubContractsTest extends TestCase
                             'mvc',
                             Stub::FRAGMENT_PREFIX . 'model-column-map',
                             ['pairs' => "            'id' => 'id',\n"]
+                        ),
+                        // The getter and the setter of #70 must be valid in the class.
+                        'methods'    => $stub->render(
+                            'mvc',
+                            Stub::FRAGMENT_PREFIX . 'model-get-set',
+                            ['method' => 'Id', 'property' => 'id', 'type' => 'int']
                         ),
                         'namespace'  => $namespace . '\\Base',
                         'properties' => "    public ?int \$id = null;\n",

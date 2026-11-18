@@ -1,0 +1,12 @@
+
+    public function get{{ method }}(): ?{{ type }}
+    {
+        return $this->{{ property }};
+    }
+
+    public function set{{ method }}(?{{ type }} $value): static
+    {
+        $this->{{ property }} = $value;
+
+        return $this;
+    }

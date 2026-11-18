@@ -17,4 +17,4 @@ use Phalcon\Mvc\Model;
     {
         $this->setSource('{{ table }}');
 {{ schema }}{{ relations }}    }
-{{ columnMap }}}
+{{ methods }}{{ columnMap }}}

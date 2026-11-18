@@ -428,6 +428,47 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
         );
     }
 
+    public function testATableWithGetSetWorksOnEachPage(): void
+    {
+        // With models.getSet the properties are protected: the form and the
+        // views go through the getters and the setters (#70, spec 3.8).
+        $project = $this->scaffolded('GetSet', 'user_profiles', ScaffoldProfilesMigration::class, false, true);
+
+        $this->assertStringContainsString(
+            "    protected ?string \$first_name = null;\n",
+            (string) file_get_contents($project . '/src/Models/Base/UserProfilesBase.php')
+        );
+        $this->assertStringContainsString('First name', $this->page($project, '/user-profiles'));
+        $this->assertRedirect(
+            $this->request($project, 'POST', '/user-profiles/create', ['first_name' => 'ann', 'age' => '3']),
+            '/user-profiles'
+        );
+        $this->assertSame('ann', $this->value($project, 'SELECT first_name FROM user_profiles'));
+        $this->assertStringContainsString(
+            '<td>ann</td>',
+            $this->page($project, '/user-profiles/search?first_name=ann')
+        );
+
+        $id = $this->number($project, 'SELECT id FROM user_profiles');
+
+        $this->assertMatchesRegularExpression(
+            '/<input(?=[^>]*name="first_name")(?=[^>]*value="ann")[^>]*>/',
+            $this->page($project, '/user-profiles/edit/' . $id)
+        );
+
+        // A blank input saves null: afterBind() writes null through __set()
+        // and the setter.
+        $this->assertRedirect(
+            $this->request($project, 'POST', '/user-profiles/save/' . $id, ['first_name' => 'bob', 'age' => '']),
+            '/user-profiles'
+        );
+        $this->assertSame('bob', $this->value($project, 'SELECT first_name FROM user_profiles'));
+        $this->assertNull($this->value($project, 'SELECT age FROM user_profiles'));
+
+        $this->assertRedirect($this->request($project, 'POST', '/user-profiles/delete/' . $id), '/user-profiles');
+        $this->assertSame(0, $this->rows($project, 'user_profiles'));
+    }
+
     public function testAValueIsEscapedInTheList(): void
     {
         $project = $this->scaffolded('Escaped', 'users', ScaffoldUsersMigration::class);
@@ -738,16 +779,27 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
      *
      * @param class-string<AbstractSchema> $migration
      */
-    private function scaffolded(string $case, string $table, string $migration, bool $camelCase = false): string
-    {
+    private function scaffolded(
+        string $case,
+        string $table,
+        string $migration,
+        bool $camelCase = false,
+        bool $getSet = false
+    ): string {
         $project = $this->project($case, $migration);
+        $file    = $project . '/crest.php';
 
         if (true === $camelCase) {
-            $file = $project . '/crest.php';
-
             file_put_contents(
                 $file,
                 str_replace("'camelCase' => false", "'camelCase' => true", (string) file_get_contents($file))
+            );
+        }
+
+        if (true === $getSet) {
+            file_put_contents(
+                $file,
+                str_replace("'getSet'    => false", "'getSet'    => true", (string) file_get_contents($file))
             );
         }
 

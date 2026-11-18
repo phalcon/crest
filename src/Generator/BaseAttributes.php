@@ -99,6 +99,7 @@ final class BaseAttributes
      * @param array<string, string>|null $map        The pairs of columnMap(); null for no columnMap()
      * @param bool                       $readable   False for a columnMap() that crest cannot read
      * @param list<string>               $declared   The properties that the class declares
+     * @param list<string>               $methods    The methods that the class declares, in lower case (#70)
      */
     private function __construct(
         public readonly array $aliases,
@@ -106,13 +107,14 @@ final class BaseAttributes
         private readonly ?array $map,
         private readonly bool $readable,
         private readonly array $declared,
+        private readonly array $methods,
     ) {
     }
 
     public static function read(string $file): self
     {
         if (false === is_file($file)) {
-            return new self([], [], null, true, []);
+            return new self([], [], null, true, [], []);
         }
 
         // Suppressed for the reason given at ArtifactWriter::write(): the
@@ -124,7 +126,7 @@ final class BaseAttributes
         }
 
         if (false === str_contains($contents, ArtifactWriter::MARKER)) {
-            return new self([], [], null, true, []);
+            return new self([], [], null, true, [], []);
         }
 
         $tokens     = self::tokens($file, $contents);
@@ -153,9 +155,10 @@ final class BaseAttributes
             }
         }
 
-        [$map, $readable] = self::map($tokens);
+        [$map, $readable]     = self::map($tokens);
+        [$declared, $methods] = self::declared($tokens);
 
-        return new self($aliases, $properties, $map, $readable, self::declared($tokens));
+        return new self($aliases, $properties, $map, $readable, $declared, $methods);
     }
 
     /**
@@ -244,21 +247,24 @@ final class BaseAttributes
      * The properties that the class declares: each variable in the body of
      * the class, outside the methods and their parameters. With no
      * columnMap(), each property has the name of its column (#50 to #52).
-     * crest writes no `${...}` in a string, and PHP 8.2 deprecates it, so the
-     * read does not count it as a brace.
+     * Also the methods that the class declares, in lower case, because PHP
+     * ignores the case of a method name (#70). A function in the body of a
+     * method is not a method. crest writes no `${...}` in a string, and PHP
+     * 8.2 deprecates it, so the read does not count it as a brace.
      *
      * @param list<Token> $tokens
      *
-     * @return list<string>
+     * @return array{list<string>, list<string>}
      */
     private static function declared(array $tokens): array
     {
         $declared = [];
+        $methods  = [];
         $inside   = false;
         $depth    = 0;
         $round    = 0;
 
-        foreach ($tokens as $token) {
+        foreach ($tokens as $at => $token) {
             if (false === $inside) {
                 $inside = true === is_array($token) && T_CLASS === $token[0];
 
@@ -279,10 +285,16 @@ final class BaseAttributes
                 $round--;
             } elseif (1 === $depth && 0 === $round && true === is_array($token) && T_VARIABLE === $token[0]) {
                 $declared[] = substr($token[1], 1);
+            } elseif (1 === $depth && true === is_array($token) && T_FUNCTION === $token[0]) {
+                $name = $tokens[$at + 1];
+
+                if (true === is_array($name) && T_STRING === $name[0]) {
+                    $methods[] = strtolower($name[1]);
+                }
             }
         }
 
-        return $declared;
+        return [$declared, $methods];
     }
 
     /**
@@ -491,9 +503,7 @@ final class BaseAttributes
 
         foreach ($next as $column => $name) {
             $column = (string) $column;
-            $old    = null === $this->map
-                ? (true === in_array($column, $this->declared, true) ? $column : null)
-                : $this->map[$column] ?? null;
+            $old    = $this->old($column);
 
             if (null !== $old && $old !== $name) {
                 $renamed[$column] = [$old, $name];
@@ -501,5 +511,88 @@ final class BaseAttributes
         }
 
         return $renamed;
+    }
+
+    /**
+     * The columns whose getter and setter change in the next base (#70, spec
+     * 3.5): column => [old <Name>, new <Name>], in the order of $next, or
+     * [old <Name>, null] when the next base has no methods. A column is in it
+     * only when the old base declares the getter of its old property. A
+     * change of case only is not a change, because PHP ignores the case of a
+     * method name. Null when the base has a columnMap() that crest cannot
+     * read.
+     *
+     * @param array<string, string> $next The column and its property in the next base
+     *
+     * @return array<string, array{string, string|null}>|null
+     */
+    public function renamedMethods(array $next, bool $getSet): ?array
+    {
+        if (false === $this->readable) {
+            return null;
+        }
+
+        $methods = [];
+
+        foreach ($next as $column => $name) {
+            $column = (string) $column;
+            $old    = $this->old($column);
+
+            if (null === $old || false === $this->declares('get' . ClassName::studly($old))) {
+                continue;
+            }
+
+            $from = ClassName::studly($old);
+            $to   = ClassName::studly($name);
+
+            if (false === $getSet) {
+                $methods[$column] = [$from, null];
+            } elseif (strtolower($from) !== strtolower($to)) {
+                $methods[$column] = [$from, $to];
+            }
+        }
+
+        return $methods;
+    }
+
+    /**
+     * True when the class declares properties and no getter for any of them
+     * (#70, spec 3.5): a base that crest wrote with no models.getSet.
+     */
+    public function withoutAccessors(): bool
+    {
+        if ([] === $this->declared) {
+            return false;
+        }
+
+        foreach ($this->declared as $property) {
+            if (true === $this->declares('get' . ClassName::studly($property))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * True when the class declares the method, without regard to case.
+     */
+    private function declares(string $method): bool
+    {
+        return true === in_array(strtolower($method), $this->methods, true);
+    }
+
+    /**
+     * The old property of a column: the name in columnMap(), or, with no
+     * columnMap(), the column when the class declares it. Null for a column
+     * that the old base does not have.
+     */
+    private function old(string $column): ?string
+    {
+        if (null === $this->map) {
+            return true === in_array($column, $this->declared, true) ? $column : null;
+        }
+
+        return $this->map[$column] ?? null;
     }
 }

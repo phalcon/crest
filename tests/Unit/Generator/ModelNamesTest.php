@@ -32,11 +32,11 @@ final class ModelNamesTest extends TestCase
         yield 'not an array' => ['yes', 'crest.php: models must be an array'];
         yield 'an unknown key' => [
             ['camelcase' => true],
-            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase and schema",
+            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase, getSet and schema",
         ];
         yield 'a list' => [
             [true],
-            "crest.php: models has an unknown key '0'; the keys are classes, camelCase and schema",
+            "crest.php: models has an unknown key '0'; the keys are classes, camelCase, getSet and schema",
         ];
         yield 'classes that are not an array' => [
             ['classes' => 'users'],
@@ -70,6 +70,10 @@ final class ModelNamesTest extends TestCase
         yield 'camelCase that is not a boolean' => [
             ['camelCase' => 'yes'],
             'crest.php: models.camelCase must be true or false',
+        ];
+        yield 'getSet that is not a boolean' => [
+            ['getSet' => 'yes'],
+            'crest.php: models.getSet must be true or false',
         ];
 
         $message = 'crest.php: models.schema must be the name of a schema';
@@ -153,6 +157,73 @@ final class ModelNamesTest extends TestCase
     }
 
     /**
+     * Conflict a of #70 (spec 3.4): a getter or a setter that Phalcon\Mvc\Model
+     * has, for each source of the name.
+     *
+     * @return iterable<string, array{ModelNames, list<string>, string}>
+     */
+    public static function modelMethods(): iterable
+    {
+        $model  = 'which Phalcon\\Mvc\\Model has';
+        $getSet = ModelNames::of(['getSet' => true]);
+
+        yield 'the column' => [
+            $getSet,
+            ['id', 'source'],
+            "column 'source' of table 'pages' gives the method getSource(), " . $model
+            . '; give it another name with --property="source=<name>"',
+        ];
+        yield 'the column with camelCase' => [
+            ModelNames::of(['camelCase' => true, 'getSet' => true]),
+            ['write_connection'],
+            "column 'write_connection' of table 'pages' gives the method getWriteConnection(), " . $model
+            . '; give it another name with --property="write_connection=<name>"',
+        ];
+        yield 'a setter only' => [
+            $getSet,
+            ['connection_service'],
+            "column 'connection_service' of table 'pages' gives the method setConnectionService(), " . $model
+            . '; give it another name with --property="connection_service=<name>"',
+        ];
+        yield 'the property option' => [
+            $getSet->withGiven('pages', ['title' => 'source']),
+            ['title'],
+            "--property: 'source' gives the method getSource(), " . $model,
+        ];
+        yield 'an attribute' => [
+            $getSet->withStored('pages', ['title' => ['name' => 'messages', 'line' => 7]], '/b.php'),
+            ['title'],
+            "/b.php, line 7: the property name 'messages' gives the method getMessages(), " . $model . '; change it',
+        ];
+    }
+
+    /**
+     * Conflict b of #70 (spec 3.4), for each source of the name. PHP method
+     * names are not case-sensitive.
+     *
+     * @return iterable<string, array{ModelNames, list<string>, string}>
+     */
+    public static function twoPropertiesOneMethod(): iterable
+    {
+        $message = "columns 'first_name' and '%s' of table 'people' give the same methods getFirstName() "
+            . 'and setFirstName(); give one of them another name with --property';
+        $getSet  = ModelNames::of(['getSet' => true]);
+
+        yield 'the same name' => [$getSet, ['first_name', 'firstName'], sprintf($message, 'firstName')];
+        yield 'case only' => [$getSet, ['first_name', 'firstname'], sprintf($message, 'firstname')];
+        yield 'the property option' => [
+            $getSet->withGiven('people', ['fname' => 'firstName']),
+            ['first_name', 'fname'],
+            sprintf($message, 'fname'),
+        ];
+        yield 'an attribute' => [
+            $getSet->withStored('people', ['fname' => ['name' => 'firstName', 'line' => 7]], '/b.php'),
+            ['first_name', 'fname'],
+            sprintf($message, 'fname'),
+        ];
+    }
+
+    /**
      * @dataProvider badModelsKeys
      */
     public function testABadModelsKeyStops(mixed $models, string $message): void
@@ -230,6 +301,19 @@ final class ModelNamesTest extends TestCase
 
         $this->assertSame('Member', $names->classOf('users'));
         $this->assertSame('Orders', $names->classOf('orders'));
+    }
+
+    /**
+     * @param list<string> $columns
+     *
+     * @dataProvider modelMethods
+     */
+    public function testAMethodOfTheModelStops(ModelNames $names, array $columns, string $message): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($message);
+
+        $names->properties('pages', $columns);
     }
 
     public function testANullSchemaIsNoSchema(): void
@@ -373,12 +457,41 @@ final class ModelNamesTest extends TestCase
             ->fieldOf('customers', 'box');
     }
 
+    public function testGetSetGivesTheValue(): void
+    {
+        $this->assertTrue(ModelNames::of(['getSet' => true])->getSet());
+        $this->assertFalse(ModelNames::of(['getSet' => false])->getSet());
+    }
+
+    public function testGetSetIsOffByDefault(): void
+    {
+        // A null value counts as no value, as for camelCase.
+        $this->assertFalse(ModelNames::of([])->getSet());
+        $this->assertFalse(ModelNames::of(['getSet' => null])->getSet());
+    }
+
+    public function testGetSetPassesForNamesWithNoConflict(): void
+    {
+        $this->assertSame(
+            ['id' => 'id', 'title' => 'title'],
+            ModelNames::of(['getSet' => true])->properties('pages', ['id', 'title'])
+        );
+    }
+
     public function testMappedGivesTheTablesOfTheMap(): void
     {
         // PHP makes the key 9 an integer; mapped() gives a string.
         $this->assertSame(
             ['users', '9'],
             ModelNames::of(['classes' => ['users' => 'Member', '9' => 'Nine']])->mapped()
+        );
+    }
+
+    public function testNoMethodCheckRunsWithNoKey(): void
+    {
+        $this->assertSame(
+            ['source' => 'source', 'first_name' => 'first_name', 'firstName' => 'firstName'],
+            ModelNames::of([])->properties('pages', ['source', 'first_name', 'firstName'])
         );
     }
 
@@ -432,6 +545,15 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('billing', $names->schemaOf('users'));
     }
 
+    public function testTheWithMethodsKeepGetSet(): void
+    {
+        $names = ModelNames::of(['getSet' => true]);
+
+        $this->assertTrue($names->withGiven('t', [])->getSet());
+        $this->assertTrue($names->withStored('t', [], '/b.php')->getSet());
+        $this->assertTrue($names->withFailed('t', 'x')->getSet());
+    }
+
     public function testTheWithMethodsKeepTheSchema(): void
     {
         $names = ModelNames::of(['schema' => 'billing']);
@@ -448,6 +570,19 @@ final class ModelNamesTest extends TestCase
             ['name' => 'name', 'Name' => 'Name'],
             ModelNames::of([])->properties('t', ['name', 'Name'])
         );
+    }
+
+    /**
+     * @param list<string> $columns
+     *
+     * @dataProvider twoPropertiesOneMethod
+     */
+    public function testTwoPropertiesWithOneMethodNameStop(ModelNames $names, array $columns, string $message): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($message);
+
+        $names->properties('people', $columns);
     }
 
     /**

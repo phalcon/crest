@@ -88,6 +88,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `form` default path (`src/Forms`), the MVC stubs `scaffold-form-base`, `scaffold-form`, `scaffold-controller`, `scaffold-view-index`, `scaffold-view-new`, `scaffold-view-edit`, `fragment-guidance-scaffold` and `fragment-guidance-scaffold-module`, `Crest\Generator\FormElements`, `Crest\Generator\ControllerRoute`, `ModelCommand::readTable()` and `ModelCommand::writeTable()`. [#56](https://github.com/phalcon/crest/issues/56)
 - Added the `models.schema` key to `crest.php`: `make:model` and `make:scaffold` read the tables of that schema, and the base calls `setSchema()`. One schema applies to all the tables. `config:show` shows it in a `schema` row. [#69](https://github.com/phalcon/crest/issues/69)
 - Added `ModelNames::schemaOf()`, `schema()` and `checkSchema()`, `ForeignKeys::elsewhere()` and the MVC stub `fragment-model-schema`. [#69](https://github.com/phalcon/crest/issues/69)
+- Added the `models.getSet` key and `crest new --get-set`: protected model properties with a getter and a setter. [#70](https://github.com/phalcon/crest/issues/70)
 
 ### Changed
 

@@ -39,6 +39,15 @@ final class BaseAttributesTest extends TestCase
 
     private const KEY = 'belongsTo invoices(customer_id) -> customers(id)';
 
+    /**
+     * The getter and the setter of first_name, as make:model writes them with
+     * models.getSet (#70).
+     */
+    private const METHODS = "    public function getFirstName(): ?string\n    {\n"
+        . "        return \$this->first_name;\n    }\n\n"
+        . "    public function setFirstName(?string \$value): static\n    {\n        \$this->first_name = \$value;\n\n"
+        . "        return \$this;\n    }\n";
+
     private const PAYMENTS = 'hasMany payments(invoice_id) -> invoices(id)';
 
     protected function setUp(): void
@@ -160,12 +169,94 @@ final class BaseAttributesTest extends TestCase
         ];
     }
 
+    /**
+     * Bases and next names that give no method line (#70, spec 3.5).
+     *
+     * @return iterable<string, array{string, array<string, string>, bool}>
+     */
+    public static function sameMethodNames(): iterable
+    {
+        $base = "    protected ?string \$first_name = null;\n\n" . self::METHODS;
+
+        yield 'the same property' => [$base, ['first_name' => 'first_name'], true];
+        // PHP finds a method without regard to case.
+        yield 'a change of case only' => [$base, ['first_name' => 'firstName'], true];
+        yield 'no methods' => ["    public ?string \$first_name = null;\n", ['first_name' => 'given'], false];
+    }
+
+    /**
+     * The body of the old base, or null for no base, and the value of
+     * withoutAccessors() (#70, spec 3.5).
+     *
+     * @return iterable<string, array{string|null, bool}>
+     */
+    public static function withoutAccessorsBases(): iterable
+    {
+        yield 'public properties and no methods' => ["    public ?string \$first_name = null;\n", true];
+        yield 'the properties and their getters' => [
+            "    protected ?string \$first_name = null;\n\n" . self::METHODS,
+            false,
+        ];
+        yield 'no properties' => ['', false];
+        yield 'no base' => [null, false];
+    }
+
+    public function testAFunctionInAMethodBodyIsNotAMethod(): void
+    {
+        // A function in the body of a method is not a method of the class.
+        $file = $this->file(
+            $this->base(
+                "    public ?string \$first_name = null;\n\n"
+                . "    public function initialize(): void\n    {\n"
+                . "        function getFirstName(): void\n        {\n        }\n    }\n"
+            )
+        );
+
+        $this->assertTrue(BaseAttributes::read($file)->withoutAccessors());
+    }
+
+    public function testAMethodNameIsFoundWithoutRegardToCase(): void
+    {
+        // PHP ignores the case of a method name.
+        $file = $this->file(
+            $this->base(
+                "    public ?string \$first_name = null;\n\n"
+                . "    public function getfirstname(): ?string\n    {\n        return \$this->first_name;\n    }\n"
+            )
+        );
+
+        $this->assertSame(
+            ['first_name' => ['FirstName', null]],
+            BaseAttributes::read($file)->renamedMethods(['first_name' => 'first_name'], false)
+        );
+    }
+
+    /**
+     * @dataProvider columnMapsThatCrestCannotRead
+     */
+    public function testAnUnreadableColumnMapGivesNoMethods(string $method): void
+    {
+        $file = $this->file($this->base("    public ?int \$code = null;\n\n" . $method));
+
+        $this->assertNull(BaseAttributes::read($file)->renamedMethods(['id' => 'id'], true));
+    }
+
     public function testAPropertyNameIsNotCheckedHere(): void
     {
         // ModelNames checks a property name, with the file and the line.
         $file = $this->file($this->text("#[\\Crest\\Attribute\\PropertyName('id', name: '2nd')]\n"));
 
         $this->assertSame(['id' => ['name' => '2nd', 'line' => 6]], BaseAttributes::read($file)->properties);
+    }
+
+    /**
+     * @param array<string, string> $next
+     *
+     * @dataProvider sameMethodNames
+     */
+    public function testNoMethodLineForTheSameName(string $body, array $next, bool $getSet): void
+    {
+        $this->assertSame([], BaseAttributes::read($this->file($this->base($body)))->renamedMethods($next, $getSet));
     }
 
     public function testReadGivesBackAKeyWithAQuoteABackslashAndALineBreak(): void
@@ -486,6 +577,50 @@ final class BaseAttributesTest extends TestCase
             ['first_name' => ['first_name', 'firstName']],
             BaseAttributes::read($file)->renamed(['id' => 'id', 'first_name' => 'firstName', 'nick_name' => 'nickName'])
         );
+    }
+
+    public function testTheMethodsAreRemovedWhenTheKeyIsOff(): void
+    {
+        // Only a property whose getter the old base declares gets a line.
+        $file = $this->file(
+            $this->base(
+                "    protected ?int \$id = null;\n    protected ?string \$first_name = null;\n\n" . self::METHODS
+            )
+        );
+
+        $this->assertSame(
+            ['first_name' => ['FirstName', null]],
+            BaseAttributes::read($file)->renamedMethods(['id' => 'id', 'first_name' => 'first_name'], false)
+        );
+    }
+
+    public function testTheMethodsOfARenamedPropertyAreRenamed(): void
+    {
+        $file = $this->file(
+            $this->base(
+                "    protected ?string \$fname = null;\n\n"
+                . "    public function getFname(): ?string\n    {\n        return \$this->fname;\n    }\n\n"
+                . "    public function setFname(?string \$value): static\n    {\n        \$this->fname = \$value;\n\n"
+                . "        return \$this;\n    }\n\n"
+                . "    public function columnMap(): array\n    {\n        return [\n"
+                . "            'first_name' => 'fname',\n        ];\n    }\n"
+            )
+        );
+
+        $this->assertSame(
+            ['first_name' => ['Fname', 'GivenName']],
+            BaseAttributes::read($file)->renamedMethods(['first_name' => 'givenName'], true)
+        );
+    }
+
+    /**
+     * @dataProvider withoutAccessorsBases
+     */
+    public function testWithoutAccessors(?string $body, bool $expected): void
+    {
+        $file = null === $body ? $this->root . '/Missing.php' : $this->file($this->base($body));
+
+        $this->assertSame($expected, BaseAttributes::read($file)->withoutAccessors());
     }
 
     /**

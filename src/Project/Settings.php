@@ -30,13 +30,16 @@ use function var_export;
 final class Settings
 {
     /**
-     * The models key of an MVC project (#53), with the camelCase answer. The
-     * comments help the user who reads crest.php.
+     * The models key of an MVC project (#53), with the camelCase and the
+     * getSet (#70) answers. The comments help the user who reads crest.php.
      */
     private const MODELS = "    'models'    => [\n"
         . "        // Property names in camelCase. A change renames the properties of\n"
         . "        // each model, so choose before the first make:model.\n"
         . "        'camelCase' => %s,\n"
+        . "        // Protected properties with a getter and a setter for each, as\n"
+        . "        // devtools --get-set. A change changes the base of each model.\n"
+        . "        'getSet'    => %s,\n"
         . "        // The class name of a table, when the default name does not fit,\n"
         . "        // e.g. 'user_logins' => 'Login'.\n"
         . "        'classes'   => [],\n"
@@ -47,6 +50,8 @@ final class Settings
      * @param bool|null             $camelCase The models.camelCase answer of an MVC project.
      *                                         Null gives no models key: ADR and CLI have no
      *                                         models.
+     * @param bool|null             $getSet    The models.getSet answer of an MVC project (#70).
+     *                                         Null gives false in the models key.
      */
     public function __construct(
         public readonly Flavor $flavor,
@@ -55,6 +60,7 @@ final class Settings
         public readonly array $paths,
         public readonly Runtime $runtime,
         public readonly ?bool $camelCase = null,
+        public readonly ?bool $getSet = null,
     ) {
     }
 
@@ -73,7 +79,11 @@ final class Settings
             'flavor'    => $this->flavor->value,
             'models'    => null === $this->camelCase
                 ? ''
-                : sprintf(self::MODELS, var_export($this->camelCase, true)),
+                : sprintf(
+                    self::MODELS,
+                    var_export($this->camelCase, true),
+                    var_export($this->getSet ?? false, true)
+                ),
             'namespace' => $this->namespace,
             'paths'     => $this->pathLines(),
             'runtime'   => $this->runtime->render(),

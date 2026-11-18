@@ -47,6 +47,15 @@ final class SettingsTest extends TestCase
         yield 'true' => [true, 'true'];
     }
 
+    /**
+     * @return iterable<string, array{bool, string}>
+     */
+    public static function getSets(): iterable
+    {
+        yield 'false' => [false, 'false'];
+        yield 'true' => [true, 'true'];
+    }
+
     public function testABootstrapIsOneLine(): void
     {
         $settings = new Settings(Flavor::ADR, 'App', 'App\\AppFront', [], Runtime::host());
@@ -66,10 +75,29 @@ final class SettingsTest extends TestCase
             . "        // Property names in camelCase. A change renames the properties of\n"
             . "        // each model, so choose before the first make:model.\n"
             . "        'camelCase' => " . $written . ",\n"
+            . "        // Protected properties with a getter and a setter for each, as\n"
+            . "        // devtools --get-set. A change changes the base of each model.\n"
+            . "        'getSet'    => false,\n"
             . "        // The class name of a table, when the default name does not fit,\n"
             . "        // e.g. 'user_logins' => 'Login'.\n"
             . "        'classes'   => [],\n"
             . "    ],\n",
+            $settings->replacements()['models']
+        );
+    }
+
+    /**
+     * @dataProvider getSets
+     */
+    public function testAGetSetAnswerGivesTheModelsKey(bool $getSet, string $written): void
+    {
+        $settings = new Settings(Flavor::MVC, 'App', null, [], Runtime::host(), false, $getSet);
+
+        $this->assertStringContainsString(
+            "        'camelCase' => false,\n"
+            . "        // Protected properties with a getter and a setter for each, as\n"
+            . "        // devtools --get-set. A change changes the base of each model.\n"
+            . "        'getSet'    => " . $written . ",\n",
             $settings->replacements()['models']
         );
     }
@@ -193,6 +221,9 @@ final class SettingsTest extends TestCase
             (new Stub(Paths::stubs()))->render('mvc', 'project-config', $settings->replacements())
         );
 
-        $this->assertSame(['camelCase' => true, 'classes' => []], Config::discover($this->root)->models());
+        $this->assertSame(
+            ['camelCase' => true, 'getSet' => false, 'classes' => []],
+            Config::discover($this->root)->models()
+        );
     }
 }
