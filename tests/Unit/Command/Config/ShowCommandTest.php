@@ -70,7 +70,7 @@ final class ShowCommandTest extends TestCase
         yield 'not an array' => ["'yes'", 'crest.php: models must be an array'];
         yield 'an unknown key' => [
             "['camelcase' => true]",
-            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase and schema",
+            "crest.php: models has an unknown key 'camelcase'; the keys are classes, camelCase, getSet and schema",
         ];
         yield 'classes that are not an array' => [
             "['classes' => 'users']",
@@ -79,6 +79,10 @@ final class ShowCommandTest extends TestCase
         yield 'camelCase that is not a boolean' => [
             "['camelCase' => 'yes']",
             'crest.php: models.camelCase must be true or false',
+        ];
+        yield 'getSet that is not a boolean' => [
+            "['getSet' => 'yes']",
+            'crest.php: models.getSet must be true or false',
         ];
         yield 'a class that is not a string' => [
             "['classes' => ['users' => 1]]",
@@ -107,6 +111,19 @@ final class ShowCommandTest extends TestCase
         ];
     }
 
+    public function testADeclaredGetSetIsShown(): void
+    {
+        // The getSet row comes after the camelCase row (#70).
+        $this->writeModels("['getSet' => true]");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(
+            'camelCase false default' . PHP_EOL . 'getSet true declared' . PHP_EOL . 'schema none default' . PHP_EOL,
+            $this->normalized()
+        );
+    }
+
     public function testADeclaredSchemaIsShown(): void
     {
         $this->writeModels("['schema' => 'billing']");
@@ -114,7 +131,7 @@ final class ShowCommandTest extends TestCase
         $this->runCommand();
 
         $this->assertStringContainsString(
-            'camelCase false default' . PHP_EOL . 'schema billing declared' . PHP_EOL,
+            'getSet false default' . PHP_EOL . 'schema billing declared' . PHP_EOL,
             $this->normalized()
         );
     }
@@ -149,7 +166,7 @@ final class ShowCommandTest extends TestCase
         $output = $this->readStdout();
 
         $this->assertSame(0, $status);
-        $this->assertDoesNotMatchRegularExpression('/^(camelCase|models|schema|TABLE) /m', $output);
+        $this->assertDoesNotMatchRegularExpression('/^(camelCase|getSet|models|schema|TABLE) /m', $output);
         $this->assertSame('', $this->readStderr());
     }
 
@@ -194,6 +211,18 @@ final class ShowCommandTest extends TestCase
         );
     }
 
+    public function testANullGetSetIsTheDefault(): void
+    {
+        $this->writeModels("['getSet' => null]");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(
+            'camelCase false default' . PHP_EOL . 'getSet false default' . PHP_EOL,
+            $this->normalized()
+        );
+    }
+
     public function testANullSchemaIsTheDefault(): void
     {
         $this->writeModels("['schema' => null]");
@@ -201,7 +230,7 @@ final class ShowCommandTest extends TestCase
         $this->runCommand();
 
         $this->assertStringContainsString(
-            'camelCase false default' . PHP_EOL . 'schema none default' . PHP_EOL,
+            'getSet false default' . PHP_EOL . 'schema none default' . PHP_EOL,
             $this->normalized()
         );
     }
@@ -225,7 +254,7 @@ final class ShowCommandTest extends TestCase
             . 'PATH LOCATION ORIGIN' . PHP_EOL,
             $output
         );
-        $this->assertDoesNotMatchRegularExpression('/^(camelCase|schema|TABLE) /m', $output);
+        $this->assertDoesNotMatchRegularExpression('/^(camelCase|getSet|schema|TABLE) /m', $output);
         $this->assertSame('', $this->readStderr());
     }
 
@@ -324,6 +353,7 @@ final class ShowCommandTest extends TestCase
             . 'runtime host default' . PHP_EOL
             . 'service app default' . PHP_EOL
             . 'camelCase true declared' . PHP_EOL
+            . 'getSet false default' . PHP_EOL
             . 'schema none default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
@@ -371,6 +401,7 @@ final class ShowCommandTest extends TestCase
             . 'runtime host default' . PHP_EOL
             . 'service app default' . PHP_EOL
             . 'camelCase false default' . PHP_EOL
+            . 'getSet false default' . PHP_EOL
             . 'schema none default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL

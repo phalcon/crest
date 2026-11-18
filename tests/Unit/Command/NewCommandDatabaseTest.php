@@ -121,6 +121,7 @@ final class NewCommandDatabaseTest extends TestCase
             ['--database', 'mysql'],
         ];
         yield 'config models' => ['shared', 'project-config', 'models', 'mvc', ['--camel-case']];
+        yield 'config models get-set' => ['shared', 'project-config', 'models', 'mvc', ['--get-set']];
     }
 
     public function testAMariadbProjectGetsTheMariadbService(): void
@@ -616,6 +617,19 @@ final class NewCommandDatabaseTest extends TestCase
         $this->assertFileExists($this->root . '/my-app/storage/.gitkeep');
     }
 
+    public function testGetSetForAnAdrProjectWritesNoModelsKey(): void
+    {
+        // ADR has no models: the flag has no effect (#70).
+        $this->assertSame(0, $this->runCommand(['my-app', '--get-set']));
+        $this->assertStringNotContainsString("'models'", $this->read('crest.php'));
+    }
+
+    public function testGetSetWithoutADatabaseIsTrue(): void
+    {
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'mvc', '--get-set']));
+        $this->assertStringContainsString("        'getSet'    => true,\n", $this->read('crest.php'));
+    }
+
     /**
      * @dataProvider databaseProjects
      */
@@ -652,15 +666,18 @@ final class NewCommandDatabaseTest extends TestCase
     public function testTheCamelCaseQuestionIsOnlyForAnMvcProjectWithADatabase(): void
     {
         // Flavor, namespace, PHP version, Phalcon version, runtime, service,
-        // database, camelCase.
-        $this->answers("mvc\n\n\n\n\n\nmysql\nyes\n");
+        // database, camelCase, getSet. The getSet question comes after the
+        // camelCase question (#70).
+        $this->answers("mvc\n\n\n\n\n\nmysql\nyes\nyes\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringEndsWith(
-            'Database (none, mariadb, mysql, pgsql, sqlite) [none]: Property names in camelCase (no, yes) [no]: ',
+            'Database (none, mariadb, mysql, pgsql, sqlite) [none]: Property names in camelCase (no, yes) [no]: '
+            . 'Protected properties with a getter and a setter (no, yes) [no]: ',
             $this->readStderr()
         );
         $this->assertStringContainsString("        'camelCase' => true,\n", $this->read('crest.php'));
+        $this->assertStringContainsString("        'getSet'    => true,\n", $this->read('crest.php'));
     }
 
     public function testTheDatabaseIsCaseInsensitive(): void
@@ -702,6 +719,16 @@ final class NewCommandDatabaseTest extends TestCase
         $this->assertStringContainsString("\nDB_HOST=database\n", $env);
     }
 
+    public function testTheGetSetQuestionTakesNoAsTheDefault(): void
+    {
+        // Flavor, namespace, PHP version, Phalcon version, runtime, service,
+        // database, camelCase, getSet (#70).
+        $this->answers("mvc\n\n\n\n\n\nmysql\n\n\n");
+
+        $this->assertSame(0, $this->runCommand(['my-app'], true));
+        $this->assertStringContainsString("        'getSet'    => false,\n", $this->read('crest.php'));
+    }
+
     public function testTheHelpNamesTheNewOptions(): void
     {
         $status = $this->runThroughKernel('new', NewCommand::class, ['--help']);
@@ -713,6 +740,10 @@ final class NewCommandDatabaseTest extends TestCase
         );
         $this->assertMatchesRegularExpression(
             '/--camel-case +MVC: property names in camelCase \(models\.camelCase of crest\.php\)\R/',
+            $this->readStdout()
+        );
+        $this->assertMatchesRegularExpression(
+            '/--get-set +MVC: protected properties with a getter and a setter \(models\.getSet of crest\.php\)\R/',
             $this->readStdout()
         );
     }
@@ -787,6 +818,7 @@ final class NewCommandDatabaseTest extends TestCase
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringEndsWith('Database (none, mariadb, mysql, pgsql, sqlite) [none]: ', $this->readStderr());
         $this->assertStringContainsString("        'camelCase' => false,\n", $this->read('crest.php'));
+        $this->assertStringContainsString("        'getSet'    => false,\n", $this->read('crest.php'));
     }
 
     public function testWithoutADatabaseTheFilesEndAsBefore(): void
@@ -814,6 +846,7 @@ final class NewCommandDatabaseTest extends TestCase
     {
         $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'mvc', '--database', 'mysql']));
         $this->assertStringContainsString("        'camelCase' => false,\n", $this->read('crest.php'));
+        $this->assertStringContainsString("        'getSet'    => false,\n", $this->read('crest.php'));
     }
 
     /**

@@ -615,4 +615,56 @@ final class ModelRelationsTest extends AbstractModelRelationsTestCase
             $this->relationsOf($adapter, 'users', ['id', 'name'])->relations
         );
     }
+
+    public function testWithGetSetAnAliasWithTheNameOfAGetterIsSkipped(): void
+    {
+        // With models.getSet (#70), the property customer_ has the getter
+        // getCustomer(), which hides the related record of the alias
+        // Customer. Phalcon finds a method without regard to case.
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+
+        $relations = $this->relationsOf(
+            $this->adapter(),
+            'invoices',
+            ['id', 'total', 'customer_id', 'customer_'],
+            [],
+            ModelNames::of(['getSet' => true])
+        );
+
+        $this->assertSame([], $relations->relations);
+        $this->assertSame(
+            ['Skipped the relation ' . self::INVOICE_KEY . ': the alias Customer has the name of a getter'],
+            $relations->skipped
+        );
+    }
+
+    public function testWithGetSetAnAttributeAliasWithTheNameOfAGetterStops(): void
+    {
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            self::BASE_FILE . ", line 16: the alias Customer of '" . self::INVOICE_KEY
+            . "' has the name of a getter; change it"
+        );
+
+        $this->relationsOf(
+            $this->adapter(),
+            'invoices',
+            ['id', 'total', 'customer_id', 'customer_'],
+            [self::INVOICE_KEY => ['alias' => 'Customer', 'line' => 16]],
+            ModelNames::of(['getSet' => true])
+        );
+    }
+
+    public function testWithNoKeyAnAliasWithTheNameOfAGetterIsKept(): void
+    {
+        // With no models.getSet, the base has no getters.
+        $this->createTables(CustomersMigration::class, InvoicesMigration::class);
+
+        $relations = $this->relationsOf($this->adapter(), 'invoices', ['id', 'total', 'customer_id', 'customer_']);
+
+        $this->assertSame([], $relations->skipped);
+        $this->assertSame('Customer', $relations->relations[0]['alias']);
+    }
 }

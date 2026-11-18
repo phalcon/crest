@@ -442,6 +442,20 @@ final class ScaffoldCommandTest extends AbstractDatabaseTestCase
         );
     }
 
+    public function testWithGetSetAColumnWithTheNameOfAModelMethodStopsInMakeModel(): void
+    {
+        // With models.getSet, the read phase of make:model stops first, with
+        // its own text (#70, spec 3.4). checkAccessors() does not run.
+        $this->createTables(ScaffoldSourcesMigration::class);
+        $this->front(DatabaseFront::class, "['getSet' => true]");
+
+        $this->assertScaffoldStops(
+            ['sources'],
+            "column 'source' of table 'sources' gives the method getSource(), which Phalcon\\Mvc\\Model has; "
+            . 'give it another name with --property="source=<name>"'
+        );
+    }
+
     /**
      * The command stops with the error on stderr, and makes no folder.
      *

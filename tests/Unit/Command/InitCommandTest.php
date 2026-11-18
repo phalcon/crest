@@ -168,10 +168,14 @@ final class InitCommandTest extends TestCase
 
     public function testAnMvcCrestPhpKeepsThePropertyNames(): void
     {
-        // An existing project has models: camelCase false keeps their names.
-        // init asks no question for it.
+        // An existing project has models: camelCase false keeps their names,
+        // and getSet false keeps their public properties (#70). init asks no
+        // question for them.
         $this->assertSame(0, $this->init(['--flavor', 'mvc']));
-        $this->assertSame(['camelCase' => false, 'classes' => []], Config::discover($this->root)->models());
+        $this->assertSame(
+            ['camelCase' => false, 'getSet' => false, 'classes' => []],
+            Config::discover($this->root)->models()
+        );
     }
 
     public function testAnMvcProjectFromNewGetsTheSameCrestPhp(): void
