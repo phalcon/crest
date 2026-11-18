@@ -249,6 +249,31 @@ final class ModelRelations
     }
 
     /**
+     * What the alias clashes with: 'a property', or, with models.getSet,
+     * 'a getter' when the alias is the name part of a getter (#70, spec 3.4).
+     * Phalcon gives the related records through get<Alias>(), and a getter of
+     * the base would hide them. Phalcon finds an alias and a method without
+     * regard to case. Null for no clash.
+     *
+     * @param list<string> $properties The property names of the table
+     */
+    private static function clash(string $alias, array $properties, bool $getSet): ?string
+    {
+        $alias = strtolower($alias);
+
+        if (true === in_array($alias, array_map('strtolower', $properties), true)) {
+            return 'a property';
+        }
+
+        $getters = array_map(
+            static fn (string $property): string => strtolower(ClassName::studly($property)),
+            $properties
+        );
+
+        return true === $getSet && true === in_array($alias, $getters, true) ? 'a getter' : null;
+    }
+
+    /**
      * One relation, after checks 0 to 2 of spec 3.3. A key with an attribute
      * in the base gets the alias of that attribute (spec 3.4).
      *
@@ -322,8 +347,9 @@ final class ModelRelations
         $relation['referenced'] = $belongsTo ? $otherNames : $keyNames;
         $relation['alias']      = $stored[$relation['key']]['alias'] ?? $rules;
 
-        // Phalcon finds an alias without regard to case.
-        if (false === in_array(strtolower($relation['alias']), array_map('strtolower', $properties), true)) {
+        $clash = self::clash($relation['alias'], $properties, $names->getSet());
+
+        if (null === $clash) {
             return ['relation' => $relation, 'reason' => null];
         }
 
@@ -332,15 +358,16 @@ final class ModelRelations
         // and the base does not change.
         if (true === isset($stored[$relation['key']])) {
             throw new Exception(sprintf(
-                "%s, line %d: the alias %s of '%s' has the name of a property; change it",
+                "%s, line %d: the alias %s of '%s' has the name of %s; change it",
                 $file,
                 $stored[$relation['key']]['line'],
                 $relation['alias'],
-                $relation['key']
+                $relation['key'],
+                $clash
             ));
         }
 
-        return self::skip($relation, sprintf('the alias %s has the name of a property', $relation['alias']));
+        return self::skip($relation, sprintf('the alias %s has the name of %s', $relation['alias'], $clash));
     }
 
     /**

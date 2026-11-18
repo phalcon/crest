@@ -90,7 +90,9 @@ final class InitCommand extends Command
             $paths,
             Questions::runtime($output, $proposal->runtime),
             // An existing MVC project has models: false keeps their property
-            // names. ADR and CLI get no models key.
+            // names. ADR and CLI get no models key. With no getSet answer,
+            // Settings writes getSet false, which keeps the public properties
+            // (#70).
             Flavor::MVC === $flavor ? false : null
         );
 

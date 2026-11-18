@@ -108,11 +108,12 @@ final class ShowCommand extends ProjectCommand
     }
 
     /**
-     * The models key of an MVC project (#71): the camelCase row and the
-     * schema row (#69), and a row for each line of models.classes, sorted by
-     * table. The origin of camelCase comes from the key, because ModelNames
-     * does not keep it. A wrong key gives one models row with the error, and
-     * no lines: make:model stops on the error, but config:show does not.
+     * The models key of an MVC project (#71): the camelCase row, the getSet
+     * row (#70) and the schema row (#69), and a row for each line of
+     * models.classes, sorted by table. The origins of camelCase and getSet
+     * come from the key, because ModelNames does not keep them. A wrong key
+     * gives one models row with the error, and no lines: make:model stops on
+     * the error, but config:show does not.
      *
      * @return array{list<list<string>>, list<list<string>>}
      */
@@ -137,8 +138,8 @@ final class ShowCommand extends ProjectCommand
             $rows[] = [$table, $names->classOf($table)];
         }
 
-        // A null value counts as no value, as in ModelNames::of() (#53).
-        $declared = true === is_array($models) && true === isset($models['camelCase']);
+        // A null value counts as no value, as in ModelNames::of() (#53, #70).
+        $declared = static fn (string $key): bool => true === is_array($models) && true === isset($models[$key]);
 
         $schema = $names->schema();
 
@@ -147,7 +148,12 @@ final class ShowCommand extends ProjectCommand
                 [
                     'camelCase',
                     var_export($names->camelCase(), true),
-                    true === $declared ? self::DECLARED : self::DEFAULTED,
+                    true === $declared('camelCase') ? self::DECLARED : self::DEFAULTED,
+                ],
+                [
+                    'getSet',
+                    var_export($names->getSet(), true),
+                    true === $declared('getSet') ? self::DECLARED : self::DEFAULTED,
                 ],
                 ['schema', $schema ?? 'none', null === $schema ? self::DEFAULTED : self::DECLARED],
             ],

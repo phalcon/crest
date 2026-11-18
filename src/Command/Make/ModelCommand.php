@@ -106,6 +106,7 @@ use function var_export;
  * there is no guidance.
  *
  * @phpstan-type Parts array{
+ *     accessors: list<string>,
  *     attributes: array<string, string>,
  *     base: string,
  *     baseFile: string,
@@ -114,6 +115,7 @@ use function var_export;
  *     command: string,
  *     dropped: list<string>,
  *     file: string,
+ *     getSet: bool,
  *     map: array<string, string>,
  *     names: array<string, string>,
  *     namespace: string,
@@ -135,6 +137,16 @@ final class ModelCommand extends ProjectCommand
     // crest reads relations only from foreign keys, so `crest list` says so.
     private const DESCRIPTION = 'Create an MVC model from a database table, or from each table with --all '
         . '(relations come only from foreign keys)';
+
+    /**
+     * The stubs that a base with models.getSet needs, with the placeholders
+     * of #70. With no key, crest renders the values, and a copy that a project
+     * published before #70 drops them.
+     */
+    private const GET_SET_PLACEHOLDERS = [
+        'model-base'                             => 'methods',
+        Stub::FRAGMENT_PREFIX . 'model-property' => 'visibility',
+    ];
 
     private const KEPT = 'pass --force to replace it';
 
@@ -166,6 +178,41 @@ final class ModelCommand extends ProjectCommand
      * #69.
      */
     private const SCHEMA_PLACEHOLDERS = ['model-base' => 'schema'];
+
+    /**
+     * The lines about the getters and the setters of the base (#70, spec
+     * 3.5): Renamed or Removed for each column, in the order of the table,
+     * then the Note when the public properties of the old base are protected
+     * now.
+     *
+     * @param array<string, string> $final The column name and its property
+     *
+     * @return list<string>
+     */
+    private static function accessors(BaseAttributes $base, array $final, bool $getSet, string $baseFile): array
+    {
+        $lines = [];
+
+        foreach ($base->renamedMethods($final, $getSet) ?? [] as [$old, $new]) {
+            $lines[] = null === $new
+                ? sprintf('Removed get%1$s() and set%1$s(): change the code that uses them', $old)
+                : sprintf(
+                    'Renamed get%1$s() and set%1$s() to get%2$s() and set%2$s(): change the code that uses them',
+                    $old,
+                    $new
+                );
+        }
+
+        if (true === $getSet && true === $base->withoutAccessors()) {
+            $lines[] = sprintf(
+                'Note: the properties of %s are protected now; code outside the model goes through the getters '
+                . 'and setters',
+                $baseFile
+            );
+        }
+
+        return $lines;
+    }
 
     /**
      * The base of a class, in the Base subfolder of the folder of the models:
@@ -518,8 +565,14 @@ final class ModelCommand extends ProjectCommand
                         . RelationAliases::note($relations->relations),
                     'class'      => $parts['base'],
                     'columnMap'  => $this->columnMap($config, $parts['map']),
+                    'methods'    => $this->methods($config, $parts['properties'], $parts['names'], $parts['getSet']),
                     'namespace'  => $parts['baseNamespace'],
-                    'properties' => $this->properties($config, $parts['properties'], $parts['names']),
+                    'properties' => $this->properties(
+                        $config,
+                        $parts['properties'],
+                        $parts['names'],
+                        $parts['getSet']
+                    ),
                     'relations'  => $this->relations($config, $relations),
                     'schema'     => $this->schema($config, $parts['schema']),
                     'table'      => $parts['table'],
@@ -539,6 +592,12 @@ final class ModelCommand extends ProjectCommand
 
         foreach ($parts['renamed'] ?? [] as [$old, $new]) {
             $output->line(sprintf('Renamed $%s to $%s: change the code that uses it', $old, $new));
+        }
+
+        // The getters and the setters that change, and the Note for public
+        // properties that are protected now (#70, spec 3.5).
+        foreach ($parts['accessors'] as $line) {
+            $output->line($line);
         }
 
         foreach ($parts['dropped'] as $line) {
@@ -772,6 +831,36 @@ final class ModelCommand extends ProjectCommand
     }
 
     /**
+     * With models.getSet, one fragment-model-get-set for each column, in the
+     * order of the table: the getter and the setter of its property (#70,
+     * spec 3.2). The name part of the methods is ClassName::studly() of the
+     * property. Empty with no key.
+     *
+     * @param array<string, string> $properties The column name and its PHP type
+     * @param array<string, string> $names      The column name and its property
+     */
+    private function methods(Config $config, array $properties, array $names, bool $getSet): string
+    {
+        if (false === $getSet) {
+            return '';
+        }
+
+        $flavor = $config->flavor()->value;
+        $stub   = $this->stub($config);
+        $text   = '';
+
+        foreach ($properties as $column => $type) {
+            $text .= $stub->render(
+                $flavor,
+                Stub::FRAGMENT_PREFIX . 'model-get-set',
+                ['method' => ClassName::studly($names[$column]), 'property' => $names[$column], 'type' => $type]
+            );
+        }
+
+        return $text;
+    }
+
+    /**
      * One quoted column name, or an array of names for a composite key.
      * var_export() escapes a quote in a name.
      *
@@ -817,12 +906,13 @@ final class ModelCommand extends ProjectCommand
     /**
      * One fragment-model-property for each column, in the order of the
      * table, with the property name of the column. A project can publish the
-     * fragment and change it.
+     * fragment and change it. With models.getSet, the properties are
+     * protected (#70).
      *
      * @param array<string, string> $properties The column name and its PHP type
      * @param array<string, string> $names      The column name and its property
      */
-    private function properties(Config $config, array $properties, array $names): string
+    private function properties(Config $config, array $properties, array $names, bool $getSet): string
     {
         $flavor = $config->flavor()->value;
         $stub   = $this->stub($config);
@@ -832,7 +922,12 @@ final class ModelCommand extends ProjectCommand
             $text .= $stub->render(
                 $flavor,
                 Stub::FRAGMENT_PREFIX . 'model-property',
-                ['column' => (string) $column, 'property' => $names[$column], 'type' => $type]
+                [
+                    'column'     => (string) $column,
+                    'property'   => $names[$column],
+                    'type'       => $type,
+                    'visibility' => true === $getSet ? 'protected' : 'public',
+                ]
             );
         }
 
@@ -892,9 +987,16 @@ final class ModelCommand extends ProjectCommand
             $this->checkStubs($config, self::SCHEMA_PLACEHOLDERS);
         }
 
+        $getSet = $names->getSet();
+
+        if (true === $getSet) {
+            $this->checkStubs($config, self::GET_SET_PLACEHOLDERS);
+        }
+
         $renamed = $base->renamed($final);
 
         return [
+            'accessors'     => self::accessors($base, $final, $getSet, $baseFile),
             'attributes'    => $names->attributes($table, $list),
             'base'          => $class . self::BASE_SUFFIX,
             'baseFile'      => $baseFile,
@@ -903,6 +1005,7 @@ final class ModelCommand extends ProjectCommand
             'command'       => $command,
             'dropped'       => $names->dropped($table, $list),
             'file'          => $path . '/' . $class . '.php',
+            'getSet'        => $getSet,
             'map'           => true === $mapped ? $final : [],
             'names'         => $final,
             'namespace'     => $namespace,

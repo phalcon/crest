@@ -210,6 +210,7 @@ final class NewCommand extends Command
             ->option('service=s', 'The docker compose service, for docker. Default: app')
             ->option('database=s', 'The database: none, mariadb, mysql, pgsql or sqlite', 'none')
             ->option('camel-case', 'MVC: property names in camelCase (models.camelCase of crest.php)')
+            ->option('get-set', 'MVC: protected properties with a getter and a setter (models.getSet of crest.php)')
             ->option('force', 'Write into a directory that is not empty, and overwrite files with the same names');
     }
 
@@ -275,6 +276,7 @@ final class NewCommand extends Command
         );
 
         $camelCase = $this->camelCase($input, $output, $flavor, $database);
+        $getSet    = $this->getSet($input, $output, $flavor, $database);
 
         // After the questions, and before the first write.
         $this->checkService($runtime, $database);
@@ -294,7 +296,8 @@ final class NewCommand extends Command
             $namespace . '\\' . Layout::FRONT,
             Config::defaultPaths($flavor),
             $runtime,
-            $camelCase
+            $camelCase,
+            $getSet
         );
 
         $replacements = [
@@ -326,7 +329,7 @@ final class NewCommand extends Command
 
         // A published copy from before #54 stops here, before the first
         // write, when the project needs one of its new placeholders.
-        $this->checkPlaceholders($stub, $flavor->value, $replacements, $camelCase);
+        $this->checkPlaceholders($stub, $flavor->value, $replacements, $camelCase, $getSet);
 
         // All files render before the first write. A published stub that does
         // not render then stops the command before it writes a file.
@@ -433,17 +436,23 @@ final class NewCommand extends Command
      * that crest uses: render() drops a value that has no placeholder, and
      * the project would lose its database service, or its models key, with
      * no message. An empty value is not lost, so an old copy works for a
-     * project without a database. The models key with camelCase false says
-     * what make:model does with no key, so only true needs the placeholder.
+     * project without a database. The models key with camelCase and getSet
+     * false says what make:model does with no key, so only true needs the
+     * placeholder (#70).
      *
      * @param array<string, string> $replacements
      */
-    private function checkPlaceholders(Stub $stub, string $flavor, array $replacements, ?bool $camelCase): void
-    {
+    private function checkPlaceholders(
+        Stub $stub,
+        string $flavor,
+        array $replacements,
+        ?bool $camelCase,
+        ?bool $getSet
+    ): void {
         foreach (self::PLACEHOLDERS as $placeholder => $file) {
             $name   = Stub::PROJECT_PREFIX . $file;
             $needed = 'models' === $placeholder
-                ? true === $camelCase
+                ? true === $camelCase || true === $getSet
                 : '' !== ($replacements[$placeholder] ?? '');
 
             if (false === $needed || true === $stub->hasPlaceholder($flavor, $name, $placeholder)) {
@@ -490,6 +499,28 @@ final class NewCommand extends Command
     private function display(array $step): string
     {
         return implode(' ', array_map($this->quote(...), $step));
+    }
+
+    /**
+     * The models.getSet answer of an MVC project (#70), with the rules of
+     * camelCase(): null for ADR, true for --get-set, false with no database,
+     * else the question.
+     */
+    private function getSet(Input $input, Output $output, Flavor $flavor, DatabaseChoice $database): ?bool
+    {
+        if (Flavor::MVC !== $flavor) {
+            return null;
+        }
+
+        if (true === $input->option('get-set')) {
+            return true;
+        }
+
+        if (DatabaseChoice::NONE === $database) {
+            return false;
+        }
+
+        return 'yes' === $output->choice('Protected properties with a getter and a setter', ['no', 'yes'], 'no');
     }
 
     /**
