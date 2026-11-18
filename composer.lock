@@ -1292,12 +1292,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/phalcon/phql.git",
-                "reference": "c30e6ac0da462d570570be504dbf9a4b7d935dd7"
+                "reference": "db67754ef65dc776b961981a414f3cd9ed7841a7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phalcon/phql/zipball/c30e6ac0da462d570570be504dbf9a4b7d935dd7",
-                "reference": "c30e6ac0da462d570570be504dbf9a4b7d935dd7",
+                "url": "https://api.github.com/repos/phalcon/phql/zipball/db67754ef65dc776b961981a414f3cd9ed7841a7",
+                "reference": "db67754ef65dc776b961981a414f3cd9ed7841a7",
                 "shasum": ""
             },
             "require": {
@@ -1358,8 +1358,8 @@
                     "type": "open_collective"
                 }
             ],
-            "time": "2026-11-11T21:35:54+00:00",
-            "published-time": "2026-11-11T21:35:59+00:00"
+            "time": "2026-11-18T03:16:59+00:00",
+            "published-time": "2026-11-18T03:17:04+00:00"
         },
         {
             "name": "phalcon/talon",
