@@ -61,9 +61,9 @@ use const TOKEN_PARSE;
  * ArtifactWriter::MARKER, gives nothing: a file without the marker belongs to
  * the developer (#46).
  *
- * @phpstan-import-type Stored from ModelRelations
- * @phpstan-type Token array{int, string, int}|string
- * @phpstan-type Names array<string, array{name: string, line: int}>
+ * @phpstan-import-type Names from GeneratorTypes
+ * @phpstan-import-type Stored from GeneratorTypes
+ * @phpstan-import-type Token from GeneratorTypes
  */
 final class BaseAttributes
 {

@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Database\Generator;
 
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\GeneratorTypes;
 use Crest\Generator\ModelNames;
 use Crest\Generator\ModelRelations;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
@@ -25,7 +26,8 @@ use Phalcon\Db\Adapter\AdapterInterface;
  * The table of a migration can have more columns: the relations read only the
  * keys of the database.
  *
- * @phpstan-import-type Relation from ModelRelations
+ * @phpstan-import-type Relation from GeneratorTypes
+ * @phpstan-import-type Stored from GeneratorTypes
  */
 abstract class AbstractModelRelationsTestCase extends AbstractDatabaseTestCase
 {
@@ -66,9 +68,9 @@ abstract class AbstractModelRelationsTestCase extends AbstractDatabaseTestCase
      * The relations of the table in the namespace App\Models, with the
      * attributes of $stored in the base self::BASE_FILE.
      *
-     * @param list<string>                                   $columns The property names of the table; with no
-     *                                                                names of #53, the columns
-     * @param array<string, array{alias: string, line: int}> $stored
+     * @param list<string> $columns The property names of the table; with no
+     *                              names of #53, the columns
+     * @param Stored       $stored
      */
     protected function relationsOf(
         AdapterInterface $adapter,

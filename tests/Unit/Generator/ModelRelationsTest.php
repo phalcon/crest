@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Generator;
 
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\GeneratorTypes;
 use Crest\Generator\ModelNames;
 use Crest\Generator\ModelRelations;
 use Phalcon\Db\Reference;
@@ -23,6 +24,8 @@ use PHPUnit\Framework\TestCase;
  * The relations of a key to a table of another schema (#69, spec 3.6), with
  * no database. The tests in tests/Database show the relations of each
  * driver.
+ *
+ * @phpstan-import-type Stored from GeneratorTypes
  */
 final class ModelRelationsTest extends TestCase
 {
@@ -83,8 +86,8 @@ final class ModelRelationsTest extends TestCase
      * The relations of the table, with the keys of invoices to another
      * schema.
      *
-     * @param list<Reference>                                $elsewhere
-     * @param array<string, array{alias: string, line: int}> $stored
+     * @param list<Reference> $elsewhere
+     * @param Stored          $stored
      */
     private function relations(string $table, array $elsewhere, array $stored = []): ModelRelations
     {

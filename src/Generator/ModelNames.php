@@ -57,7 +57,7 @@ use const SORT_STRING;
  * get it through schemaOf() for one table, and through schema() for the
  * list of the tables.
  *
- * @phpstan-import-type Names from BaseAttributes
+ * @phpstan-import-type Names from GeneratorTypes
  */
 final class ModelNames
 {

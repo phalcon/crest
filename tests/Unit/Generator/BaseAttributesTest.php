@@ -16,7 +16,7 @@ namespace Crest\Tests\Unit\Generator;
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\BaseAttributes;
-use Crest\Generator\ModelRelations;
+use Crest\Generator\GeneratorTypes;
 use Crest\Generator\RelationAliases;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
@@ -31,7 +31,7 @@ use function preg_quote;
  * #53). Each test writes its base into a scratch folder. The attributes of a
  * base start on line 6 (text()).
  *
- * @phpstan-import-type Relation from ModelRelations
+ * @phpstan-import-type Relation from GeneratorTypes
  */
 final class BaseAttributesTest extends TestCase
 {

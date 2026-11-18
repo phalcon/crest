@@ -53,16 +53,9 @@ use function strtolower;
  * the model. `dropped` has one line for each attribute that the next base
  * does not have.
  *
- * @phpstan-type Relation array{
- *     kind: string,
- *     fields: list<string>,
- *     class: string,
- *     referenced: list<string>,
- *     alias: string,
- *     key: string
- * }
- * @phpstan-type Draft array{relation: Relation, reason: string|null}
- * @phpstan-type Stored array<string, array{alias: string, line: int}>
+ * @phpstan-import-type Draft from GeneratorTypes
+ * @phpstan-import-type Relation from GeneratorTypes
+ * @phpstan-import-type Stored from GeneratorTypes
  */
 final class ModelRelations
 {

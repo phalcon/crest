@@ -105,28 +105,7 @@ use function var_export;
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
  *
- * @phpstan-type Parts array{
- *     accessors: list<string>,
- *     attributes: array<string, string>,
- *     base: string,
- *     baseFile: string,
- *     baseNamespace: string,
- *     class: string,
- *     command: string,
- *     dropped: list<string>,
- *     file: string,
- *     getSet: bool,
- *     map: array<string, string>,
- *     names: array<string, string>,
- *     namespace: string,
- *     note: string|null,
- *     properties: array<string, string>,
- *     relations: ModelRelations,
- *     renamed: array<string, array{string, string}>|null,
- *     run: list<string>,
- *     schema: string|null,
- *     table: string
- * }
+ * @phpstan-import-type Parts from MakeTypes
  */
 final class ModelCommand extends ProjectCommand
 {

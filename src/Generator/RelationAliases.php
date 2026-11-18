@@ -27,7 +27,7 @@ use function var_export;
  * The developer can change the alias. make:model reads the attributes before
  * it writes the base again (BaseAttributes, #53), and keeps the aliases.
  *
- * @phpstan-import-type Relation from ModelRelations
+ * @phpstan-import-type Relation from GeneratorTypes
  */
 final class RelationAliases
 {

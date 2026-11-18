@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Generator;
 
-use Crest\Generator\ModelRelations;
+use Crest\Generator\GeneratorTypes;
 use Crest\Generator\RelationAliases;
 use PHPUnit\Framework\TestCase;
 
@@ -21,7 +21,7 @@ use PHPUnit\Framework\TestCase;
  * The RelationAlias attribute lines and the docblock note of a model base
  * (#51, spec 3.4). BaseAttributesTest has the read tests (#53).
  *
- * @phpstan-import-type Relation from ModelRelations
+ * @phpstan-import-type Relation from GeneratorTypes
  */
 final class RelationAliasesTest extends TestCase
 {
