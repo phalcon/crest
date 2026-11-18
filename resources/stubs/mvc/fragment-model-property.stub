@@ -1,1 +1,1 @@
-    public ?{{ type }} ${{ property }} = null;
+    {{ visibility }} ?{{ type }} ${{ property }} = null;
