@@ -21,6 +21,7 @@ use Crest\Tests\Support\Console\ThrowingCommand;
 use Crest\Tests\Support\InstalledPackages;
 use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 use function file_put_contents;
 use function json_encode;
@@ -135,6 +136,18 @@ final class RegistryTest extends TestCase
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
     }
 
+    public function testDiscoveryIgnoresAClassThatIsNotACommand(): void
+    {
+        $this->installExtra([
+            self::KEY => ['commands' => ['plain' => stdClass::class, 'fake' => FakeCommand::class]],
+        ]);
+
+        $registry = (new Registry())->withDiscovery(self::KEY);
+
+        $this->assertSame(['fake' => FakeCommand::class], $registry->all());
+        $this->assertSame(['fake' => 'A command that exists only for tests'], $registry->descriptions());
+    }
+
     public function testDiscoveryIgnoresANonArrayCommandsEntry(): void
     {
         $this->installExtra([self::KEY => ['commands' => 'nonsense']]);
@@ -240,6 +253,36 @@ final class RegistryTest extends TestCase
 
         // No withDiscovery() call, so the contributed command stays invisible.
         $this->assertSame([], (new Registry())->all());
+    }
+
+    public function testDiscoveryKeepsASeededAliasForAContributedName(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['f' => ThrowingCommand::class]]]);
+
+        $registry = (new Registry())->add('fake', FakeCommand::class, 'f')->withDiscovery(self::KEY);
+
+        $this->assertSame(['fake' => FakeCommand::class], $registry->all());
+        $this->assertSame(FakeCommand::class, $registry->get('f'));
+    }
+
+    public function testDiscoveryKeepsASeededCommandForAContributedName(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['fake' => ThrowingCommand::class]]]);
+
+        $registry = (new Registry())->add('fake', FakeCommand::class)->withDiscovery(self::KEY);
+
+        $this->assertSame(['fake' => FakeCommand::class], $registry->all());
+    }
+
+    public function testDiscoveryLetsTheRootProjectReplaceAPackageCommand(): void
+    {
+        $this->installPackages(
+            $this->root,
+            [[self::KEY => ['commands' => ['same' => FakeCommand::class]]]],
+            [self::KEY => ['commands' => ['same' => ThrowingCommand::class]]]
+        );
+
+        $this->assertSame(['same' => ThrowingCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
     public function testDiscoveryReadsThePackagesBeforeTheRootProject(): void

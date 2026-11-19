@@ -18,11 +18,11 @@ use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 
 use function array_keys;
-use function class_exists;
 use function file_get_contents;
 use function is_array;
 use function is_file;
 use function is_string;
+use function is_subclass_of;
 use function json_decode;
 use function ksort;
 use function sprintf;
@@ -260,11 +260,15 @@ final class Registry
      * Split out of discover() to keep the nesting shallow: walking datasets,
      * packages and commands in one method put its cognitive complexity well
      * past what the analyzers allow. Anything malformed is skipped rather than
-     * rejected - a broken contributor must not stop the scan.
+     * rejected - a broken contributor must not stop the scan. A name that is
+     * in $seeded stays with the seeded command, and a class that is not a
+     * Command is skipped.
      *
-     * @param mixed $extra The package's `extra.<key>` value, whatever it holds.
+     * @param mixed                 $extra  The package's `extra.<key>` value,
+     *                                      whatever it holds.
+     * @param array<string, string> $seeded The seeded names and aliases.
      */
-    private function addContributed(mixed $extra): void
+    private function addContributed(mixed $extra, array $seeded): void
     {
         if (false === is_array($extra)) {
             return;
@@ -281,7 +285,7 @@ final class Registry
                 continue;
             }
 
-            if (false === class_exists($class)) {
+            if (true === isset($seeded[$name]) || false === is_subclass_of($class, Command::class)) {
                 continue;
             }
 
@@ -293,7 +297,8 @@ final class Registry
     /**
      * Folds in commands contributed by installed packages and by the root
      * project through `extra.<key>.commands` in their composer.json. Reads
-     * each vendor folder that has a registered composer class loader. Runs at
+     * each vendor folder that has a registered composer class loader. A
+     * contributed command cannot replace a seeded command or alias. Runs at
      * most once, and only when something actually needs it.
      */
     private function discover(): void
@@ -304,10 +309,11 @@ final class Registry
 
         $this->discovered = true;
         $key              = $this->discoveryKey;
+        $seeded           = $this->commands + $this->aliases;
 
         foreach (array_keys(ClassLoader::getRegisteredLoaders()) as $vendor) {
             foreach (self::extras($vendor) as $extra) {
-                $this->addContributed($extra[$key] ?? null);
+                $this->addContributed($extra[$key] ?? null, $seeded);
             }
         }
     }

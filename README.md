@@ -15,7 +15,8 @@
 [![OpenCollective Backers][oc-backers-badge]][oc-backers-link]
 [![OpenCollective Sponsors][oc-sponsors-badge]][oc-sponsors-link]
 
-Command line application for Phalcon - generators, introspection and project tooling.
+Crest is a command line application for Phalcon. It generates code, shows information
+about a project, and creates and runs projects.
 
 ## Requirements
 
@@ -26,7 +27,7 @@ Command line application for Phalcon - generators, introspection and project too
 ## Install
 
 Crest has no tagged release yet. Packagist has only the version `dev-master`, and the
-default `minimum-stability` of composer is `stable`. Thus, give the version in the
+default `minimum-stability` of composer is `stable`. Thus give the version in the
 command. In a project:
 
 ```bash
@@ -34,7 +35,7 @@ composer require --dev phalcon/crest:dev-master
 ```
 
 To create projects, also install Crest globally. The global composer `vendor/bin`
-directory must be in your `PATH`:
+folder must be in your `PATH`:
 
 ```bash
 composer global require phalcon/crest:dev-master
@@ -51,9 +52,9 @@ curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
 
 The options of `new` follow the name, for example `--phalcon v6`. `new` asks no questions
 here: the options give the values, else the defaults apply. The project goes into the
-folder `<name>` in the working directory. `--directory` is not supported, and a system
-folder such as `/usr` is refused as the working directory. `--help` shows the options of
-`new`.
+folder `<name>` in the working directory. The script stops with an error on
+`--directory`, and when the working directory is a system folder such as `/usr`.
+`--help` shows the options of `new`.
 
 The script runs `crest new` in a one-off `composer:2` container. The working directory
 has the same path in that container, so the errors of `new` show host paths. It writes your user and
@@ -131,7 +132,7 @@ the defaults:
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
 | `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
-| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [The database](docs/index.md#the-database) |
+| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [The database](docs/index.md#the-database) in `docs/index.md` |
 | `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`) |
 | `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`) |
 | `--force` | write into a directory that is not empty, and overwrite files with the same names |
@@ -146,7 +147,7 @@ the project `.env`.
 By default, `new` runs nothing: it writes the files and prints the next commands. A
 published `project-config` stub can add a `new` key, with commands that `new` runs after
 it writes the files, for example `crest up` and `crest install`. See
-[Commands after `new`](docs/index.md#commands-after-new).
+[Commands after `new`](docs/index.md#commands-after-new) in `docs/index.md`.
 
 For an existing project, `crest init` writes `crest.php`:
 
@@ -221,7 +222,7 @@ return [
 ];
 ```
 
-`models` changes the names that `make:model` gives in an MVC project: `classes`
+The `models` key changes the names that `make:model` gives in an MVC project: `classes`
 gives a class to a table, and `camelCase` gives camelCase property names. `getSet`
 gives protected properties with a getter and a setter for each, as devtools
 `--get-set`. `crest new` and `crest init` write the key for an MVC project, with
@@ -257,15 +258,19 @@ return [
 ```
 
 Crest constructs the class with the project root. The class must declare `boot()`. There
-is no base class and no interface: `boot()` is the whole contract. For `container:list`
-and `event:list`, `boot()` must return a `Phalcon\Contracts\Container\Service\Collection`,
-for example a `Phalcon\Container\Container`. For `make:model` and `make:scaffold`, it must
-return a `Phalcon\Di\DiInterface` with a `db` service. See
-[Commands that boot the project](docs/index.md#commands-that-boot-the-project) for the
-rest.
+is no base class and no interface: `boot()` is the whole contract. For `container:list`,
+`boot()` must return an object that implements
+`Phalcon\Contracts\Container\Service\Collection` and
+`Phalcon\Contracts\Container\Service\Enumerable`, for example a
+`Phalcon\Container\Container`. For `event:list`, the object must implement `Collection`,
+and hold a registered `Phalcon\Events\Manager`. For `make:model` and `make:scaffold`, it
+must be a `Phalcon\Di\DiInterface` with a `db` service. See
+[Commands that boot the project](docs/index.md#commands-that-boot-the-project) in
+`docs/index.md` for the rest.
 
 All the other commands, for example the other generators, `about`, `config:show` and
-`route:list`, read only the files. They also work on a project that does not run.
+`route:list`, do not start your front controller. Thus they also work on a project that
+does not run.
 
 ## Custom stubs
 
@@ -277,15 +282,17 @@ folders in the package. `crest stub:publish` copies each stub into the folder wh
 looks for it.
 
 `stub:publish` copies a `project-*` stub, which `new` uses, only when you give its name.
-See [Creating a project](docs/index.md#creating-a-project).
+See [Creating a project](docs/index.md#creating-a-project) in `docs/index.md`.
 
 ## Development
 
-    docker compose up -d
-    docker exec crest-app composer install
-    docker exec crest-app composer test
-    docker exec crest-app composer cs
-    docker exec crest-app composer analyze
+```bash
+docker compose up -d
+docker exec crest-app composer install
+docker exec crest-app composer test
+docker exec crest-app composer cs
+docker exec crest-app composer analyze
+```
 
 Set `PHALCON_VARIANT=v6` in `.env` and rebuild to test against `phalcon/phalcon` instead
 of the C extension.
@@ -298,8 +305,10 @@ services `mysql`, `mariadb` and `postgres`. The `DATA_*` lines of `resources/.en
 tests where the servers are: copy them into `.env`, then run
 `docker compose up -d --build --force-recreate`, so that `crest-app` gets the new values.
 
-    docker exec crest-app composer test-db
-    docker exec crest-app composer test-db-sqlite
+```bash
+docker exec crest-app composer test-db
+docker exec crest-app composer test-db-sqlite
+```
 
 `test-db` runs the four suites. `test-db-sqlite`, `test-db-mysql`, `test-db-mariadb` and
 `test-db-pgsql` run one suite. `composer test` runs no database test. `composer test-coverage` and
@@ -313,10 +322,12 @@ A container built with `PHALCON_VARIANT=v6` has no C extension, so the commands 
 path. To run the v6 path in the v5 container, use `php -n`. `php -n` does not load the C extension,
 `pdo_mysql` or `pdo_pgsql`, so load the PDO driver with `-d extension=`:
 
-    docker exec crest-app php -n vendor/bin/phpunit -c resources/phpunit.sqlite.xml
-    docker exec crest-app php -n -d extension=pdo_mysql vendor/bin/phpunit -c resources/phpunit.mysql.xml
-    docker exec crest-app php -n -d extension=pdo_mysql vendor/bin/phpunit -c resources/phpunit.mariadb.xml
-    docker exec crest-app php -n -d extension=pdo_pgsql vendor/bin/phpunit -c resources/phpunit.pgsql.xml
+```bash
+docker exec crest-app php -n vendor/bin/phpunit -c resources/phpunit.sqlite.xml
+docker exec crest-app php -n -d extension=pdo_mysql vendor/bin/phpunit -c resources/phpunit.mysql.xml
+docker exec crest-app php -n -d extension=pdo_mysql vendor/bin/phpunit -c resources/phpunit.mariadb.xml
+docker exec crest-app php -n -d extension=pdo_pgsql vendor/bin/phpunit -c resources/phpunit.pgsql.xml
+```
 
 ## License
 

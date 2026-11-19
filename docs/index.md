@@ -85,7 +85,8 @@ the defaults. The options still give their values, for example in CI.
 
 The project goes into the folder `<name>` in the working directory, or in
 `--directory` if you give one. By default, `new` runs nothing: no composer, no
-docker, no network. It prints the next steps:
+docker, no network. It prints the next steps. For an ADR project with no
+database, the output is:
 
 ```text
 Created my-app/
@@ -131,7 +132,7 @@ same router and document root as the container. The port is `--port`, else
 as docker compose does: the last `APP_PORT` line wins, and `export`,
 `APP_PORT: <port>`, quotes and `#` comments are allowed. It does not expand
 `${...}`. Such a value stops `serve` with an error. `serve` finds the root
-from a subdirectory. A global Crest passes it to the Crest in `vendor/`, as
+from a subfolder. A global Crest passes it to the Crest in `vendor/`, as
 it does the other project commands. It stops before PHP starts if
 `.htrouter.php` or `<vendor-dir>/autoload.php` is missing.
 
@@ -201,7 +202,7 @@ crest: /path/to/my-app has no vendor/bin/crest; run 'crest install' or 'composer
 crest: /path/to/my-app does not require phalcon/crest; run 'composer require --dev phalcon/crest'
 ```
 
-Crest has no tagged release yet. Thus, add `:dev-master` to the `composer require`
+Crest has no tagged release yet. Thus add `:dev-master` to the `composer require`
 command of the second message.
 
 With `'runtime' => ['type' => 'docker', 'service' => 'app']` in `crest.php` (what `new`
@@ -226,7 +227,7 @@ expand `~` or `$VAR` in these values: use a relative or an absolute path. A cust
 project: an older Crest looks only for `vendor/bin/crest`.
 
 The files come from the `project-*` stubs. To change them, publish them by
-name in the directory that the project goes into (the working directory, or
+name in the folder that the project goes into (the working directory, or
 `--directory`), then edit the copies:
 
 ```bash
@@ -315,8 +316,9 @@ crest new my-app --flavor=mvc --database=mysql
 With a database, `new` also writes:
 
 - `DbProvider.php` in the provider folder (`src/Providers` for MVC, `src/Provider` for
-  ADR). It registers the `db` service. The MVC front adds it in `providers()`. The ADR
-  front gets a `registerProviders()` override that calls it.
+  ADR). It registers the `db` service. The MVC front controller adds it in
+  `providers()`. The ADR front controller gets a `registerProviders()` override that
+  calls it.
 - The connection values at the end of `.env`:
 
   ```text
@@ -373,13 +375,14 @@ With `mysql`, `mariadb` or `pgsql`, the app service cannot have the name `databa
 crest: the service 'database' is the name of the database service; choose another service name
 ```
 
-In an ADR project with a database, the front already has `registerProviders()`. For a new
-provider, add only the `provide()` line that `crest make:provider` prints.
+In an ADR project with a database, the front controller already has
+`registerProviders()`. For a new provider, add only the `provide()` line that
+`crest make:provider` prints.
 
 The service and the `.env` lines come from the project stubs `project-compose-mysql`,
 `project-compose-mariadb`, `project-compose-pgsql`, `project-env-database` and
 `project-env-sqlite`. To change one, for example the image, publish it by name in the
-directory that the projects go into:
+folder that the projects go into:
 
 ```bash
 crest stub:publish project-compose-mysql
@@ -488,8 +491,8 @@ questions, in this order, each with a proposal:
    and `views` for MVC. The question says if the folder exists. A class folder is in the
    folder of the namespace.
    An answer must be a relative folder in a psr-4 folder, and its folder names must give
-   a usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use. A
-   leading `./` is removed.
+   a usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use.
+   `init` removes a leading `./`.
 
    `views` holds no classes. It is a relative folder in the project, with no psr-4
    check. Each part of the answer must be a folder name, so `init` refuses an absolute
@@ -516,9 +519,10 @@ namespaces from it. Without one, `init` stops and tells you to add one, for exam
 
 ## Commands that boot the project
 
-`container:list`, `event:list`, `make:model` and `make:scaffold` read a state that
-exists only after the application registers it. Thus they start your front
-controller. Name it in `crest.php`:
+`container:list`, `event:list`, `make:model` and `make:scaffold` read the
+services, the listeners and the `db` service, which exist only after the
+application registers them. Thus they start your front controller. Name it in
+`crest.php`:
 
 ```php
 return [
@@ -559,8 +563,8 @@ object:
 | `event:list` | implement `Collection`, and hold a registered `Phalcon\Events\Manager` |
 | `make:model`, `make:scaffold` | implement `Phalcon\Di\DiInterface`, and hold a `db` service that is a `Phalcon\Db\Adapter\AdapterInterface` |
 
-`Phalcon\Container\Container` implements both contracts. Thus, for
-`container:list`, `boot()` can return a `Phalcon\Container\Container`.
+`Phalcon\Container\Container` implements both contracts. Thus `boot()` can
+return a `Phalcon\Container\Container` for `container:list`.
 
 For `event:list`, "registered" means a definition or an instance that exists. A
 manager that the container can only autowire does not count. Then Crest stops with
@@ -568,8 +572,8 @@ an error that says that the bootstrap registers no manager. It does not show zer
 listeners from a new instance that it made itself.
 
 All the other commands, for example the other generators, `about`, `config:show`
-and `route:list`, read only the files. They also work on a project that does not
-run.
+and `route:list`, do not start your front controller. Thus they also work on a
+project that does not run.
 
 ## Generating actions
 
@@ -594,21 +598,26 @@ goes where the router looks for it. Placeholders must come last: Crest stops on
 A view action names a template, but Crest does not create the template.
 `Renderer::render()` takes a name, not a path. Thus the folder and the extension
 belong to your renderer. Crest prints the name of the template, and does not
-guess a file.
+guess a file name.
 
 ## Generating controllers
 
 In an MVC project, `make:controller` writes a controller and the base class that
-it extends. When the base does not exist yet, the output is:
+it extends:
 
 ```bash
 crest make:controller Users
 ```
 
+When the base does not exist yet, the output starts with these lines:
+
 ```text
 Created src/Controllers/Base/CrestControllerBase.php
 Created src/Controllers/UsersController.php
 ```
+
+In the `Created`, `Updated` and `Kept` lines, Crest prints the full path of each
+file. The examples in this document show the path from the project root.
 
 `UsersController` extends `CrestControllerBase`, which extends
 `Phalcon\Mvc\Controller`, and has an empty `indexAction()`. Crest then prints
@@ -617,8 +626,9 @@ with the default routes (`GET /users`), and the name of its view
 (`users/index`). The views folder and the engine belong to your project.
 
 A project from `crest new --flavor=mvc` already has `CrestControllerBase` and
-`IndexController`, and its dispatcher has the default namespace. Thus, in that
-project, `make:controller` prints no line for the base.
+`IndexController`, and its dispatcher has the default namespace. Thus in that
+project, `make:controller` prints no line for the base while the base is the
+same as its stub (see [Generated bases](#generated-bases)).
 
 The name must give a class that the dispatcher can find from a URL. Crest stops
 on `users` (the URL `/users` looks for `UsersController`), on `User_Profiles`,
@@ -679,26 +689,33 @@ base, add `--module=<key>` to `make:controller`.
 
 In an MVC project, `make:model` reads a table from the database of the project,
 and writes a model and the base class that it extends. Crest writes relations
-only from FOREIGN KEY constraints (see "Relations"):
+only from FOREIGN KEY constraints (see [Relations](#relations)):
 
-    crest make:model users
+```bash
+crest make:model users
+```
 
-    Created src/Models/Base/UsersBase.php
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
-    Created src/Models/Users.php
+```text
+Created src/Models/Base/UsersBase.php
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+Created src/Models/Users.php
+```
 
-Crest reads the table through the `db` service of your project, so it starts
-your front controller: `crest.php` must name it in `bootstrap` (see "Commands
-that boot the project"). A project from `crest new --flavor=mvc --database=<choice>`
-has the `db` service (see "The database"). For a project without one, add a
-provider that registers it (`crest make:provider Db`).
+Crest reads the table through the `db` service of your project. Thus it starts
+your front controller: `crest.php` must name it in `bootstrap` (see
+[Commands that boot the project](#commands-that-boot-the-project)). A project
+from `crest new --flavor=mvc` with a database has the `db` service (see
+[The database](#the-database)). For a project without one, add a provider that
+registers it (`crest make:provider Db`).
 
 With the `phalcon/phalcon` package (Phalcon v6), a model also needs
 `phalcon/phql`, because a model uses PHQL to find rows. The extension (Phalcon
-v5) has PHQL. `crest new --database` adds the package to `composer.json`. For
-another project, install it:
+v5) has PHQL. For an MVC project with Phalcon v6, `crest new` with a database
+adds the package to `composer.json`. For another project, install it:
 
-    composer require phalcon/phql:1.0.x-dev
+```bash
+composer require phalcon/phql:1.0.x-dev
+```
 
 `Users` extends `UsersBase`, which extends `Phalcon\Mvc\Model`. The base has a
 property for each column, in the order of the table, and an `initialize()` that
@@ -722,60 +739,74 @@ Phalcon reads `DOUBLE` and `BOOLEAN` columns as `VARCHAR`, so they give
 `?string`.
 
 Each property is nullable, with the default `null`, because a new model has no
-values yet. The class name comes from the table name: crest makes the first
+values yet. The class name comes from the table name: Crest makes the first
 letter of each part between `_` uppercase. `user_profiles` gives
 `UserProfiles`. To give a table another class, or a column another property
-name, see "Names".
+name, see [Names](#names).
 
 When the table changes, run `make:model` again. Crest writes the base again,
 and keeps your model:
 
-    Updated src/Models/Base/UsersBase.php
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
-    Kept src/Models/Users.php: it exists; pass --force to replace it
+```text
+Updated src/Models/Base/UsersBase.php
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+Kept src/Models/Users.php: it exists; pass --force to replace it
+```
 
-The rules of "Generated bases" apply to the base of a model too: do not edit
-it (you can change only the aliases of its relations and the names in its
-`PropertyName` attributes, see "Relations" and "Names"), and `--force`
-replaces the model, but never a base without the
-`Generated by crest.` line. If you add `initialize()` to your model, call
+The rules of [Generated bases](#generated-bases) apply to the base of a model
+too: do not edit it (you can change only the aliases of its relations and the
+names in its `PropertyName` attributes, see [Relations](#relations) and
+[Names](#names)), and `--force` replaces the model, but never a base without
+the `Generated by crest.` line. If you add `initialize()` to your model, call
 `parent::initialize()` first.
 
 Crest stops, and writes no file, when:
 
 - the table name gives no class name (`user-profiles`), or a name that PHP
-  reserves (`list`), and `models.classes` gives it no class (see "Names");
+  reserves (`list`), and `models.classes` gives it no class (see
+  [Names](#names));
 - the project has no `db` service, the service is not a Phalcon database
   adapter, or it cannot connect;
 - the table does not exist (in the schema of `models.schema`, when you set it);
-- `models.schema` has a value, and the `db` service is SQLite (see "The
-  schema");
+- `models.schema` has a value, and the `db` service is SQLite (see
+  [The schema](#the-schema));
 - a column name is not a property name (`first name`), or it is the name of a
   property of `Phalcon\Mvc\Model` (`container`), and no `--property` or
   attribute gives it another name: the error gives the `--property` to use;
-- the base is not valid PHP, or crest cannot use a `RelationAlias` or a
-  `PropertyName` attribute in it (see "Relations" and "Names");
+- two columns give the same property name (with `camelCase`, `first_name` and
+  `firstName`): the error tells you to give one of them another name with
+  `--property`;
+- the base is not valid PHP, or Crest cannot use a `RelationAlias` or a
+  `PropertyName` attribute in it (see [Relations](#relations) and
+  [Names](#names));
 - the `models` key of `crest.php` is not correct, or `--property` names a
-  column that the table does not have (see "Names");
+  column that the table does not have (see [Names](#names));
 - a published stub has no `{{ columnMap }}` or `{{ property }}`, and the base
-  needs a `columnMap()` (see "Names"), or the published `model-base` has no
-  `{{ schema }}`, and `models.schema` has a value (see "The schema");
+  needs a `columnMap()` (see [Names](#names)), or the published `model-base`
+  has no `{{ schema }}`, and `models.schema` has a value (see
+  [The schema](#the-schema));
 - `models.getSet` is `true`, and a getter or a setter is a method of
   `Phalcon\Mvc\Model`, two properties give one method name, or a published
-  stub has no `{{ visibility }}` or `{{ methods }}` (see "Getters and
-  setters");
-- `--module` names a module that does not exist (see "Generating modules").
+  stub has no `{{ visibility }}` or `{{ methods }}` (see
+  [Getters and setters](#getters-and-setters));
+- `--module` names a module that does not exist (see
+  [Generating modules](#generating-modules)).
 
 `make:model` is for MVC projects. An ADR project uses repositories, not Active
 Record models, so the command stops there.
 
-To write the models into a module, add `--module` (see "Generating modules"):
+To write the models into a module, add `--module` (see
+[Generating modules](#generating-modules)):
 
-    crest make:model users --module=admin
+```bash
+crest make:model users --module=admin
+```
 
-    Created src/Modules/Admin/Models/Base/UsersBase.php
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
-    Created src/Modules/Admin/Models/Users.php
+```text
+Created src/Modules/Admin/Models/Base/UsersBase.php
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+Created src/Modules/Admin/Models/Users.php
+```
 
 The models and their bases go into the `Models` folder of the module, in its
 namespace (`App\Modules\Admin\Models`). `--module` works with one table and
@@ -803,32 +834,37 @@ return [
 ];
 ```
 
-The `models` key has a third setting, `schema`, which does not change the names
-(see "The schema").
+The `models` key has two more settings, `getSet` and `schema`, which do not
+change the names (see [Getters and setters](#getters-and-setters) and
+[The schema](#the-schema)).
 
 In an MVC project, `crest config:show` shows the key: the rows `camelCase`,
 `getSet` and `schema`, each with its origin, and a table with each line of
 `classes`, sorted by table:
 
-    ITEM       VALUE          ORIGIN
-    ...
-    service    app            default
-    camelCase  true           declared
-    getSet     false          default
-    schema     none           default
+```text
+ITEM       VALUE          ORIGIN
+...
+service    app            default
+camelCase  true           declared
+getSet     false          default
+schema     none           default
 
-    PATH        LOCATION                   ORIGIN
-    ...
+PATH        LOCATION                   ORIGIN
+...
 
-    TABLE          CLASS
-    user-profiles  UserProfile
-    users          User
+TABLE          CLASS
+user-profiles  UserProfile
+users          User
+```
 
 When the key is not correct, `config:show` shows the error in a `models` row and
 exits with 0, and `make:model` stops on it:
 
-    service    app                                                default
-    models     crest.php: models.camelCase must be true or false  declared
+```text
+service    app                                                default
+models     crest.php: models.camelCase must be true or false  declared
+```
 
 **Classes.** `classes` gives a class to a table. Write a line only for each
 table whose class you want to change: the other tables keep the class of their
@@ -839,13 +875,17 @@ none (`user-profiles`), or gives a name that PHP reserves (`list`), also with
 `--all`. With `--all`, a line for a table that the database does not have gives a
 note:
 
-    Note: models.classes names the table Users, which the database does not have; did you mean users?
+```text
+Note: models.classes names the table Users, which the database does not have; did you mean users?
+```
 
-When you add a line for a table that has a model, crest writes a new base and a
+When you add a line for a table that has a model, Crest writes a new base and a
 new model (`UserBase.php`, `User.php`), and keeps the old files. A note names
 the old files, and the tables that have relations with the table:
 
-    Note: the old files of users stay: src/Models/Users.php and src/Models/Base/UsersBase.php; move your code to User, delete them, then run make:model for invoices
+```text
+Note: the old files of users stay: src/Models/Users.php and src/Models/Base/UsersBase.php; move your code to User, delete them, then run make:model for invoices
+```
 
 Move your code to the new model, delete the old files, and run `make:model` for
 the tables of the note. Crest prints the note on each run until you delete the
@@ -855,30 +895,32 @@ related table that has no model yet: `make:model` then writes a model for it.
 The new base does not get the `PropertyName` attributes of the old base: give
 the names again with `--property`.
 
-No note comes when the old base does not have the `Generated by crest.` line.
-No note comes also when another table gets the old class (for example, with
-the line `'members' => 'Users'`), because the old base can be the base of that
-table.
+Crest prints no note when the old base does not have the `Generated by crest.`
+line. Crest also prints no note when another table gets the old class (for
+example, with the line `'members' => 'Users'`), because the old base can be the
+base of that table.
 
 **camelCase.** With `'camelCase' => true`, each property gets the camelCase form
-of its column: crest splits the column at each `_`, makes the first letter of
+of its column: Crest splits the column at each `_`, makes the first letter of
 each part uppercase, and then makes the first letter of the name lowercase.
 `first_name` gives `firstName`, and `name` stays `name`. The other letters do
-not change, so a column in capitals gives an odd name (`USER_ID` gives `uSERID`):
+not change, so a column in capitals gives an unusual name (`USER_ID` gives `uSERID`):
 give it a name with `--property`. The setting applies to each table, on each
 run.
 
 > **Warning:** when you change `camelCase` in a project that has models, the
-> next run of `make:model` renames the properties of each base, and the code
-> that uses the old names stops working. Crest prints a `Renamed` line for each
-> property that changes.
+> next run of `make:model` renames the properties of each base that it writes,
+> and the code that uses the old names stops working. Crest prints a `Renamed`
+> line for each property that changes.
 
 **One property.** `--property` gives a name to a column of one table:
 
-    crest make:model users --property="first name=firstName,last_name=lastName"
+```bash
+crest make:model users --property="first name=firstName,last_name=lastName"
+```
 
 Separate the columns with commas, and give all the names to one `--property`:
-if you give it two times, crest uses only the last one. A column whose name has
+if you give it two times, Crest uses only the last one. A column whose name has
 a comma, or a space at the start or the end, cannot get a name. `--property`
 works only for one table, not with `--all`.
 
@@ -890,17 +932,19 @@ base:
 abstract class UsersBase extends Model
 ```
 
-On the next runs, you do not give `--property` again: crest reads the
-attribute. You can change the name in the attribute, and crest uses it on the
+On the next runs, you do not give `--property` again: Crest reads the
+attribute. You can change the name in the attribute, and Crest uses it on the
 next run. To use the name of `camelCase`, or the column name, again, delete the
 attribute line and run `make:model` again. When the table no longer has the
-column, crest drops the attribute:
+column, Crest drops the attribute:
 
-    Dropped the property name firstName of column 'first name': the table has no such column
+```text
+Dropped the property name firstName of column 'first name': the table has no such column
+```
 
 Crest reads the `PropertyName` attributes as it reads the `RelationAlias`
-attributes (see "Relations"). Crest stops, and writes no file, when a
-`PropertyName` attribute does not have two plain strings (the column and the
+attributes (see [Relations](#relations)). Crest stops, and writes no file, when
+a `PropertyName` attribute does not have two plain strings (the column and the
 name), when two attributes have the same column, or when the name in an
 attribute is not a usable property name. The message names the file and the
 line.
@@ -915,71 +959,88 @@ as it is by default. The relations use the property names of the two tables:
 with `camelCase`, the `belongsTo()` of `invoices` has `'customerId'`.
 
 **When a name changes.** When a property gets another name (a change of
-`camelCase`, a new `--property`, or a changed attribute), crest prints a line
-for it. When a relation of another table uses the property, crest names that
+`camelCase`, a new `--property`, or a changed attribute), Crest prints a line
+for it. When a relation of another table uses the property, Crest names that
 table:
 
-    Updated src/Models/Base/InvoicesBase.php
-    Renamed $customer_id to $customerId: change the code that uses it
-    Run make:model for customers too: its relations use the property names of invoices
-    Kept src/Models/Invoices.php: it exists; pass --force to replace it
+```text
+Updated src/Models/Base/InvoicesBase.php
+Renamed $customer_id to $customerId: change the code that uses it
+Run make:model for customers too: its relations use the property names of invoices
+Kept src/Models/Invoices.php: it exists; pass --force to replace it
+```
 
-With `--all`, crest writes all the tables again, so it names only the tables of
-`--exclude` (see "All the tables"). It does not name a table that fails later.
+With `--all`, Crest reads all the tables in the same run, and writes again each
+base that changes. Thus it names only the tables of `--exclude` (see
+[All the tables](#all-the-tables)). It does not name a table that fails later.
 The summary lists each table that failed: run `make:model` for it again after
 the fix.
 
 **Published stubs.** `model-base` has the placeholder `{{ columnMap }}`, and
 `fragment-model-property` has `{{ property }}`. A copy that you published before
-does not have them. When a base needs a `columnMap()`, crest stops:
+Crest added these placeholders does not have them. When a base needs a
+`columnMap()`, Crest stops:
 
-    crest: the published stub .../resources/stubs/mvc/model-base.stub has no {{ columnMap }}; publish it again with crest stub:publish model-base --force, and make your changes in it again
+```text
+crest: the published stub .../resources/stubs/mvc/model-base.stub has no {{ columnMap }}; publish it again with crest stub:publish model-base --force, and make your changes in it again
+```
 
 Crest writes the `columnMap()` with the stub `fragment-model-column-map`, which
-has the placeholder `{{ pairs }}`. On the next run, crest reads the old property
+has the placeholder `{{ pairs }}`. On the next run, Crest reads the old property
 names from this `columnMap()`. It reads only the form that it writes: a body
 with only `return [...];`, and a plain string on each side of each `=>`. When
 the base has another form (a published `fragment-model-column-map`, or a change
-by hand), crest still writes the base, but it cannot find the renamed
+by hand), Crest still writes the base, but it cannot find the renamed
 properties. It prints no `Renamed` line, and prints:
 
-    Note: crest cannot read columnMap() of src/Models/Base/CustomersBase.php, so it cannot list the renamed properties
+```text
+Note: crest cannot read columnMap() of src/Models/Base/CustomersBase.php, so it cannot list the renamed properties
+```
 
 Then find the code that uses the properties of that table yourself.
 
 ### All the tables
 
 `make:model --all` writes a model and its base for each table of the database,
-in the order of the table names. For each table, crest prints a `Table` line,
-then the lines of `make:model <table>`. At the end, crest prints a summary:
+in the order of the table names. For each table, Crest prints a `Table` line,
+then the lines of `make:model <table>`. At the end, Crest prints a summary:
 
-    crest make:model --all
+```bash
+crest make:model --all
+```
 
-    Table customers
-    Created src/Models/Base/CustomersBase.php
-    Created src/Models/Customers.php
+```text
+Table customers
+Created src/Models/Base/CustomersBase.php
+Created src/Models/Customers.php
 
-    Table invoices
-    Created src/Models/Base/InvoicesBase.php
-    Created src/Models/Invoices.php
+Table invoices
+Created src/Models/Base/InvoicesBase.php
+Created src/Models/Invoices.php
 
-    2 tables: 2 models created, 0 kept, 0 failed.
+2 tables: 2 models created, 0 kept, 0 failed.
+```
 
-Each table works as with `make:model <table>`: another run writes the bases
-again and keeps the models, and `--force` replaces the models. When the
-database has no tables to write, crest prints `No tables to write.`, and the
-exit status is 0.
+Each table works as with `make:model <table>`. On another run, Crest compares
+each base with the base that it makes from the table. If they are not the
+same, Crest writes the base again. Crest keeps the models, and `--force`
+replaces them. When the database has no tables to write, Crest prints
+`No tables to write.`, and the exit status is 0.
 
-With `models.schema`, `--all` writes the tables of that schema (see "The
-schema"), and the line names the schema:
+With `models.schema`, `--all` writes the tables of that schema (see
+[The schema](#the-schema)), and the line names the schema:
 
-    No tables to write in the schema 'billing'.
+```text
+No tables to write in the schema 'billing'.
+```
 
 PostgreSQL gives no tables for a schema that does not exist, so a schema name
 with a typo gives this line. On MySQL and MariaDB, a schema that does not exist
-stops crest:
+stops Crest:
 
-    crest: the schema 'billing' cannot be read: SQLSTATE[42000]: Syntax error or access violation: 1049 Unknown database 'billing'
+```text
+crest: the schema 'billing' cannot be read: SQLSTATE[42000]: Syntax error or access violation: 1049 Unknown database 'billing'
+```
 
 `--all` writes no models for views, and no models for the internal tables of
 SQLite (for example, `sqlite_sequence`). For a view, run `make:model <view>`.
@@ -988,50 +1049,60 @@ stops with the "not found" error, because Phalcon finds only tables there.
 
 To skip tables, give their names to one `--exclude`, separated by commas:
 
-    crest make:model --all --exclude=audit_log,phalcon_migrations
+```bash
+crest make:model --all --exclude=audit_log,phalcon_migrations
+```
 
 Give all the names to one `--exclude`. If you give `--exclude` two times,
-crest uses only the last one.
+Crest uses only the last one.
 
 Each name must be the exact name of a table, with the same case. A name that
-the database does not have stops crest before it writes a file. When the name
+the database does not have stops Crest before it writes a file. When the name
 differs from a table only in case, the error gives the name of the table:
 
-    crest: --exclude: the database has no table Users; did you mean users?
+```text
+crest: --exclude: the database has no table Users; did you mean users?
+```
 
-For the name of a view or an internal SQLite table, crest prints a note, and
+For the name of a view or an internal SQLite table, Crest prints a note, and
 continues. A skipped table still gives its relations: with
 `--exclude=invoices`, the base of `customers` has its `hasMany()` to
 `Invoices`.
 
-A table fails when its name gives no class name (`user-profiles`) or a name
-that PHP reserves (`list`) (a line of `models.classes` gives such a table a
-class), when a column is not a property name and has no name from an
-attribute, or when crest cannot use its base (see the list above). A table
-also fails when it
-gives the same class as another table, also with a different case
-(`UserProfiles` and `user_profiles`, or `USERS` and `users`): crest writes
-none of these tables. Crest prints the reason, and continues with the next
-table. At the end, crest lists the tables that failed, so that you can write
-their models yourself:
+With `--all`, an error of the list in [Generating models](#generating-models)
+that is about one table makes only that table fail. For example:
 
-    Table user-profiles
-    Failed: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
+- its name gives no class name (`user-profiles`) or a name that PHP reserves
+  (`list`), and no line of `models.classes` gives it a class;
+- a column is not a property name and has no name from an attribute;
+- Crest cannot use its base;
+- a published stub has no placeholder that its base needs.
 
-    Table users
-    Created src/Models/Base/UsersBase.php
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
-    Created src/Models/Users.php
+A table also fails when it gives the same class as another table, also with a
+different case (`UserProfiles` and `user_profiles`, or `USERS` and `users`):
+Crest writes none of these tables. Crest prints the reason, and continues with
+the next table. At the end, Crest lists the tables that failed, so that you can
+write their models yourself:
 
-    2 tables: 1 model created, 0 kept, 1 failed.
-    Failed tables:
-      user-profiles: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
+```text
+Table user-profiles
+Failed: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
 
-The exit status is 1 when a table fails, and 0 when crest writes or keeps each
+Table users
+Created src/Models/Base/UsersBase.php
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+Created src/Models/Users.php
+
+2 tables: 1 model created, 0 kept, 1 failed.
+Failed tables:
+  user-profiles: 'user-profiles' gives no usable class name; expected a table name like 'users' or 'user_profiles'
+```
+
+The exit status is 1 when a table fails, and 0 when Crest writes or keeps each
 table. Crest prints all these lines to stdout, also the `Failed` lines, so a
 log of the output (`> log.txt`) has them in order. An error that is not about
-one table stops crest, and goes to stderr: for example, no `db` service, a
-connection that breaks, or a stub that crest cannot render. The files of the
+one table stops Crest, and goes to stderr: for example, no `db` service, a
+connection that breaks, or a stub that Crest cannot render. The files of the
 tables before the error stay, and the next run continues from them.
 
 ### Relations
@@ -1042,7 +1113,9 @@ gives no relation. MySQL tables with the MyISAM engine do not keep foreign
 keys, so they give no relations. When a table has no foreign keys, and no
 foreign key of another table points to it, `make:model` prints:
 
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+```text
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+```
 
 With no foreign keys, write the relations in your model, in `initialize()`
 after `parent::initialize()`:
@@ -1104,8 +1177,10 @@ for each table.
 The aliases:
 
 - A `belongsTo()` uses the key column without `_id`: `customer_id` gives
-  `Customer`. If the column has no `_id`, or the key has more than one column,
-  the alias is the related class (`Customers`).
+  `Customer`. If the column does not end in `_id`, if the part before `_id`
+  gives no valid name (`_2nd_id`), or if the key has more than one column, the
+  alias comes from the name of the related table: `customers` gives
+  `Customers`.
 - A `hasMany()` uses the class of the other table (`Invoices`). If that table
   has more than one key to this table, the alias adds `By` and the alias of the
   key: a table `messages` with `sender_id` and `recipient_id` gives
@@ -1129,81 +1204,99 @@ abstract class InvoicesBase extends Model
 To change an alias, change the `alias:` argument, and run `make:model` for the
 table again. Crest writes the base with your alias, and keeps it on each later
 run. An alias in an attribute does not change when another key to the same
-table comes, or when a later version of crest has other rules. Change only the
-`alias:` argument: crest writes the rest of the base again. If you delete the
+table comes, or when a later version of Crest has other rules. Change only the
+`alias:` argument: Crest writes the rest of the base again. If you delete the
 base, the aliases go back to the rules above.
 
-When the next base has no relation for the key of an attribute, crest drops
+When the next base has no relation for the key of an attribute, Crest drops
 the attribute and prints one line for it, so that you know that the alias is
 gone. This happens when a key column gets a new name, when the key gets
 another target, or when the table name has another case on another server:
 
-    Dropped the alias Buyer of 'belongsTo invoices(buyer_id) -> customers(id)': the database has no such key
+```text
+Dropped the alias Buyer of 'belongsTo invoices(buyer_id) -> customers(id)': the database has no such key
+```
 
 Crest reads the attributes with the PHP tokenizer, so a formatter can change
 their layout: line breaks, comments, quotes, named arguments, or a `use` import
 of `Crest\Attribute\RelationAlias`. Each argument must be a plain string: in
 single quotes, or in double quotes with no backslash. A constant, or two
 strings joined with `.`, is not a plain string. The attribute class does not
-need to exist when your application runs, so an install without crest
+need to exist when your application runs, so an install without Crest
 (`composer install --no-dev`) works.
 
 Crest stops, and writes no file, when the base is not valid PHP, when a
 `RelationAlias` attribute does not have two plain strings (the key and the
 alias), when an alias is not a valid name, when two attributes have the same
-key, when an alias of an attribute has the name of a property of the table, or
-when two aliases of attributes are the same (the case is ignored). The message
-names the file and the line.
+key, when an alias of an attribute has the name of a property of the table or,
+with `models.getSet`, the name of a getter (see
+[Getters and setters](#getters-and-setters)), or when two aliases of attributes
+are the same (Crest ignores the case). The message names the file and the
+line.
 
-When another table gets a new key to a table, run `make:model` for that table
-again, so that its base gets the new `hasMany()`. Or run `make:model --all`,
-which writes the bases of all the tables again.
+When another table gets a new key to a table, run `make:model` again for the
+table that the key points to, so that its base gets the new `hasMany()`. Or run
+`make:model --all`: Crest compares the base of each table with the base that it
+makes from the table, and writes the base again if they are not the same.
 
 Crest skips a relation that it cannot write, and prints one line for it:
 
-    Skipped the relation belongsTo invoices(customer_id) -> customers(id): the alias Customer has the name of a property
+```text
+Skipped the relation belongsTo invoices(customer_id) -> customers(id): the alias Customer has the name of a property
+```
 
 Crest skips a relation when:
 
 - the key does not name the referenced columns (SQLite accepts
   `REFERENCES customers`);
 - the related table gives no class name, or a name that PHP reserves;
-- crest cannot read the base of the related table, for example because an
+- Crest cannot read the base of the related table, for example because an
   attribute in it does not have two plain strings. The line gives the error;
 - a key column of the related table has no usable property name, and no
-  `--property` or attribute gives it one (see "Names");
-- the alias has the name of a property of the table (the case is ignored);
-- two or more relations have the same alias (the case is ignored). Crest skips
-  all of them, but not a relation whose alias comes from an attribute;
+  `--property` or attribute gives it one (see [Names](#names));
+- the alias has the name of a property of the table or, with `models.getSet`,
+  the name of a getter (Crest ignores the case);
+- two or more relations have the same alias (Crest ignores the case). Crest
+  skips all of them, but not a relation whose alias comes from an attribute;
 - the key points to a table of another schema: the reason is
-  `the table customers is in another schema` (see "The schema").
+  `the table customers is in another schema` (see [The schema](#the-schema)).
 
 Crest writes the other relations. When the reason is the alias (the name of a
-column, or two relations with the same alias), you can give the skipped
-relation an alias: add an attribute with the key from the line, and run
-`make:model` again:
+property or of a getter, or two relations with the same alias), you can give
+the skipped relation an alias: add an attribute with the key from the line, and
+run `make:model` again:
 
-    #[\Crest\Attribute\RelationAlias('belongsTo invoices(customer_id) -> customers(id)', alias: 'Client')]
+```php
+#[\Crest\Attribute\RelationAlias('belongsTo invoices(customer_id) -> customers(id)', alias: 'Client')]
+```
 
-For the other reasons, an attribute does nothing: crest drops it, with a
+For the other reasons, an attribute does nothing: Crest drops it, with a
 `Dropped` line.
 
-When crest cannot read the base of the related table, correct that base as the
+When Crest cannot read the base of the related table, correct that base as the
 line says, and run `make:model` again. When a key column of the related table
 has no usable property name, give it a name in a run for the related table, and
 then run `make:model` for this table again:
 
-    Skipped the relation hasMany notes(it's_id) -> users(id): column 'it's_id' of table 'notes' has no usable property name
+```text
+Skipped the relation hasMany notes(it's_id) -> users(id): column 'it's_id' of table 'notes' has no usable property name
+```
 
-    crest make:model notes --property="it's_id=userId"
-    crest make:model users
+```bash
+crest make:model notes --property="it's_id=userId"
+crest make:model users
+```
 
 You can also add a skipped relation in your model, in `initialize()` after
 `parent::initialize()`.
 
-Composite keys work on MySQL and PostgreSQL: the fields are arrays, for example
-`['order_id', 'line_no']`. SQLite gives one key for each column of a composite
-key, so crest does not support SQLite composite keys.
+Composite keys work on MySQL and MariaDB: the fields are arrays, for example
+`['order_id', 'line_no']`. On PostgreSQL, composite keys work from cphalcon
+5.24.0 and from the tag of `phalcon/phalcon` after `v6.0.0RC4`. Before these
+versions, Phalcon gives the wrong columns for a composite key on PostgreSQL. On
+SQLite, Phalcon gives one key for each column of a composite key. Thus Crest
+writes one relation for each column, and each relation uses only a part of the
+key. Crest does not support SQLite composite keys.
 
 An alias with the name of a `get` method of `Phalcon\Mvc\Model`, for example
 `Messages` (`getMessages()`) or `Source` (`getSource()`), works as a property
@@ -1223,7 +1316,7 @@ tables of another schema, give its name in the `models` key of `crest.php`:
 
 Then `make:model`, `make:model --all` and `make:scaffold` read the tables, the
 columns and the foreign keys of that schema, and each base calls `setSchema()`
-after `setSource()`. So the model reads and writes the rows of
+after `setSource()`. Thus the model reads and writes the rows of
 `billing.invoices`:
 
 ```php
@@ -1238,39 +1331,46 @@ The value must be a string that is not empty and not only white space. Crest
 uses it as you write it: on PostgreSQL, write the name with the case that the
 server keeps. A `null` value is the same as no value. The schema applies to all
 the tables of the project, also with `--module`. `config:show` shows it in the
-`schema` row (see "Names").
+`schema` row (see [Names](#names)).
 
 When you change the value, the next run reads the tables of the new schema, and
 writes the base of each table of the run with the new value. A table that the
 new schema does not have stops `make:model`:
 
-    crest: table 'invoices' was not found in the schema 'billing' of the 'db' service
+```text
+crest: table 'invoices' was not found in the schema 'billing' of the 'db' service
+```
 
 Crest deletes no file. When you remove the key, the next run writes each base
 with no `setSchema()`.
 
-A model keeps its schema until crest writes its base again. So after you add,
+A model keeps its schema until Crest writes its base again. Thus after you add,
 change or remove the key, run `make:model --all`: a related model whose base
-crest did not write again reads the old schema, with no error.
+Crest did not write again reads the old schema, with no error.
 
 SQLite has no schemas. When the `db` service is SQLite, and `models.schema` has
-a value, crest stops:
+a value, Crest stops:
 
-    crest: crest.php: models.schema is 'billing', but SQLite has no schemas; remove the key
+```text
+crest: crest.php: models.schema is 'billing', but SQLite has no schemas; remove the key
+```
 
 When `models.schema` has a value, a published `model-base` must have the
-placeholder `{{ schema }}`. A copy that you published before does not have it,
-and crest stops with the message of "Published stubs" (see "Names"). With no
-`models.schema`, a published copy works as before.
+placeholder `{{ schema }}`. A copy that you published before Crest added this
+placeholder does not have it, and Crest stops with the message of
+**Published stubs** in [Names](#names). With no `models.schema`, a published
+copy works as before.
 
 **A key to another schema.** Crest writes a relation only to a table of the
 schema that it reads. A foreign key to a table of another schema gives no
 relation, also with no `models.schema`:
 
-    Skipped the relation belongsTo invoices(customer_id) -> customers(id): the table customers is in another schema
+```text
+Skipped the relation belongsTo invoices(customer_id) -> customers(id): the table customers is in another schema
+```
 
 Crest finds such a key from the list of the tables: the referenced table is not
-a table of the schema. A base from an older version of crest can have a
+a table of the schema. A base from an older version of Crest can have a
 relation like that. The next run removes it, and the code that uses its alias
 stops working. A `RelationAlias` attribute for the key gets a `Dropped` line.
 If you need the relation, write it in your model.
@@ -1278,16 +1378,18 @@ If you need the relation, write it in your model.
 The limits:
 
 - When the schema also has a table or a view with the name of the referenced
-  table, crest cannot see the difference. It writes the relation to the model
+  table, Crest cannot see the difference. It writes the relation to the model
   of that table or view in the schema.
 - A key from a table of another schema to a table of this schema gives no
-  `hasMany()`: crest does not read the other schemas.
-- On PostgreSQL, until cphalcon 5.24.0 and the tag of `phalcon/phalcon` after
-  `v6.0.0RC4`: when two schemas have the same table with the same key column,
+  `hasMany()`: Crest does not read the other schemas.
+- On PostgreSQL, two schemas can have the same table with the same key column.
+  If you do not give the keys a name, PostgreSQL gives the two keys the same
+  name, for example `invoices_customer_id_fkey`. Two keys with the same name can
+  point to tables or columns with different names. For such keys, before
+  cphalcon 5.24.0 and before the tag of `phalcon/phalcon` after `v6.0.0RC4`,
   Phalcon gives one key with the columns of the two keys. Crest then writes a
-  relation with the column two times, or a `Skipped` line, for that key. To
-  fix it, give one of the two keys another name, or use the release with the
-  fix.
+  relation with the column two times, or a `Skipped` line, for that key. To fix
+  it, give one of the two keys another name, or use the release with the fix.
 
 ### Getters and setters
 
@@ -1349,14 +1451,18 @@ setters: `$user->setFirstName('Ann')->setAge(30)`.
 Phalcon uses the methods in `toArray()`, in `assign()` (when
 `disableAssignSetters` is off), in the forms, and for `$user->first_name` from
 outside the model. `findFirst()` and `save()` do not use the methods: they read
-and write the protected properties directly. So a getter or a setter that you
-change in your model does not run when Phalcon reads a row or saves it. (With
-the `orm.call_setters_on_hydration` setting, `findFirst()` calls the setters.)
-Two things change for the code outside the model:
+and write the protected properties directly. Thus a getter or a setter that you
+change in your model does not run when Phalcon reads a row or saves it. (When
+the setting `orm.call_setters_on_hydration` is on, `findFirst()` calls the
+setters. The setting is off by default.) Two things change for the code outside
+the model:
 
-- `isset($user->first_name)` is true also when the value is null, and
-  `$user->first_name ?? 'none'` gives null;
-- `get_object_vars()`, `(array)` and `foreach` do not show the columns.
+- `isset($user->first_name)` is true also when the value is null;
+- `get_object_vars()` and `foreach` do not show the columns. `(array)` gives
+  the columns, but not with the key `first_name`: the key of a protected
+  property starts with `"\0*\0"`.
+
+`$user->first_name ?? 'none'` still gives `'none'` for a null value.
 
 **What stops the command.** With the key, these names stop `make:model` before
 it writes a file. With `--all`, only the table of the name fails.
@@ -1364,7 +1470,9 @@ it writes a file. With `--all`, only the table of the name fails.
 - The getter or the setter is a method of `Phalcon\Mvc\Model`. For example, the
   column `source` gives `getSource()`:
 
-      column 'source' of table 'pages' gives the method getSource(), which Phalcon\Mvc\Model has; give it another name with --property="source=<name>"
+  ```text
+  crest: column 'source' of table 'pages' gives the method getSource(), which Phalcon\Mvc\Model has; give it another name with --property="source=<name>"
+  ```
 
   A name from `--property` or from a `PropertyName` attribute gives the same
   error, with its source.
@@ -1372,43 +1480,51 @@ it writes a file. With `--all`, only the table of the name fails.
   `first_name` and `firstName`.
 
 Phalcon gives the related records of an alias through `get<Alias>()`, and a
-getter of the base would hide them. So crest skips a relation whose alias is
+getter of the base would hide them. Thus Crest skips a relation whose alias is
 the `<Name>` of a property, without regard to case. For example, the column
 `billing_address` of `invoices` gives `getBillingAddress()`, the getter of the
 alias `BillingAddress`:
 
-    Skipped the relation belongsTo invoices(billing_address_id) -> addresses(id): the alias BillingAddress has the name of a getter
+```text
+Skipped the relation belongsTo invoices(billing_address_id) -> addresses(id): the alias BillingAddress has the name of a getter
+```
 
 An alias from a `RelationAlias` attribute stops the command, and you change
 it.
 
-**A change of the key.** When a property gets another name, crest prints a
+**A change of the key.** When a property gets another name, Crest prints a
 line for its methods after the `Renamed` line of the property:
 
-    Renamed getFname() and setFname() to getGivenName() and setGivenName(): change the code that uses them
+```text
+Renamed getFname() and setFname() to getGivenName() and setGivenName(): change the code that uses them
+```
 
 From `true` to `false`, the base gets public properties and no methods, and
-crest prints a line for each property:
+Crest prints a line for each property:
 
-    Removed getFirstName() and setFirstName(): change the code that uses them
+```text
+Removed getFirstName() and setFirstName(): change the code that uses them
+```
 
-From `false` to `true`, crest prints a line for each base:
+From `false` to `true`, Crest prints a line for each base:
 
-    Note: the properties of <base file> are protected now; code outside the model goes through the getters and setters
+```text
+Note: the properties of <base file> are protected now; code outside the model goes through the getters and setters
+```
 
 **Published stubs.** The getter and the setter come from the stub
 `fragment-model-get-set`. With the key, `fragment-model-property` needs the
 placeholder `{{ visibility }}`, and `model-base` needs `{{ methods }}`. A copy
-that you published before #70 does not have them: publish it again with
-`crest stub:publish <name> --force`, and make your changes in it again. With no
-key, an old copy works.
+that you published before Crest added these placeholders does not have them:
+publish it again with `crest stub:publish <name> --force`, and make your
+changes in it again. With no key, an old copy works.
 
 **Moving a devtools `--get-set` model.**
 
 1. Set `'getSet' => true` in the `models` key of `crest.php`. If devtools used
    `camelize`, also set `'camelCase' => true`.
 2. Run `crest make:model --all`. Crest writes each base. A model file that
-   exists stays as it is, because crest writes a model one time.
+   exists stays as it is, because Crest writes a model one time.
 3. In each model:
    - change `extends Model` to `extends <Class>Base`, with the `use` line of
      the `Base` namespace;
@@ -1421,8 +1537,10 @@ key, an old copy works.
 A property, a getter or a setter of devtools that stays in the model stops PHP
 when it loads the model, for example:
 
-    Fatal error: Declaration of Users::getAge() must be compatible with UsersBase::getAge(): ?int
-    Fatal error: Type of Users::$age must be ?int (as in class UsersBase)
+```text
+Fatal error: Declaration of Users::getAge() must be compatible with UsersBase::getAge(): ?int
+Fatal error: Type of Users::$age must be ?int (as in class UsersBase)
+```
 
 Delete them. To change a getter or a setter, keep the declaration of the base.
 
@@ -1480,8 +1598,9 @@ the folder `AdminPanel`. A name that does not give a class name (`my module`,
 Crest writes it one time. When it exists, `make:module` stops; `--force`
 replaces only `Module.php`, and the folders and their files stay. There is no
 config file. A module that needs settings reads them from the environment in
-`registerServices()`, as `DbProvider` does in a project with a database. Docker
-compose gives the values of `.env` to the app container.
+`registerServices()`, as `DbProvider` does in a project with a database. With
+docker, docker compose gives the values of `.env` to the app container. PHP on
+the host does not read `.env` (see [The database](#the-database)).
 
 ### Registration and routes
 
@@ -1578,47 +1697,57 @@ of the project, also when the module sets its own `db`.
 
 In an MVC project, `make:scaffold` writes CRUD pages for one table of the
 database: a model, a form, a controller and three views. In a project from
-`crest new --flavor=mvc --database=<choice>`, with a table `users`:
+`crest new --flavor=mvc` with a database, and with a table `users`:
 
-    crest make:scaffold users
+```bash
+crest make:scaffold users
+```
 
-    Created src/Models/Base/UsersBase.php
-    No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
-    Created src/Models/Users.php
-    Created src/Forms/Base/UsersFormBase.php
-    Created src/Forms/UsersForm.php
-    Created src/Controllers/UsersController.php
-    Created themes/default/users/index.phtml
-    Created themes/default/users/new.phtml
-    Created themes/default/users/edit.phtml
+```text
+Created src/Models/Base/UsersBase.php
+No relations for users: the table has no foreign keys, and no foreign keys point to it. Relations come only from foreign keys.
+Created src/Models/Users.php
+Created src/Forms/Base/UsersFormBase.php
+Created src/Forms/UsersForm.php
+Created src/Controllers/UsersController.php
+Created themes/default/users/index.phtml
+Created themes/default/users/new.phtml
+Created themes/default/users/edit.phtml
+```
 
-Crest then prints what the pages need: the default namespace of the dispatcher,
-the URL of the list, and the base URI.
+A project from `crest new --flavor=mvc` already has `CrestControllerBase`. Thus
+Crest prints no line for it while the base is the same as its stub. Crest then
+prints what the pages need: the default namespace of the dispatcher, the URL of
+the list, and the base URI. It also tells you that the pages have no login and
+no CSRF check.
 
 | File | Owner | A second run |
 |---|---|---|
-| `src/Models/Base/UsersBase.php` | crest | writes it again |
+| `src/Models/Base/UsersBase.php` | Crest | writes it again |
 | `src/Models/Users.php` | you | keeps it, also with `--force` |
-| `src/Forms/Base/UsersFormBase.php` | crest | writes it again |
+| `src/Forms/Base/UsersFormBase.php` | Crest | writes it again |
 | `src/Forms/UsersForm.php` | you | keeps it, unless `--force` |
-| `src/Controllers/Base/CrestControllerBase.php` | crest | writes it again when its stub changes |
+| `src/Controllers/Base/CrestControllerBase.php` | Crest | writes it again |
 | `src/Controllers/UsersController.php` | you | keeps it, unless `--force` |
 | `themes/default/users/index.phtml` | you | keeps it, unless `--force` |
 | `themes/default/users/new.phtml` | you | keeps it, unless `--force` |
 | `themes/default/users/edit.phtml` | you | keeps it, unless `--force` |
 
-So when the table gets a new column, run `make:scaffold` again. Crest writes the
-two bases again, and the list and the `new` and `edit` pages show the column,
-because the views loop over the form. The rules of "Generated bases" apply to the
+Crest writes a base again only if the file is not the same as the base that
+Crest makes: from the table for `UsersBase` and `UsersFormBase`, and from the
+stub `controller-base` for `CrestControllerBase`. Thus when the table gets a new
+column, run `make:scaffold` again. Crest writes the two bases again, and the
+list and the `new` and `edit` pages show the column, because the views loop
+over the form. The rules of [Generated bases](#generated-bases) apply to the
 two bases. `make:model --force` replaces the model.
 
-With `models.schema`, the pages read the table of that schema (see "The
-schema").
+With `models.schema`, the pages read the table of that schema (see
+[The schema](#the-schema)).
 
 ### The names of the pages
 
-All the names come from the class of the model, so one line of `models.classes`
-changes all of them (see "Names"):
+All the names come from the class of the model. Thus one line of
+`models.classes` changes all of them (see [Names](#names)):
 
 | Name | `users` | `user_profiles` | `users` with `'users' => 'User'` |
 |---|---|---|---|
@@ -1652,9 +1781,12 @@ column: `first_name` gives the label `First name`.
   gives the message of the model, and the form shows again.
 - A row that does not exist gives `Users was not found`, and the list.
 
-To write the pages into a module, add `--module` (see "Generating modules"):
+To write the pages into a module, add `--module` (see
+[Generating modules](#generating-modules)):
 
-    crest make:scaffold users --module=admin
+```bash
+crest make:scaffold users --module=admin
+```
 
 The model, the form and the controller go into the `Models`, `Forms` and
 `Controllers` folders of the module, in its namespace, and the views go into
@@ -1663,31 +1795,36 @@ and the routes that `make:module` prints. The module must exist.
 
 ### What stops the command
 
-Crest does these checks before it writes a file, so a run that stops changes
+Crest does these checks before it writes a file. Thus a run that stops changes
 nothing. It stops when:
 
 - the project is not an MVC project;
 - `--module` names a module that does not exist;
 - the table name gives no class name, and `models.classes` gives it no class;
-- the dispatcher cannot find a controller of that class from a URL (see "Generating
-  controllers");
+- the dispatcher cannot find a controller of that class from a URL (see
+  [Generating controllers](#generating-controllers));
 - no psr-4 entry covers the `form`, `controller` or `model` path;
 - the table does not exist;
 - the table has no primary key, or its primary key has more than one column;
-- `make:model` stops on the table (see "Generating models");
+- `make:model` stops on the table (see [Generating models](#generating-models));
 - a property has the name of an accessor of `Phalcon\Mvc\Model` (see below);
 - the `edit` form has no fields, for example when the table has only its primary
   key.
 
 **A column with the name of a `Model` accessor.** `Phalcon\Mvc\Model` has methods
 such as `setSource()`, `getSchema()` and `getMessages()`. A form calls
-`set<Name>()` and `get<Name>()` when they exist, so a column `source` calls
+`set<Name>()` and `get<Name>()` when they exist. Thus a column `source` calls
 `Model::setSource()`, and each save fails. Crest stops, and gives the command that
 gives the column another property name:
 
-    crest: column 'source' gives the property 'source', and Phalcon\Mvc\Model has a method with that name; give it another name with make:model sources --property=source=<name>
+```text
+crest: column 'source' gives the property 'source', and Phalcon\Mvc\Model has a method with that name; give it another name with make:model sources --property=source=<name>
+```
 
-Run that `make:model` command, then run `make:scaffold` again.
+Run that `make:model` command, then run `make:scaffold` again. With
+`models.getSet`, the check of `make:model` for the getters and setters comes
+first, and Crest stops with the message of
+[Getters and setters](#getters-and-setters).
 
 ### The form
 
@@ -1704,15 +1841,16 @@ The form has one field for each column, in the order of the table:
 | `BOOLEAN` | `Select` | `bool` | the options `No` and `Yes`, and an empty option |
 | `DATE` | `Date` | `trim` | |
 | `TEXT`, `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT`, `JSON`, `JSONB` | `TextArea` | `trim` | |
-| `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB`, `BINARY`, `VARBINARY`, `BYTEA` | none | | crest prints `Skipped <column>: a binary column has no field in the form` |
+| `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB`, `BINARY`, `VARBINARY`, `BYTEA` | none | | Crest prints `Skipped <column>: a binary column has no field in the form` |
 | Each other type | `Text` | `trim` | |
 
-The column type is the type that Phalcon reads from the database (see "Generating
-models"). An input that is empty or has only whitespace is null, and the model decides
-if the column can be null: a `NOT NULL` column gives the message `<property> is required`.
+The column type is the type that Phalcon reads from the database (see
+[Generating models](#generating-models)). An input that is empty or has only
+whitespace is null, and the model decides if the column can be null: a `NOT NULL`
+column gives the message `<property> is required`.
 
 The pages also work with `models.getSet`: the form and the views go through the getters
-and the setters (see "Getters and setters").
+and the setters (see [Getters and setters](#getters-and-setters)).
 
 ### Search
 
@@ -1729,20 +1867,24 @@ correct. A project from `crest new` sets `/` in `UrlProvider`. For an applicatio
 a subfolder, change that line, for example to `/shop/`. Another project must set
 the base URI:
 
-    $url->setBaseUri('/');
+```php
+$url->setBaseUri('/');
+```
 
 ### Limits
 
 - The pages have no login and no CSRF check. Add them before you deploy the pages.
-- There is no success message after a redirect, because a message that survives a
-  redirect needs a session. When your project has a `session` service, call
+- There is no success message after a redirect, because a message that stays after
+  a redirect needs a session. When your project has a `session` service, call
   `$this->flashSession->success('Saved')` before the redirect, and add
   `<?php $this->flashSession->output() ?>` to the view.
-- A foreign key is a number field, not a list of the related rows.
+- A foreign key column gets the field of its type, for example a `Numeric` field,
+  not a list of the related rows.
 - A `DELETE` that a foreign key refuses gives an error page.
 - A column with the name `page` is also the parameter of the page in the URL.
 - With the `phalcon/phalcon` package (Phalcon v6), a project needs `phalcon/phql`.
-  `crest new --database` adds it (see "Generating models").
+  `crest new` adds it to an MVC project with Phalcon v6 and a database (see
+  [Generating models](#generating-models)).
 
 ## Adding commands from a package
 
@@ -1759,7 +1901,9 @@ A package adds commands to Crest in its `composer.json`:
 ```
 
 Crest reads this block from each installed package, and from the root
-project. `crest make:command` writes a command and prints its block.
+project. These commands cannot replace a command or an alias of Crest, and the
+root project replaces a package command with the same name. `crest make:command`
+writes a command and prints its block.
 
 An unknown command gives a hint when Crest knows the package that provides its
 prefix:
@@ -1820,6 +1964,6 @@ stops with the `crest init` hint.
 
 A public element with `@internal` in its docblock is not part of the API,
 and it can change in any release. Tools that read the tag, for example an
-IDE or a static-analysis rule, can report its use from another package. Do
+IDE or a rule of a static analyzer, can report its use from another package. Do
 not extend `Crest\Command\ProjectCommand`: it is the base of the commands of
 Crest, and it changes with them.
