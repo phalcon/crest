@@ -146,7 +146,12 @@ main() {
     printf 'crest: %s runs on http://localhost:%s/\n' "$name" "${APP_PORT:-8080}"
     echo 'Next:'
     printf '    cd %s\n' "$name"
-    echo '    ./crest make:action GET /hello'
+    # make:action is for ADR projects. The new project is MVC by default.
+    if grep -q "'flavor'[[:space:]]*=>[[:space:]]*'adr'" crest.php; then
+        echo '    ./crest make:action GET /hello'
+    else
+        echo '    ./crest make:controller Hello'
+    fi
 }
 
 # The last line. The shell reads all of the script before the first command

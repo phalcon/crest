@@ -17,7 +17,7 @@
 
 Crest is a command line application for Phalcon. It generates code, shows information
 about a project, and creates and runs projects. For the two flavors of project that Crest
-works with, ADR (Action-Domain-Responder) and MVC (Model-View-Controller), see
+works with, MVC (Model-View-Controller) and ADR (Action-Domain-Responder), see
 [Overview](docs/index.md#overview).
 
 ## Requirements
@@ -56,14 +56,14 @@ the global Crest of [Install](#install). On a host with docker and no PHP, use
 [With Docker Only](#with-docker-only) instead.
 
 ```bash
-crest new my-app                      # create an ADR project
-crest new my-app --flavor=mvc         # create an MVC project
+crest new my-app                      # create an MVC project
+crest new my-app --flavor=adr         # create an ADR project
 ```
 
 In a terminal, `new` asks for each value that no option gives. An empty answer takes the
 default (see [Creating a Project](docs/index.md#creating-a-project)).
 
-For an ADR project with no database, the output of `new` gives two ways to run the
+For an MVC project with no database, the output of `new` gives two ways to run the
 project. With docker, you use `./crest`, a script that `crest new` writes into the project
 (see [The Launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next
 two sections explain each way. The output is:
@@ -83,7 +83,7 @@ Or with PHP and composer on the host:
     composer install
     crest serve
 
-Then GET / answers from src/Action/Get.php
+Then GET / answers from src/Controllers/IndexController.php
 ```
 
 ### With Docker

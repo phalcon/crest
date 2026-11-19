@@ -60,7 +60,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added `Crest\Generator\ArtifactWriter::renderOwned()`, `renderOnce()` and `MARKER`, and `Crest\Generator\Outcome`: the write rules for a generated base class and for a class that the developer owns. [#46](https://github.com/phalcon/crest/issues/46)
 - Added `new --flavor=adr|mvc`: `crest new my-app --flavor=mvc` writes an MVC project that runs. `new` asks for the flavor first. [#47](https://github.com/phalcon/crest/issues/47)
 - Added `new --template-engine`: the view engine of an MVC project. It accepts `phtml`, the default. [#47](https://github.com/phalcon/crest/issues/47)
-- Added `stub:publish --flavor`: the flavor of a project stub before the project exists, `adr` by default. [#47](https://github.com/phalcon/crest/issues/47)
+- Added `stub:publish --flavor`: the flavor of a project stub before the project exists, `mvc` by default. [#47](https://github.com/phalcon/crest/issues/47)
 - Added the MVC default paths `provider` (`src/Providers`) and `views` (`themes/default`), and the MVC project stubs `project-front`, `project-readme`, `project-provider-dispatcher`, `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`. [#47](https://github.com/phalcon/crest/issues/47)
 - Added `Crest\Generator\Project`: `Skeleton` (the files, the values and the first artifacts of the project of a flavor), `AdrSkeleton`, `MvcSkeleton`, `Skeletons`, `Answers` and `TemplateEngines`, and `Crest\Generator\ControllerBase`. [#47](https://github.com/phalcon/crest/issues/47)
 - Added the flavor question of `init`, and `init --flavor`: `init` proposes `adr` or `mvc` from the default folders that the project has. [#48](https://github.com/phalcon/crest/issues/48)
@@ -148,6 +148,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `new`: an MVC project gets `UrlProvider`, which sets the base URI to `/`. Added the stub `project-provider-url`. A published copy of `project-front` needs the `use` line of `UrlProvider` and the line `new UrlProvider(),`. [#56](https://github.com/phalcon/crest/issues/56)
 - Changed `make:model`: with `models.schema`, a published `model-base` needs `{{ schema }}`. Publish it again with `crest stub:publish model-base --force`. [#69](https://github.com/phalcon/crest/issues/69)
 - Changed `ModelProperties::of()` and `ForeignKeys::read()`: each one takes the schema as an optional last parameter. [#69](https://github.com/phalcon/crest/issues/69)
+- Changed the default flavor to `mvc`: `new` with no `--flavor`, the flavor that `init` proposes for a tie, a `crest.php` with no `flavor` key, and `stub:publish --flavor`. An ADR project whose `crest.php` has no `flavor` key must add `'flavor' => 'adr'`.
 
 ### Fixed
 
