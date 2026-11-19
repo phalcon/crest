@@ -114,7 +114,7 @@ final class ModelCommandTest extends TestCase
 
     public function testAnAdrProjectStops(): void
     {
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertStops(
             ['users'],

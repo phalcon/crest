@@ -142,7 +142,7 @@ final class ShowCommandTest extends TestCase
         // block declared would say the project asked for something it did not.
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
+            "<?php\n\nreturn ['flavor' => 'adr', 'paths' => ['views' => 'templates']];\n"
         );
 
         $this->runCommand();
@@ -194,7 +194,7 @@ final class ShowCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertStringContainsString('Source: ' . $this->root . '/crest.php', $output);
-        $this->assertStringContainsString('adr', $output);
+        $this->assertStringContainsString('mvc', $output);
         $this->assertStringContainsString('App', $output);
         $this->assertStringContainsString($this->root, $output);
     }
@@ -262,7 +262,7 @@ final class ShowCommandTest extends TestCase
     {
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
+            "<?php\n\nreturn ['flavor' => 'adr', 'paths' => ['views' => 'templates']];\n"
         );
 
         $this->runCommand();
@@ -425,18 +425,23 @@ final class ShowCommandTest extends TestCase
             . PHP_EOL
             . 'ITEM VALUE ORIGIN' . PHP_EOL
             . 'root ' . $this->root . ' crest.php' . PHP_EOL
-            . 'flavor adr default' . PHP_EOL
+            . 'flavor mvc default' . PHP_EOL
             . 'namespace App default' . PHP_EOL
             . 'bootstrap none default' . PHP_EOL
             . 'runtime host default' . PHP_EOL
             . 'service app default' . PHP_EOL
+            . 'camelCase false default' . PHP_EOL
+            . 'getSet false default' . PHP_EOL
+            . 'schema none default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
-            . 'action ' . $this->root . '/src/Action default' . PHP_EOL
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
-            . 'middleware ' . $this->root . '/src/Middleware default' . PHP_EOL
-            . 'provider ' . $this->root . '/src/Provider default' . PHP_EOL
-            . 'responder ' . $this->root . '/src/Responder default' . PHP_EOL;
+            . 'controller ' . $this->root . '/src/Controllers default' . PHP_EOL
+            . 'form ' . $this->root . '/src/Forms default' . PHP_EOL
+            . 'model ' . $this->root . '/src/Models default' . PHP_EOL
+            . 'module ' . $this->root . '/src/Modules default' . PHP_EOL
+            . 'provider ' . $this->root . '/src/Providers default' . PHP_EOL
+            . 'views ' . $this->root . '/themes/default default' . PHP_EOL;
 
         $this->assertSame($expected, $this->normalized());
     }

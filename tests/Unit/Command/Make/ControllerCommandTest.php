@@ -192,7 +192,7 @@ final class ControllerCommandTest extends TestCase
 
     public function testAnAdrProjectGetsTheFlavorError(): void
     {
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $status = $this->runCommand(['Users']);
 

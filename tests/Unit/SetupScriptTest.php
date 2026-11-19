@@ -586,6 +586,23 @@ final class SetupScriptTest extends TestCase
             . 'crest: my-app runs on http://localhost:8080/' . PHP_EOL
             . 'Next:' . PHP_EOL
             . '    cd my-app' . PHP_EOL
+            . '    ./crest make:controller Hello' . PHP_EOL,
+            $stdout
+        );
+    }
+
+    public function testTheSetupPrintsTheActionStepForAnAdrProject(): void
+    {
+        [$status, $stdout] = $this->runSetup(['my-app', '--flavor', 'adr']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'crest: creating my-app' . PHP_EOL
+            . 'crest: starting my-app' . PHP_EOL
+            . 'crest: installing my-app' . PHP_EOL
+            . 'crest: my-app runs on http://localhost:8080/' . PHP_EOL
+            . 'Next:' . PHP_EOL
+            . '    cd my-app' . PHP_EOL
             . '    ./crest make:action GET /hello' . PHP_EOL,
             $stdout
         );

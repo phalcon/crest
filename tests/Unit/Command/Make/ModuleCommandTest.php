@@ -83,7 +83,7 @@ final class ModuleCommandTest extends TestCase
 
     public function testAnAdrProjectGetsTheFlavorError(): void
     {
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $status = $this->runCommand(['admin']);
 

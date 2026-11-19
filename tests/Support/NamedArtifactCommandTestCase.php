@@ -35,6 +35,7 @@ abstract class NamedArtifactCommandTestCase extends TestCase
     protected function setUp(): void
     {
         $this->startScratchProject(str_replace(':', '-', $this->commandName()), $this->directory());
+        $this->writeCrestPhp("['flavor' => 'adr']");
     }
 
     protected function tearDown(): void

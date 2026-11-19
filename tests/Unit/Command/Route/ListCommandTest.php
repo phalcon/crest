@@ -39,7 +39,7 @@ final class ListCommandTest extends TestCase
     {
         $this->makeScratchDirectory('route-list', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
         $this->captureStreams();
     }
 

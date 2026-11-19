@@ -41,7 +41,7 @@ final class ListCommandTest extends TestCase
     {
         $this->makeScratchDirectory('event-list', 'src/Action');
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
         $this->captureStreams();
     }
 
@@ -127,7 +127,7 @@ final class ListCommandTest extends TestCase
     {
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['bootstrap' => '" . str_replace('\\', '\\\\', $class) . "'];\n"
+            "<?php\n\nreturn ['flavor' => 'adr', 'bootstrap' => '" . str_replace('\\', '\\\\', $class) . "'];\n"
         );
     }
 

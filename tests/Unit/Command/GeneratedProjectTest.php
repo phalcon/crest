@@ -237,7 +237,11 @@ final class GeneratedProjectTest extends TestCase
      */
     private function generate(string $name, string $namespace, array $options): string
     {
-        $this->runProjectCommand('new', NewCommand::class, [$name, '--namespace', $namespace, ...$options]);
+        $this->runProjectCommand(
+            'new',
+            NewCommand::class,
+            [$name, '--flavor', 'adr', '--namespace', $namespace, ...$options]
+        );
 
         $source     = $this->root . '/' . $name . '/src/';
         $autoloader = static function (string $class) use ($namespace, $source): void {

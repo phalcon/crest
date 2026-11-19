@@ -101,7 +101,7 @@ final class ListCommandTest extends TestCase
 
     public function testAnAdrProjectListsEveryCommandButTheMvcOnes(): void
     {
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->listCommands();
 

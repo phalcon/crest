@@ -41,6 +41,7 @@ final class PublishCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->startScratchProject('stub-publish', 'src/Action');
+        $this->writeCrestPhp("['flavor' => 'adr']");
     }
 
     protected function tearDown(): void
@@ -135,7 +136,7 @@ final class PublishCommandTest extends TestCase
         $status = $this->runCommand(['project-front', '--flavor', 'cli']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("unknown flavor 'cli'; expected adr or mvc", $this->readStderr());
+        $this->assertStringContainsString("unknown flavor 'cli'; expected mvc or adr", $this->readStderr());
         $this->assertDirectoryDoesNotExist($this->root . '/resources/stubs');
     }
 
@@ -153,8 +154,8 @@ final class PublishCommandTest extends TestCase
         );
 
         $this->assertSame(0, $status);
-        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'adr', 'project-front'));
-        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-front'));
+        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'mvc', 'project-front'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'mvc', 'project-front'));
     }
 
     public function testAProjectStubGoesIntoTheWorkingDirectoryAndNotAParentProject(): void
@@ -168,20 +169,20 @@ final class PublishCommandTest extends TestCase
         $status = $this->runThroughKernel('stub:publish', PublishCommand::class, ['project-front']);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'adr', 'project-front'));
-        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'adr', 'project-front'));
+        $this->assertFileExists(Stub::overridePath($this->root . '/work', 'mvc', 'project-front'));
+        $this->assertFileDoesNotExist(Stub::overridePath($this->root, 'mvc', 'project-front'));
     }
 
     public function testAProjectStubIgnoresTheConfiguredFlavor(): void
     {
-        // The flavor of a project stub is --flavor, adr by default, not the
+        // The flavor of a project stub is --flavor, mvc by default, not the
         // flavor of crest.php: new reads the overrides before a project exists.
-        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'mvc'];\n");
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'adr'];\n");
 
         $status = $this->runCommand(['project-front']);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'project-front'));
     }
 
     public function testAProjectStubMayBePublishedByName(): void
@@ -189,7 +190,7 @@ final class PublishCommandTest extends TestCase
         $status = $this->runCommand(['project-front']);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'project-front'));
     }
 
     public function testAProjectStubNeedsNoProjectConfiguration(): void
@@ -200,7 +201,7 @@ final class PublishCommandTest extends TestCase
         $status = $this->runCommand(['project-front']);
 
         $this->assertSame(0, $status);
-        $this->assertFileExists(Stub::overridePath($this->root, 'adr', 'project-front'));
+        $this->assertFileExists(Stub::overridePath($this->root, 'mvc', 'project-front'));
     }
 
     public function testAProjectStubOfTheMvcFlavorGoesIntoTheMvcFolder(): void
@@ -220,14 +221,14 @@ final class PublishCommandTest extends TestCase
         $status = $this->runCommand(['project-nope']);
 
         $this->assertSame(1, $status);
-        $this->assertSame("crest: stub 'adr/project-nope' is not packaged" . PHP_EOL, $this->readStderr());
+        $this->assertSame("crest: stub 'mvc/project-nope' is not packaged" . PHP_EOL, $this->readStderr());
     }
 
     public function testAProjectStubThatTheFlavorDoesNotHaveIsNotPackaged(): void
     {
-        // adr is the default, and only mvc has the views. The flavor of a
-        // project stub comes from --flavor, so the error names the option.
-        $status = $this->runCommand(['project-phtml-layout']);
+        // Only mvc has the views. The flavor of a project stub comes from
+        // --flavor, so the error names the option.
+        $status = $this->runCommand(['project-phtml-layout', '--flavor', 'adr']);
 
         $this->assertSame(1, $status);
         $this->assertSame(
@@ -235,6 +236,14 @@ final class PublishCommandTest extends TestCase
             . PHP_EOL,
             $this->readStderr()
         );
+    }
+
+    public function testAProjectStubWithNoFlavorGoesIntoTheMvcFolder(): void
+    {
+        $status = $this->runCommand(['project-front']);
+
+        $this->assertSame(0, $status);
+        $this->assertFileExists($this->root . '/resources/stubs/mvc/project-front.stub');
     }
 
     public function testAPublishedSharedStubChangesTheOutputOfMakeCommand(): void

@@ -98,6 +98,8 @@ final class GuidanceContractsTest extends TestCase
 
     public function testMiddlewareGuidanceNamesARouterMethodThatExists(): void
     {
+        $this->writeCrestPhp("['flavor' => 'adr']");
+
         $this->runProjectCommand('make:middleware', MiddlewareCommand::class, ['Auth']);
 
         $this->assertStringContainsString('setMiddlewareMap(', $this->readStdout());
@@ -153,6 +155,8 @@ final class GuidanceContractsTest extends TestCase
 
     public function testProviderGuidanceNamesAFrontMethodThatExists(): void
     {
+        $this->writeCrestPhp("['flavor' => 'adr']");
+
         $this->runProjectCommand('make:provider', ProviderCommand::class, ['Cache']);
 
         $stdout = $this->readStdout();

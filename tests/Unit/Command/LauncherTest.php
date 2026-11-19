@@ -82,7 +82,7 @@ final class LauncherTest extends TestCase
 
     public function testACallFromASubfolderRunsInTheProjectRoot(): void
     {
-        $project = $this->create();
+        $project = $this->create(['--flavor', 'adr']);
         $this->install($project);
 
         [$status, $stdout] = $this->launch($project . '/src/Action', '../../crest', ['route:list']);

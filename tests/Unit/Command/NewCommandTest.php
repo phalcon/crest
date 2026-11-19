@@ -114,7 +114,7 @@ final class NewCommandTest extends TestCase
         $this->assertSame(
             'crest: ' . $target . "/crest.php: 'new' entry 2 in crest.php must be a list of strings, "
             . "e.g. ['crest', 'up']; the files in " . $target . '/ stay; fix '
-            . Stub::overridePath($this->root, 'adr', 'project-config') . ' and run new again with --force'
+            . Stub::overridePath($this->root, 'mvc', 'project-config') . ' and run new again with --force'
             . PHP_EOL,
             $this->readStderr()
         );
@@ -140,11 +140,10 @@ final class NewCommandTest extends TestCase
         $this->assertFileExists($target . '/crest.php');
     }
 
-    public function testAConfigCopyWithoutAFlavorKeyIsAnAdrProject(): void
+    public function testAConfigCopyWithoutAFlavorKeyIsAnMvcProject(): void
     {
-        // crest reads a crest.php with no flavor key as adr. An ADR copy from
-        // before the key still works.
-        $this->publishConfig('adr', "    'flavor'    => '{{ flavor }}',\n", '');
+        // crest reads a crest.php with no flavor key as mvc.
+        $this->publishConfig('mvc', "    'flavor'    => '{{ flavor }}',\n", '');
 
         $this->assertSame(0, $this->runCommand(['my-app']));
         $this->assertStringNotContainsString("'flavor'", $this->read('crest.php'));
@@ -167,7 +166,7 @@ final class NewCommandTest extends TestCase
         mkdir(dirname($override), 0o775, true);
         file_put_contents($override, "<?php\n\nreturn [\n");
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
         $target = $this->root . '/my-app';
 
         $this->assertSame(1, $status);
@@ -195,7 +194,7 @@ final class NewCommandTest extends TestCase
 
     public function testANamespacedRootReachesEveryFile(): void
     {
-        $status = $this->runCommand(['my-app', '--namespace', 'Acme\\Shop']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr', '--namespace', 'Acme\\Shop']);
 
         $this->assertSame(0, $status);
         $this->assertSame(['psr-4' => ['Acme\\Shop\\' => 'src/']], $this->composer()['autoload']);
@@ -294,7 +293,7 @@ final class NewCommandTest extends TestCase
             . "    'paths'     => ['action' => '{{ actionPath }}'],\n];\n"
         );
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString($override . ' has no value for {{ actionPath }}', $this->readStderr());
@@ -341,7 +340,7 @@ final class NewCommandTest extends TestCase
         $status = $this->runCommand(['my-app', '--flavor', 'cli']);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("unknown flavor 'cli'; expected adr or mvc", $this->readStderr());
+        $this->assertStringContainsString("unknown flavor 'cli'; expected mvc or adr", $this->readStderr());
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
@@ -494,7 +493,7 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(0, $published);
 
-        file_put_contents(Stub::overridePath($directory, 'adr', 'project-readme'), "custom {{ project }}\n");
+        file_put_contents(Stub::overridePath($directory, 'mvc', 'project-readme'), "custom {{ project }}\n");
 
         $status = $this->runThroughKernel('new', NewCommand::class, ['my-app', '--directory', $directory]);
 
@@ -509,7 +508,7 @@ final class NewCommandTest extends TestCase
         mkdir(dirname($override), 0o775, true);
         file_put_contents($override, "#!/bin/sh\n\necho {{ service }}\n");
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(0, $status);
         $this->assertSame("#!/bin/sh\n\necho app\n", $this->read('crest'));
@@ -523,7 +522,7 @@ final class NewCommandTest extends TestCase
         mkdir(dirname($override), 0o775, true);
         file_put_contents($override, "custom {{ project }}\n");
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(0, $status);
         $this->assertSame("custom my-app\n", $this->read('README.md'));
@@ -538,7 +537,7 @@ final class NewCommandTest extends TestCase
         mkdir(dirname($override), 0o775, true);
         file_put_contents($override, "{{ old }}\n");
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString($override . ' has no value for {{ old }}', $this->readStderr());
@@ -554,7 +553,7 @@ final class NewCommandTest extends TestCase
         mkdir(dirname($path), 0o775, true);
         file_put_contents($path, "APP_PORT=8080\n");
 
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(0, $status);
         $this->assertSame("APP_PORT=8080\n", $this->read('.env'));
@@ -589,18 +588,18 @@ final class NewCommandTest extends TestCase
     {
         // The flavor and the engine come first: a refused engine asks no
         // more questions.
-        $this->answers("\n\n\n\n\n\n");
+        $this->answers("adr\n\n\n\n\n\n");
 
         $status = $this->runCommand(['my-app', '--template-engine', 'phtml'], true);
 
         $this->assertSame(1, $status);
-        $this->assertStringStartsWith('Flavor (adr, mvc) [adr]: ', $this->readStderr());
+        $this->assertStringStartsWith('Flavor (mvc, adr) [mvc]: ', $this->readStderr());
         $this->assertStringNotContainsString('Root namespace', $this->readStderr());
     }
 
     public function testATemplateEngineForAnAdrProjectIsRejected(): void
     {
-        $status = $this->runCommand(['my-app', '--template-engine', 'phtml']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr', '--template-engine', 'phtml']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
@@ -703,7 +702,7 @@ final class NewCommandTest extends TestCase
 
     public function testEveryProjectFileIsWritten(): void
     {
-        $status = $this->runCommand(['my-app']);
+        $status = $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(0, $status);
 
@@ -759,7 +758,7 @@ final class NewCommandTest extends TestCase
     {
         // The second run overwrites crest.php. new must read the new file,
         // not the one that the first run has read.
-        $this->runCommand(['my-app']);
+        $this->runCommand(['my-app', '--flavor', 'adr']);
         $this->publishSteps([['composer', 'install']]);
 
         $runner = new FakeRunner();
@@ -800,6 +799,13 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString("missing required argument 'name'", $this->readStderr());
+    }
+
+    public function testNoFlavorOptionGivesAnMvcProject(): void
+    {
+        $this->assertSame(0, $this->runCommand(['my-app', '-n']));
+        $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
+        $this->assertFileExists($this->root . '/my-app/src/Controllers/IndexController.php');
     }
 
     /**
@@ -846,7 +852,7 @@ final class NewCommandTest extends TestCase
 
     public function testTheClosingOutputShowsBothWaysToRunIt(): void
     {
-        $this->runCommand(['my-app']);
+        $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $target = $this->root . '/my-app';
 
@@ -995,7 +1001,7 @@ final class NewCommandTest extends TestCase
         $this->answers("mvc\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
-        $this->assertStringStartsWith('Flavor (adr, mvc) [adr]: Root namespace [App]: ', $this->readStderr());
+        $this->assertStringStartsWith('Flavor (mvc, adr) [mvc]: Root namespace [App]: ', $this->readStderr());
         $this->assertStringNotContainsString('Template engine', $this->readStderr());
         $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
     }
@@ -1003,7 +1009,7 @@ final class NewCommandTest extends TestCase
     public function testTheFrontControllerIsRendered(): void
     {
         // Asserted whole: this is generated code nobody reviews.
-        $this->runCommand(['my-app']);
+        $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $this->assertSame(
             "<?php\n"
@@ -1039,7 +1045,7 @@ final class NewCommandTest extends TestCase
 
     public function testTheGeneratedConfigStatesEveryKey(): void
     {
-        $this->runCommand(['my-app']);
+        $this->runCommand(['my-app', '--flavor', 'adr']);
 
         // The docblock comes before declare(): PSR-12 puts the file docblock
         // first in the header.
@@ -1318,7 +1324,7 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString(
-            'Flavor (adr, mvc) [adr]: Root namespace [App]: PHP version [8.4]: '
+            'Flavor (mvc, adr) [mvc]: Root namespace [App]: PHP version [8.4]: '
             . 'Phalcon version (v5, v6) [v5]: Runtime (host, docker) [docker]: ',
             $this->readStderr()
         );
@@ -1390,7 +1396,7 @@ final class NewCommandTest extends TestCase
     public function testTheSeedActionIsTheRootAction(): void
     {
         // The packaged action stub, as make:action would render GET /.
-        $this->runCommand(['my-app']);
+        $this->runCommand(['my-app', '--flavor', 'adr']);
 
         $expected = (new Stub(Paths::stubs()))->render(
             'adr',
@@ -1523,10 +1529,10 @@ final class NewCommandTest extends TestCase
 
     /**
      * Publishes the packaged project-config stub with a `new` key, where new
-     * reads its overrides: the adr folder by default, or the shared folder,
+     * reads its overrides: the mvc folder by default, or the shared folder,
      * where stub:publish puts it.
      */
-    private function publishSteps(mixed $steps, string $folder = 'adr'): void
+    private function publishSteps(mixed $steps, string $folder = 'mvc'): void
     {
         $override = Stub::overridePath($this->root, $folder, 'project-config');
 

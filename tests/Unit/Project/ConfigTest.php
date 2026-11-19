@@ -53,7 +53,7 @@ final class ConfigTest extends TestCase
     public function testAdrGetsADefaultPathForEveryGeneratedArtifact(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertSame(
             [
@@ -152,7 +152,7 @@ final class ConfigTest extends TestCase
         // has nothing to resolve against and must say so rather than guess.
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['namespace' => 'Shop'];\n"
+            "<?php\n\nreturn ['flavor' => 'adr', 'namespace' => 'Shop'];\n"
         );
 
         $config = Config::discover($this->root);
@@ -203,7 +203,7 @@ final class ConfigTest extends TestCase
         $this->writeComposerJson(['App\\' => 'src/']);
         file_put_contents(
             $this->root . '/crest.php',
-            "<?php\n\nreturn ['paths' => ['views' => 'templates']];\n"
+            "<?php\n\nreturn ['flavor' => 'adr', 'paths' => ['views' => 'templates']];\n"
         );
 
         $config = Config::discover($this->root);
@@ -220,9 +220,9 @@ final class ConfigTest extends TestCase
 
         $config = Config::discover($this->root);
 
-        $this->assertSame(Flavor::ADR, $config->flavor());
+        $this->assertSame(Flavor::MVC, $config->flavor());
         $this->assertSame('App', $config->namespace());
-        $this->assertSame($this->root . '/src/Action', $config->path('action'));
+        $this->assertSame($this->root . '/src/Controllers', $config->path('controller'));
         $this->assertSame($this->root, $config->root());
         $this->assertNull($config->bootstrap());
     }
@@ -291,7 +291,7 @@ final class ConfigTest extends TestCase
             $this->root . '/composer.json',
             '{"autoload":{"psr-4":{"First\\\\":"src/Action/","Second\\\\":"src/Action/"}}}'
         );
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertSame('First', Config::discover($this->root)->namespaceFor('action'));
     }
@@ -355,7 +355,7 @@ final class ConfigTest extends TestCase
     public function testNamespaceForDerivesFromThePsr4Pairing(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
@@ -427,7 +427,7 @@ final class ConfigTest extends TestCase
             $this->root . '/composer.json',
             '{"autoload":{"psr-4":{"Long\\\\":"averylongdirectory/","App\\\\":"src/"}}}'
         );
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
     }
@@ -555,7 +555,7 @@ final class ConfigTest extends TestCase
     public function testTrailingSlashOnTheDirectoryIsIgnored(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $config = Config::discover($this->root . '/');
 
@@ -581,7 +581,7 @@ final class ConfigTest extends TestCase
     public function testUnknownPathKeyThrows(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
-        $this->writeCrestPhp();
+        $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->expectException(Exception::class);
         $this->expectExceptionMessage("unknown path 'views'");

@@ -29,7 +29,7 @@ final class SkeletonsTest extends TestCase
     public function testAnUnknownFlavorIsRefused(): void
     {
         $this->expectException(Exception::class);
-        $this->expectExceptionMessage("unknown flavor 'cli'; expected adr or mvc");
+        $this->expectExceptionMessage("unknown flavor 'cli'; expected mvc or adr");
 
         Skeletons::for('CLI');
     }
@@ -46,6 +46,6 @@ final class SkeletonsTest extends TestCase
 
     public function testTheFlavorsAreListed(): void
     {
-        $this->assertSame(['adr', 'mvc'], Skeletons::flavors());
+        $this->assertSame(['mvc', 'adr'], Skeletons::flavors());
     }
 }

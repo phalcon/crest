@@ -218,7 +218,7 @@ final class InitCommandTest extends TestCase
     {
         // Interactive, with no answers: a question would show on stderr.
         $this->assertSame(1, $this->init(['--flavor', 'cli'], true));
-        $this->assertSame("crest: unknown flavor 'cli'; expected adr or mvc" . PHP_EOL, $this->readStderr());
+        $this->assertSame("crest: unknown flavor 'cli'; expected mvc or adr" . PHP_EOL, $this->readStderr());
         $this->assertFileDoesNotExist($this->root . '/crest.php');
     }
 
@@ -275,6 +275,17 @@ final class InitCommandTest extends TestCase
         $this->assertSame('Created ' . $this->root . '/crest.php' . PHP_EOL, $this->readStdout());
     }
 
+    public function testAProjectWithNoFlavorFoldersGivesMvc(): void
+    {
+        rmdir($this->root . '/src/Action');
+
+        $this->assertSame(0, $this->init(['-n']));
+        $this->assertStringContainsString(
+            "'flavor'    => 'mvc',",
+            (string) file_get_contents($this->root . '/crest.php')
+        );
+    }
+
     public function testAVokuroLikeProjectGetsAWorkingCrestPhp(): void
     {
         $this->writeComposerJson(['Vokuro\\' => 'src/']);
@@ -316,7 +327,7 @@ final class InitCommandTest extends TestCase
         // The questions: namespace, flavor, front controller, the five paths,
         // runtime, and the service for docker. The namespace is in the psr-4
         // map.
-        $this->answers("App\\Shop\n\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\ndocker\nweb\n");
+        $this->answers("App\\Shop\nadr\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\ndocker\nweb\n");
 
         $status = $this->init([], true);
         $config = Config::discover($this->root);
@@ -363,7 +374,7 @@ final class InitCommandTest extends TestCase
         $this->answers("Admin\n\n\n\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
-        $this->assertStringStartsWith('Root namespace [App]: Flavor (adr, mvc) [mvc]: ', $this->readStderr());
+        $this->assertStringStartsWith('Root namespace [App]: Flavor (mvc, adr) [mvc]: ', $this->readStderr());
         $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
     }
 
@@ -375,7 +386,7 @@ final class InitCommandTest extends TestCase
 
         $this->assertSame(
             'Root namespace [App]: '
-            . 'Flavor (adr, mvc) [adr]: '
+            . 'Flavor (mvc, adr) [adr]: '
             . 'Front controller class (none for no front controller): '
             . 'action folder (exists) [src/Action]: '
             . 'command folder (does not exist yet) [src/Command]: '

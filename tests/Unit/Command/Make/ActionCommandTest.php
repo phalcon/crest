@@ -39,11 +39,23 @@ final class ActionCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->startScratchProject('make-action', 'src/Action');
+        $this->writeCrestPhp("['flavor' => 'adr']");
     }
 
     protected function tearDown(): void
     {
         $this->endScratchProject();
+    }
+
+    public function testACrestPhpWithNoFlavorKeyIsMvc(): void
+    {
+        $this->writeCrestPhp();
+
+        $this->assertSame(1, $this->runCommand(['GET', '/x']));
+        $this->assertSame(
+            "crest: make:action does not support the 'mvc' flavor of this project; it supports: adr" . PHP_EOL,
+            $this->readStderr()
+        );
     }
 
     public function testActionWithNoPlaceholdersDeclaresNoParams(): void

@@ -28,6 +28,7 @@ final class ProjectTest extends TestCase
     protected function setUp(): void
     {
         $this->startScratchProject('project');
+        $this->writeCrestPhp("['flavor' => 'adr']");
     }
 
     protected function tearDown(): void

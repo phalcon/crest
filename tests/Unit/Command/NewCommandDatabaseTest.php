@@ -144,7 +144,7 @@ final class NewCommandDatabaseTest extends TestCase
 
     public function testAMysqlProjectGetsTheDatabaseFiles(): void
     {
-        $this->assertSame(0, $this->runCommand(['my-app', '--database', 'mysql']));
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'adr', '--database', 'mysql']));
 
         $compose = $this->read('docker-compose.yml');
 
@@ -205,7 +205,7 @@ final class NewCommandDatabaseTest extends TestCase
     public function testAnAdrProjectWithADatabaseRegistersItsProvider(): void
     {
         // Asserted whole: this is generated code nobody reviews.
-        $this->assertSame(0, $this->runCommand(['my-app', '--database', 'mysql']));
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'adr', '--database', 'mysql']));
 
         $this->assertSame(
             "<?php\n"
@@ -301,7 +301,7 @@ final class NewCommandDatabaseTest extends TestCase
 
     public function testAnAdrProjectWithSqliteGivesTheProjectRootToItsProvider(): void
     {
-        $this->assertSame(0, $this->runCommand(['my-app', '--database', 'sqlite']));
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'adr', '--database', 'sqlite']));
 
         $this->assertStringContainsString(
             "        (new \\App\\Provider\\DbProvider(\$this->projectRoot))->provide(\$container);\n",
@@ -324,7 +324,10 @@ final class NewCommandDatabaseTest extends TestCase
     public function testAnAdrV6ProjectWithADatabaseDoesNotRequirePhql(): void
     {
         // make:model is MVC only.
-        $this->assertSame(0, $this->runCommand(['my-app', '--phalcon', 'v6', '--database', 'mysql']));
+        $this->assertSame(
+            0,
+            $this->runCommand(['my-app', '--flavor', 'adr', '--phalcon', 'v6', '--database', 'mysql'])
+        );
         $this->assertSame(['php' => '>=8.4', 'phalcon/phalcon' => '^6.0@RC'], $this->composer()['require']);
     }
 
@@ -585,7 +588,7 @@ final class NewCommandDatabaseTest extends TestCase
     public function testCamelCaseForAnAdrProjectWritesNoModelsKey(): void
     {
         // ADR has no models: the flag has no effect.
-        $this->assertSame(0, $this->runCommand(['my-app', '--camel-case']));
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'adr', '--camel-case']));
         $this->assertStringNotContainsString("'models'", $this->read('crest.php'));
     }
 
@@ -620,7 +623,7 @@ final class NewCommandDatabaseTest extends TestCase
     public function testGetSetForAnAdrProjectWritesNoModelsKey(): void
     {
         // ADR has no models: the flag has no effect (#70).
-        $this->assertSame(0, $this->runCommand(['my-app', '--get-set']));
+        $this->assertSame(0, $this->runCommand(['my-app', '--flavor', 'adr', '--get-set']));
         $this->assertStringNotContainsString("'models'", $this->read('crest.php'));
     }
 
@@ -692,7 +695,7 @@ final class NewCommandDatabaseTest extends TestCase
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertSame(
-            'Flavor (adr, mvc) [adr]: Root namespace [App]: PHP version [8.4]: Phalcon version (v5, v6) [v5]: '
+            'Flavor (mvc, adr) [mvc]: Root namespace [App]: PHP version [8.4]: Phalcon version (v5, v6) [v5]: '
             . 'Runtime (host, docker) [docker]: Docker compose service [app]: '
             . 'Database (none, mariadb, mysql, pgsql, sqlite) [none]: ',
             $this->readStderr()
@@ -765,7 +768,7 @@ final class NewCommandDatabaseTest extends TestCase
 
     public function testTheReportNamesTheDatabaseService(): void
     {
-        $this->runCommand(['my-app', '--database', 'mysql']);
+        $this->runCommand(['my-app', '--flavor', 'adr', '--database', 'mysql']);
 
         $this->assertStringEndsWith(
             'Then GET / answers from src/Action/Get.php' . PHP_EOL
