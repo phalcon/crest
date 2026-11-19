@@ -49,7 +49,7 @@ use function str_starts_with;
  *
  * A project stub goes into the directory that `new` reads. That directory is
  * not a project yet, so --flavor gives the flavor of the stub, as it does for
- * `new`; the default is adr. In a project, the flavor comes from crest.php,
+ * `new`; the default is mvc. In a project, the flavor comes from crest.php,
  * and --flavor is an error.
  */
 final class PublishCommand extends ProjectCommand
@@ -63,7 +63,7 @@ final class PublishCommand extends ProjectCommand
     {
         return Definition::for('stub:publish', 'Copy packaged stubs into the project for editing')
             ->argument('name', false, 'A single stub, e.g. action. Omit to publish them all')
-            ->option('flavor=s', 'The flavor of a project stub, before the project exists. Default: adr')
+            ->option('flavor=s', 'The flavor of a project stub, before the project exists. Default: mvc')
             ->option('force', 'Overwrite stubs the project has already published');
     }
 
@@ -78,7 +78,7 @@ final class PublishCommand extends ProjectCommand
         // does for `new`.
         if (true === str_starts_with($name, Stub::PROJECT_PREFIX)) {
             $root   = NewCommand::parent($input);
-            $flavor = Skeletons::for($given ?? Flavor::ADR->value)->flavor()->value;
+            $flavor = Skeletons::for($given ?? Flavor::MVC->value)->flavor()->value;
         } elseif (null !== $given) {
             throw new Exception(
                 '--flavor is only for a project stub; in a project, the flavor comes from crest.php'

@@ -218,7 +218,7 @@ final class Config implements ProjectContext
             $stated[] = 'runtime.service';
         }
 
-        $flavor = Flavor::ADR;
+        $flavor = Flavor::MVC;
         if (true === isset($declared['flavor']) && true === is_string($declared['flavor'])) {
             $flavor = Flavor::tryFrom($declared['flavor'])
                 ?? throw new Exception(sprintf("unknown flavor '%s'", $declared['flavor']));

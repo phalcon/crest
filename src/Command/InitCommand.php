@@ -47,7 +47,7 @@ final class InitCommand extends Command
     public function define(): Definition
     {
         return Definition::for('init', 'Write crest.php for an existing project')
-            ->option('flavor=s', 'The flavor of the project: adr or mvc. Default: what init finds')
+            ->option('flavor=s', 'The flavor of the project: mvc or adr. Default: what init finds')
             ->option('force', 'Overwrite an existing crest.php');
     }
 

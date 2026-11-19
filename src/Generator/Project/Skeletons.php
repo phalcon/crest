@@ -32,8 +32,8 @@ final class Skeletons
      * PHP 8.1.
      */
     private const SKELETONS = [
-        'adr' => AdrSkeleton::class,
         'mvc' => MvcSkeleton::class,
+        'adr' => AdrSkeleton::class,
     ];
 
     /**

@@ -201,7 +201,7 @@ final class NewCommand extends Command
     {
         return Definition::for('new', 'Create an ADR or MVC project')
             ->argument('name', true, 'Project directory, e.g. my-app')
-            ->option('flavor=s', 'Flavor: adr or mvc', 'adr')
+            ->option('flavor=s', 'Flavor: mvc or adr', 'mvc')
             ->option('template-engine=s', 'The view engine of an MVC project: phtml. Default: phtml')
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
@@ -411,14 +411,14 @@ final class NewCommand extends Command
     /**
      * The written crest.php must have the flavor of the project. A published
      * project-config copy with a fixed flavor gives another one, and the
-     * commands of crest then treat the project as that flavor. No key is adr,
+     * commands of crest then treat the project as that flavor. No key is mvc,
      * as Config reads it.
      */
     private function checkFlavor(string $file, string $flavor): void
     {
         /** @var array<string, mixed> $declared */
         $declared = require $file;
-        $written  = $declared['flavor'] ?? Flavor::ADR->value;
+        $written  = $declared['flavor'] ?? Flavor::MVC->value;
 
         if ($flavor !== $written) {
             throw new Exception(
