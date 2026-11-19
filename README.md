@@ -16,273 +16,134 @@
 [![OpenCollective Sponsors][oc-sponsors-badge]][oc-sponsors-link]
 
 Crest is a command line application for Phalcon. It generates code, shows information
-about a project, and creates and runs projects.
+about a project, and creates and runs projects. For the two flavors of project that Crest
+works with, ADR (Action-Domain-Responder) and MVC (Model-View-Controller), see
+[Overview](docs/index.md#overview).
 
 ## Requirements
 
 - PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
-- Phalcon, either the `ext-phalcon` C extension (`^5.18`) or the `phalcon/phalcon` PHP
-  implementation (`^6`). Crest itself needs neither of them to run
+- Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the
+  `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
 
 ## Install
 
 Crest has no tagged release yet. Packagist has only the version `dev-master`, and the
 default `minimum-stability` of composer is `stable`. Thus give the version in the
-command. In a project:
+`composer require` command.
+
+In a project, install Crest as a dev dependency:
 
 ```bash
 composer require --dev phalcon/crest:dev-master
 ```
 
-To create projects, also install Crest globally. The global composer `vendor/bin`
-folder must be in your `PATH`:
+This copy is the project Crest, in `vendor/bin/crest`. It runs the commands that work on
+the project, for example the generators (the `make:*` commands). See
+[The Global Crest and the Project Crest](docs/index.md#the-global-crest-and-the-project-crest).
+
+To create projects, also install Crest globally. This copy is the global Crest. The global
+composer `vendor/bin` folder must be in your `PATH`:
 
 ```bash
 composer global require phalcon/crest:dev-master
 ```
 
-### With docker only
+## Quick start
 
-On a host with docker and no PHP, one command creates a project, starts it and installs
-it:
-
-```bash
-curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
-```
-
-The options of `new` follow the name, for example `--phalcon v6`. `new` asks no questions
-here: the options give the values, else the defaults apply. The project goes into the
-folder `<name>` in the working directory. The script stops with an error on
-`--directory`, and when the working directory is a system folder such as `/usr`.
-`--help` shows the options of `new`.
-
-The script runs `crest new` in a one-off `composer:2` container. The working directory
-has the same path in that container, so the errors of `new` show host paths. It writes your user and
-group IDs into the project `.env`, then runs `./crest up` and `./crest install`. Then
-GET / answers on http://localhost:8080/. A v5 project compiles the Phalcon extension in
-`./crest up`. This takes some minutes. On Windows, run it in WSL2.
-
-For another port, set `APP_PORT`. The script writes it into the project `.env`:
-
-```bash
-curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
-```
-
-If `./crest up` or `./crest install` fails, for example because the port is in use, the
-project stays. The script prints the commands to run after you fix the problem. With
-rootless docker, the script writes `UID=0` and `GID=0` into `.env` and does no `chown`:
-rootless docker maps root in the container to your user.
-
-Do not add a `new` key to a published `project-config` stub for this command. `new` runs
-in a container without docker, so `crest up` fails there. The script runs `./crest up`
-and `./crest install` itself.
-
-The script runs on your host. To read it before it runs:
-
-```bash
-curl -fsSL https://phalcon.io/crest-setup -o crest-setup.sh
-less crest-setup.sh
-sh crest-setup.sh my-app
-```
-
-`https://phalcon.io/crest-setup` points to
-`https://raw.githubusercontent.com/phalcon/crest/master/resources/setup.sh`.
-
-## Usage
-
-Run `crest` in a project. The commands that work on the project need the project
-autoloader and its Phalcon. Thus a global Crest passes them to the project's
-`vendor/bin/crest` and returns its exit status:
-
-```bash
-crest                                 # list the available commands
-crest about                           # show the environment and version report
-crest make:action GET /company/all
-```
-
-`new`, `init`, `up`, `down`, `install` and `--version` always run in the `crest` that you
-type. Without a global Crest, run `vendor/bin/crest` in the project, or `./crest` on a
-host with docker and no PHP.
-
-Crest finds the project by its `crest.php`: the file that `--config` names, or the
-nearest `crest.php` in or above the working directory or `--directory`. Without
-`crest.php`, Crest stops and tells you to run `crest init`. If the project has no
-`vendor/bin/crest` yet, Crest stops and tells you to run `crest install` or
-`composer install`, or `composer require --dev phalcon/crest` when the project does not
-require Crest. Until Crest has a tagged release, add `:dev-master` to that command (see
-[Install](#install)).
-
-To create a project, use the global Crest. The new project requires `phalcon/crest`, so
-after `composer install` it has its own `vendor/bin/crest`:
+`crest new` creates a project (see [Creating a Project](docs/index.md#creating-a-project)). Run it with
+the global Crest of [Install](#install). On a host with docker and no PHP, use
+[With Docker Only](#with-docker-only) instead.
 
 ```bash
 crest new my-app                      # create an ADR project
 crest new my-app --flavor=mvc         # create an MVC project
 ```
 
-In a terminal, `new` asks for each value that no option gives. `--no-interaction` takes
-the defaults:
+In a terminal, `new` asks for each value that no option gives. An empty answer takes the
+default (see [Creating a Project](docs/index.md#creating-a-project)).
 
-| Option | Purpose |
-|---|---|
-| `--flavor=adr\|mvc` | the flavor of the project; defaults to `adr` |
-| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
-| `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
-| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
-| `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
-| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
-| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
-| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [The database](docs/index.md#the-database) in `docs/index.md` |
-| `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`) |
-| `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`) |
-| `--force` | write into a directory that is not empty, and overwrite files with the same names |
+For an ADR project with no database, the output of `new` gives two ways to run the
+project. With docker, you use `./crest`, a script that `crest new` writes into the project
+(see [The Launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next
+two sections explain each way. The output is:
 
-`new` also writes `./crest`, a launcher for a host with docker and no PHP. `./crest up`,
-`./crest down` and `./crest install` run docker compose on the host: they start the
-containers, stop them, and install the dependencies. All other commands run
-`vendor/bin/crest` in the service of the project. Before `./crest install`, they stop
-with a hint. On Windows, run it in WSL2. With rootless docker, set `UID=0` and `GID=0` in
-the project `.env`.
+```text
+Created my-app/
 
-By default, `new` runs nothing: it writes the files and prints the next commands. A
-published `project-config` stub can add a `new` key, with commands that `new` runs after
-it writes the files, for example `crest up` and `crest install`. See
-[Commands after `new`](docs/index.md#commands-after-new) in `docs/index.md`.
+Nothing runs it yet. With docker:
 
-For an existing project, `crest init` writes `crest.php`:
+    cd my-app
+    ./crest up
+    ./crest install
+
+Or with PHP and composer on the host:
+
+    cd my-app
+    composer install
+    crest serve
+
+Then GET / answers from src/Action/Get.php
+```
+
+### With Docker
+
+With docker on the host, run:
 
 ```bash
-crest init                            # write crest.php for this project
+cd my-app
+./crest up
+./crest install
 ```
 
-## Global options
+`./crest up` starts the containers. `./crest install` installs the composer dependencies
+(see [The Launcher](docs/index.md#the-launcher)). A v5 project compiles the Phalcon extension in
+`./crest up`. This takes some minutes. Then `GET /` answers on http://localhost:8080/.
 
-| Option | Purpose |
-|---|---|
-| `--config=<file>` | explicit path to `crest.php` |
-| `--directory=<dir>` | where Crest starts to look for `crest.php`; for `new` and `init`, the directory to use |
-| `--trace` | full exception trace |
-| `--help`, `-h` | usage for the current command |
-| `--quiet`, `-q` | suppress non-essential output |
-| `--no-interaction`, `-n` | ask no questions; use the default answers |
-| `--version`, `-V` | Crest version |
+### With PHP on the host
 
-## Configuration
+Without docker, create the project with `crest new my-app --runtime=host`: the project
+Crest then runs with the PHP of the host (see [The Runtime](docs/index.md#the-runtime)). With PHP and
+composer on the host, and no docker, run:
 
-Each project has a `crest.php` at its root. `crest new` writes it. For an existing
-project, `crest init` writes it. `init` proposes the values that it finds in the project,
-and asks you to confirm each one. The first proposal is the namespace of the first psr-4
-entry whose folder exists. Your answer must be in the psr-4 map, and the other proposals
-follow it: the flavor (`adr` or `mvc`, from the default folders of each flavor that the
-project has; `--flavor` answers it), the front controller `<namespace>\AppFront` when
-`AppFront.php` is in the folder of the namespace (answer `none` for no front
-controller), a folder for each path of the flavor (the question says if it exists), and
-the docker runtime when the project has a compose file. `--no-interaction` accepts the
-proposals. `--force` overwrites an existing `crest.php`.
-
-```php
-return [
-    'flavor'    => 'adr',
-    'namespace' => 'App',
-    'bootstrap' => App\AppFront::class,
-    'paths'     => [
-        'action'     => 'src/Action',
-        'command'    => 'src/Command',
-        'middleware' => 'src/Middleware',
-        'provider'   => 'src/Provider',
-        'responder'  => 'src/Responder',
-    ],
-    'runtime'   => ['type' => 'docker', 'service' => 'app'],
-];
+```bash
+cd my-app
+composer install
+crest serve
 ```
 
-A key that is not in the file takes its default: `flavor` `adr`, `namespace` `App`, the
-default paths of the flavor (for `adr`, the paths above), and the host runtime.
+`crest serve` starts PHP's built-in web server for the project (see
+[Running a Project](docs/index.md#running-a-project)). By default, `crest serve` listens on
+`127.0.0.1:8080`.
 
-`runtime` says where the project commands run. With `['type' => 'host']`, a global Crest
-runs the project's `vendor/bin/crest` with the PHP of the host. With
-`['type' => 'docker', 'service' => 'app']`, it runs
-`docker compose exec app vendor/bin/crest ...` in the project root. Use docker when
-Phalcon is only in the container, for example a v5 project on a host without
-`ext-phalcon`. The containers must be up (`crest up`). The service must mount the project
-folder, with `vendor/` in it, and its `working_dir` must be the project root. The compose
-file of `crest new` does this. `crest install` runs composer in the same service. With the
-host runtime, it uses the `service` of the key, else `app`.
-`crest serve` always runs on the host: PHP's built-in server must listen there. With
-docker, `crest up` serves the project.
+### With Docker only
 
-Crest gets the namespace of a path from the psr-4 map of `composer.json`. Thus a psr-4
-entry must cover each path: `src/Action` under `App\ => src/` gives `App\Action`. For a
-folder that no psr-4 entry covers, give the namespace in the `namespaces` key:
+On a host with docker and no PHP, one command creates a project, starts it and installs
+it, as in [With Docker](#with-docker). The command downloads the
+[`crest-setup` script](docs/index.md#the-setup-script) and runs it. `my-app` is the name of the
+project:
 
-```php
-return [
-    'paths'      => ['action' => 'app/Handlers'],
-    'namespaces' => ['action' => 'Shop\Handlers'],
-];
+```bash
+curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
 ```
 
-The `models` key changes the names that `make:model` gives in an MVC project: `classes`
-gives a class to a table, and `camelCase` gives camelCase property names. `getSet`
-gives protected properties with a getter and a setter for each, as devtools
-`--get-set`. `crest new` and `crest init` write the key for an MVC project, with
-`'camelCase' => false` and `'getSet' => false`; `crest new --camel-case` and
-`--get-set` give `true`. `crest config:show` shows the key. See
-[Names](docs/index.md#names) and [Getters and setters](docs/index.md#getters-and-setters)
-in `docs/index.md`:
+Then `GET /` answers on http://localhost:8080/. On Windows, run the command in the
+Windows Subsystem for Linux (WSL2).
 
-```php
-return [
-    'models' => [
-        'classes'   => ['users' => 'User'],
-        'camelCase' => true,
-        'getSet'    => true,
-    ],
-];
+For another port, set `APP_PORT`. The script writes it into the project `.env`, the file
+of settings that docker compose reads (see [The Launcher](docs/index.md#the-launcher)):
+
+```bash
+curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
 ```
 
-`models.schema` gives the schema of the tables: `make:model` and `make:scaffold`
-then read the tables of that schema, and each base calls `setSchema()`. See
-[The schema](docs/index.md#the-schema) in `docs/index.md`.
+[The Setup Script](docs/index.md#the-setup-script) gives the details: the options, the errors, and how
+to read the script before it runs.
 
-## Booting the project
+## Documentation
 
-`container:list`, `event:list`, `make:model` and `make:scaffold` start your front
-controller. They read the services, the listeners and the `db` service, which exist only
-after the application registers them. Name the front controller in `crest.php`:
-
-```php
-return [
-    'bootstrap' => App\Front\ApiFront::class,
-];
-```
-
-Crest constructs the class with the project root. The class must declare `boot()`. There
-is no base class and no interface: `boot()` is the whole contract. For `container:list`,
-`boot()` must return an object that implements
-`Phalcon\Contracts\Container\Service\Collection` and
-`Phalcon\Contracts\Container\Service\Enumerable`, for example a
-`Phalcon\Container\Container`. For `event:list`, the object must implement `Collection`,
-and hold a registered `Phalcon\Events\Manager`. For `make:model` and `make:scaffold`, it
-must be a `Phalcon\Di\DiInterface` with a `db` service. See
-[Commands that boot the project](docs/index.md#commands-that-boot-the-project) in
-`docs/index.md` for the rest.
-
-All the other commands, for example the other generators, `about`, `config:show` and
-`route:list`, do not start your front controller. Thus they also work on a project that
-does not run.
-
-## Custom stubs
-
-To change a stub, copy it into `resources/stubs/<flavor>/` in your project. Crest then
-uses your copy, not the packaged stub. A stub that all flavors use, for example
-`command.stub`, is in `resources/stubs/shared/`. Crest looks for a stub in this order:
-your `resources/stubs/<flavor>/`, your `resources/stubs/shared/`, then the same two
-folders in the package. `crest stub:publish` copies each stub into the folder where Crest
-looks for it.
-
-`stub:publish` copies a `project-*` stub, which `new` uses, only when you give its name.
-See [Creating a project](docs/index.md#creating-a-project) in `docs/index.md`.
+The full documentation is in [docs/index.md](docs/index.md). The same text is on the
+Phalcon site: <https://docs.phalcon.io/6.0/crest/>.
 
 ## Development
 

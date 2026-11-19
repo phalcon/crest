@@ -1,92 +1,70 @@
 # Crest
 
-Command line application for Phalcon.
+## Overview
 
-See the [README](../README.md) for installation, usage and configuration.
+Crest is a command line application for Phalcon. It generates code, shows information
+about a project, and creates and runs projects.
 
-## Commands
+Crest works with two flavors of project, `adr` and `mvc`:
 
-The table shows the aliases in parentheses. Run `crest` with no arguments, or
-`crest list`, for the same listing from the tool itself. In a project, the listing
-shows only the commands for the flavor of the project. `crest --help` shows the help of `list`.
-An unknown option with no command, or a `crest.php` that is not valid, stops the
-listing with an error.
+- **ADR** (Action-Domain-Responder): an action for each route, and a responder that the
+  action calls. A route is an HTTP method and a path that the application answers, for
+  example `GET /`. The action answers the route, and the responder makes the response. An
+  ADR project can also have middleware: classes that a request goes through before it
+  gets to the action.
+- **MVC** (Model-View-Controller): models, views and controllers, in the layout of vokuro
+  and invo, the Phalcon sample applications.
 
-| Command | Description |
-|---|---|
-| `about` (`info`, `i`) | environment and version report |
-| `config:show` | the project configuration that Crest resolved, and where each value came from |
-| `container:list` | services registered in the project container |
-| `down` | stop and remove the project containers |
-| `event:list` | listeners attached to the project events manager |
-| `init` | write `crest.php` for an existing project |
-| `install` | install composer dependencies in the project container |
-| `list` (`commands`, `enumerate`) | the available commands |
-| `make:action` | create an ADR action for a route |
-| `make:command` | create a Crest command |
-| `make:controller` | create an MVC controller |
-| `make:middleware` | create an ADR middleware |
-| `make:model` | create an MVC model from a database table, or from each table with `--all` (relations come only from foreign keys) |
-| `make:module` | create an MVC module |
-| `make:provider` | create a service provider |
-| `make:responder` | create an ADR responder |
-| `make:scaffold` | create MVC CRUD pages for a database table |
-| `new` | create an ADR or MVC project |
-| `route:list` | every route the application answers |
-| `serve` (`server`) | start PHP's built-in web server for the project |
-| `stub:publish` | copy packaged stubs into the project for editing |
-| `up` | start the project containers |
+Some commands are for one flavor only (see [Command Reference](#command-reference)). To
+start, see [Installation](#installation) and [Quick Start](#quick-start).
 
-`make:command` works in each flavor. `make:provider` works in ADR and MVC projects,
-with a stub for each flavor. `make:controller`, `make:model`, `make:module` and
-`make:scaffold` are for MVC projects only. These commands are for ADR projects only: `make:action`,
-`make:middleware`, `make:responder`, `route:list`, `container:list` and
-`event:list`. In a project of a different flavor, they stop with an error:
+## Requirements
 
-```text
-crest: make:responder does not support the 'mvc' flavor of this project; it supports: adr
-```
+- PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
+- Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the
+  `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
 
-## Creating a project
+## Installation
 
-`new` writes an ADR or an MVC project that runs:
+Crest has no tagged release yet. Packagist has only the version `dev-master`, and the
+default `minimum-stability` of composer is `stable`. Thus give the version in the
+`composer require` command.
+
+In a project, install Crest as a dev dependency:
 
 ```bash
-crest new my-app
-crest new my-app --flavor=mvc
+composer require --dev phalcon/crest:dev-master
 ```
 
-An ADR project has `public/index.php`, the front controller `src/AppFront.php`,
-`crest.php`, `composer.json`, the docker files, and `src/Action/Get.php`, which answers
-`GET /`. For an MVC project, see [The MVC project](#the-mvc-project).
+This copy is the project Crest, in `vendor/bin/crest`. It runs the commands that work on
+the project, for example the generators (the `make:*` commands). See
+[The Global Crest and the Project Crest](#the-global-crest-and-the-project-crest).
 
-| Option | Purpose |
-|---|---|
-| `--flavor=adr\|mvc` | the flavor of the project; defaults to `adr` |
-| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
-| `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
-| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
-| `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
-| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
-| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
-| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [The database](#the-database) |
-| `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`). See [Names](#names) |
-| `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`). See [Getters and setters](#getters-and-setters) |
-| `--force` | write into a directory that is not empty, and overwrite files with the same names |
+To create projects, also install Crest globally. This copy is the global Crest. The global
+composer `vendor/bin` folder must be in your `PATH`:
 
-In a terminal, `new` asks for each value that no option gives: the flavor, the
-namespace, the PHP version, the Phalcon version, the runtime (`host` or `docker`), the
-service for `docker`, and the database. For an MVC project with a database, it
-also asks if the property names of the models are in camelCase, and then if the
-properties are protected, with a getter and a setter. There is no question
-for the view engine while there is only one. An empty answer takes the default.
-`--no-interaction`, or a run without a terminal (CI, a pipe), asks nothing and takes
-the defaults. The options still give their values, for example in CI.
+```bash
+composer global require phalcon/crest:dev-master
+```
 
-The project goes into the folder `<name>` in the working directory, or in
-`--directory` if you give one. By default, `new` runs nothing: no composer, no
-docker, no network. It prints the next steps. For an ADR project with no
-database, the output is:
+## Quick start
+
+`crest new` creates a project (see [Creating a Project](#creating-a-project)). Run it with
+the global Crest of [Installation](#installation). On a host with docker and no PHP, use
+[With Docker Only](#with-docker-only) instead.
+
+```bash
+crest new my-app                      # create an ADR project
+crest new my-app --flavor=mvc         # create an MVC project
+```
+
+In a terminal, `new` asks for each value that no option gives. An empty answer takes the
+default (see [Creating a Project](#creating-a-project)).
+
+For an ADR project with no database, the output of `new` gives two ways to run the
+project. With docker, you use `./crest`, a script that `crest new` writes into the project
+(see [The Launcher](#the-launcher)). With PHP on the host, you use `crest serve`. The next
+two sections explain each way. The output is:
 
 ```text
 Created my-app/
@@ -106,176 +84,299 @@ Or with PHP and composer on the host:
 Then GET / answers from src/Action/Get.php
 ```
 
-`./crest` is a launcher script that `new` writes into the project. It needs docker
-only: PHP on the host is not necessary. `up`, `down` and `install` run docker compose on
-the host. All other commands run `vendor/bin/crest` in the service of the project (`app`,
-or the `--service` of `new`). Before `./crest install`, they stop with
-`crest: run './crest install' first`. Without a terminal (CI, a pipe), the launcher
-adds `-T` to `docker compose exec`. On Windows, run it in WSL2. With a global Crest,
-`crest up` and `crest install` do the same. With rootless docker, set `UID=0` and `GID=0`
-in `.env`: rootless docker maps root in the container to your user.
+### With Docker
 
-The Crest commands of the launcher get `CREST_HOST_ROOT`, the host folder of the
-project, so Crest shows host paths, not the paths in the container. The hand-off of a
-global Crest does the same. The launcher runs `vendor/bin/crest`. If you change
-`vendor-dir` or `bin-dir` in `composer.json`, change the `crest=` line at the top of
-`./crest`.
-
-`crest down` stops and removes the containers. `up --build` rebuilds the image
-first, and `down --volumes` also removes the named volumes.
-
-Without docker, run `composer install`, then `crest serve`. It runs
-`php -S 127.0.0.1:8080 -t public .htrouter.php` in the project root, with the
-same router and document root as the container. The port is `--port`, else
-`APP_PORT` from the environment, else `APP_PORT` in the project `.env`, else
-8080. docker compose reads `APP_PORT` in the same order. `serve` reads `.env`
-as docker compose does: the last `APP_PORT` line wins, and `export`,
-`APP_PORT: <port>`, quotes and `#` comments are allowed. It does not expand
-`${...}`. Such a value stops `serve` with an error. `serve` finds the root
-from a subfolder. A global Crest passes it to the Crest in `vendor/`, as
-it does the other project commands. It stops before PHP starts if
-`.htrouter.php` or `<vendor-dir>/autoload.php` is missing.
-
-The server uses the PHP that runs Crest. PHP options on the command line, for
-example `-d extension=phalcon.so`, do not reach it. Put such settings in
-`php.ini`.
-
-Press Ctrl+C to stop the server. If the server continues to run, for example
-after Crest stopped in a different way, stop its PHP process:
+With docker on the host, run:
 
 ```bash
-pkill -f -- '-S 127.0.0.1:8080'
+cd my-app
+./crest up
+./crest install
 ```
 
-Use your port if it is not 8080.
+`./crest up` starts the containers. `./crest install` installs the composer dependencies
+(see [The Launcher](#the-launcher)). A v5 project compiles the Phalcon extension in
+`./crest up`. This takes some minutes. Then `GET /` answers on http://localhost:8080/.
 
-`new`, `up`, `down` and `install` run before the project has a `vendor/`. Run
-them with a Crest outside the project, for example one that you install with
-`composer global require phalcon/crest:dev-master` (see
-[Install](../README.md#install) in the README). On a host with docker and no PHP, run
-`up`, `down` and `install` with `./crest`.
+### With PHP on the host
 
-On a host with docker and no PHP, one command creates a project, starts it and
-installs it. See [With docker only](../README.md#with-docker-only) in the README:
+Without docker, create the project with `crest new my-app --runtime=host`: the project
+Crest then runs with the PHP of the host (see [The Runtime](#the-runtime)). With PHP and
+composer on the host, and no docker, run:
+
+```bash
+cd my-app
+composer install
+crest serve
+```
+
+`crest serve` starts PHP's built-in web server for the project (see
+[Running a Project](#running-a-project)). By default, `crest serve` listens on
+`127.0.0.1:8080`.
+
+### With Docker only
+
+On a host with docker and no PHP, one command creates a project, starts it and installs
+it, as in [With Docker](#with-docker). The command downloads the
+[`crest-setup` script](#the-setup-script) and runs it. `my-app` is the name of the
+project:
 
 ```bash
 curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
 ```
 
-The generated project requires `phalcon/crest` as a dev dependency. The
-commands that work on the project, for example `make:action` and
-`route:list`, need the autoloader and the Phalcon of the project. After
-`crest install` or `composer install`, the project has its own Crest in
-`vendor/`. A global Crest passes these commands to it, with the same
-arguments, and returns its exit status:
+Then `GET /` answers on http://localhost:8080/. On Windows, run the command in the
+Windows Subsystem for Linux (WSL2).
+
+For another port, set `APP_PORT`. The script writes it into the project `.env`, the file
+of settings that docker compose reads (see [The Launcher](#the-launcher)):
 
 ```bash
-crest make:action GET /hello
+curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
 ```
 
-In the container, there is no global Crest. Run the Crest of the project:
+[The Setup Script](#the-setup-script) gives the details: the options, the errors, and how
+to read the script before it runs.
 
-```bash
-docker compose exec app vendor/bin/crest make:action GET /hello
-```
+## How Crest works
 
-On a host without PHP, `./crest` does the same:
+This section explains the parts of Crest that the rest of this page uses:
+[the project file](#the-project-file),
+[the global and the project Crest](#the-global-crest-and-the-project-crest),
+[the runtime](#the-runtime), [the launcher](#the-launcher) and [the stubs](#stubs).
 
-```bash
-./crest make:action GET /hello
-```
+### The project file
 
-`new`, `init`, `up`, `down`, `install` and `--version` always run in the `crest` that you
-type. Crest finds the project by its `crest.php`: the file that `--config` names, or the
-nearest `crest.php` in or above the working directory or `--directory`. `up`, `down` and
-`install` run docker compose in that folder. Without `crest.php`, Crest stops:
+Each project has a `crest.php` at its root. This is the project file. `crest new` writes
+it. For an existing project, `crest init` writes it (see
+[Adding Crest to an Existing Project](#adding-crest-to-an-existing-project)). The file
+holds the settings of the project, for example:
+
+- the flavor
+- the root namespace
+- the front controller (the class that starts the application)
+- the folders that Crest writes into
+- the runtime (see [The Runtime](#the-runtime))
+
+The `bootstrap` key names the front controller (see
+[Commands That Boot the Project](#commands-that-boot-the-project)).
+[Configuration](#configuration) shows each key.
+
+Crest finds the project by its `crest.php`: the file that `--config` names, or the nearest
+`crest.php` in or above the working directory or `--directory` (see
+[Global Options](#global-options)). Without `crest.php`, Crest stops:
 
 ```text
 crest: no crest.php found; run 'crest init'
 ```
 
-If the project has no `<bin-dir>/crest` (by default `vendor/bin/crest`), Crest stops
-too:
+### The global Crest and the project Crest
+
+The commands that work on the project, for example `make:action` and `route:list`, need
+the autoloader and the Phalcon of the project. A project from `crest new` requires
+`phalcon/crest` as a dev dependency. Thus after `crest install` or `composer install`, it
+has its own Crest in `vendor/bin/crest`. A global Crest passes the project commands to
+this Crest, with the same arguments, and returns its exit status. This is the hand-off.
+
+`make:action` creates an ADR action for a route (see
+[Generating Actions](#generating-actions)). `route:list` shows each route that the
+application answers (see [Command Reference](#command-reference)). For example, a global
+Crest passes this command to `vendor/bin/crest`:
+
+```bash
+crest make:action GET /hello
+```
+
+The `about` command shows the environment and version report (see
+[Command Reference](#command-reference)). In a project, run `crest` with the global Crest:
+
+```bash
+crest                                 # list the available commands
+crest about                           # show the environment and version report
+crest make:action GET /company/all
+```
+
+Without a global Crest, run the Crest of the project: `vendor/bin/crest` in the project,
+or `./crest` on a host with docker and no PHP (see [The Launcher](#the-launcher)). Here,
+the container is the docker compose service `app`, a container that docker compose runs
+(see [The Runtime](#the-runtime)). In the container, there is no global Crest, so run
+`vendor/bin/crest` there:
+
+```bash
+docker compose exec app vendor/bin/crest make:action GET /hello
+```
+
+`new`, `init`, `up`, `down`, `install` and `--version` (see
+[Global Options](#global-options)) always run in the `crest` that you type, with no
+hand-off. `down` stops the containers (see [The Launcher](#the-launcher)). `new`, `up`,
+`down` and `install` run before the project has a `vendor/`. Thus run them with a Crest
+outside the `vendor/` of the project, for example the global Crest (see
+[Installation](#installation)). The launcher `./crest` also runs `up`, `down` and
+`install` without `vendor/` (see [The Launcher](#the-launcher)).
+
+`bin-dir` is a setting of composer (see [Configuration](#configuration)). If the project
+has no `<bin-dir>/crest` (by default `vendor/bin/crest`), Crest stops, as it does without
+`crest.php`:
 
 ```text
 crest: /path/to/my-app has no vendor/bin/crest; run 'crest install' or 'composer install' first
 crest: /path/to/my-app does not require phalcon/crest; run 'composer require --dev phalcon/crest'
 ```
 
-Crest has no tagged release yet. Thus add `:dev-master` to the `composer require`
-command of the second message.
+The second message is for a project that does not require Crest. Add `:dev-master` to the
+`composer require` command of this message (see [Installation](#installation)).
 
-With `'runtime' => ['type' => 'docker', 'service' => 'app']` in `crest.php` (what `new`
-writes), a global Crest runs the project commands in the container:
-`docker compose exec app vendor/bin/crest ...`. A v5 project then works on a host
-without `ext-phalcon`. `serve` is the exception: it always runs on the host, because
-PHP's built-in server must listen there. With docker, `crest up` serves the project.
+### The runtime
 
-The docker runtime has two conditions. The service must mount the project folder, with
-`vendor/` in it: Crest looks for `vendor/bin/crest` on the host first. And the
-`working_dir` of the service must be the project root: `vendor/bin/crest` runs there. The
-compose file of `new` does both. `install` runs composer in the service of the docker
-runtime. With the host runtime, it uses the `service` of the key, else `app`.
+The `runtime` key of `crest.php` says where the project commands run:
 
-Crest reads `vendor-dir` and `bin-dir` as composer does: `COMPOSER_VENDOR_DIR` and
-`COMPOSER_BIN_DIR`, then `config` in `composer.json`, then `vendor` and
-`<vendor-dir>/bin`. The hand-off runs `<bin-dir>/crest`, and `serve` checks
-`<vendor-dir>/autoload.php`. With the docker runtime, composer runs in the container, so
-Crest reads only `composer.json`, and the two folders must be relative. Crest does not
-expand `~` or `$VAR` in these values: use a relative or an absolute path. A custom
-`vendor-dir` or `bin-dir` needs this version of Crest both as the global Crest and in the
-project: an older Crest looks only for `vendor/bin/crest`.
+- With `['type' => 'host']`, a global Crest runs the project's `vendor/bin/crest` with the
+  PHP of the host.
+- With `['type' => 'docker', 'service' => 'app']` (what `crest new` writes), a global
+  Crest runs `docker compose exec app vendor/bin/crest ...` in the project root. `app` is
+  the service: a container that the compose file of the project names.
 
-The files come from the `project-*` stubs. To change them, publish them by
-name in the folder that the project goes into (the working directory, or
-`--directory`), then edit the copies:
+Use docker when Phalcon is only in the container. For example, a v5 project then works on
+a host without `ext-phalcon`. The containers must be up (`crest up`).
+
+The docker runtime has two conditions. The compose file that `crest new` writes,
+`docker-compose.yml`, meets both:
+
+- The service must mount the project folder (share it with the container), with
+  `vendor/` in it: Crest looks for `vendor/bin/crest` on the host first.
+- The `working_dir` of the service, the folder where its commands start, must be the
+  project root: `vendor/bin/crest` runs there.
+
+`crest install` runs composer in a docker compose service, with each runtime. With the
+docker runtime, composer runs in the service of the runtime. With the host runtime,
+composer runs in the `service` of the `runtime` key, else in `app`.
+
+`crest serve` is the exception: it always runs on the host, because PHP's built-in server
+must listen there. With docker, `crest up` serves the project.
+
+### The launcher
+
+`./crest` is a launcher script that `crest new` writes into the project. It needs docker
+only: PHP on the host is not necessary.
+
+`./crest up`, `./crest down` and `./crest install` run docker compose on the host: they
+start the containers, stop them, and install the dependencies. With a global Crest,
+`crest up` and `crest install` do the same. Crest runs `up`, `down` and `install` with
+docker compose in the folder of the `crest.php` that it finds (see
+[The Project File](#the-project-file)).
+
+All other commands of `./crest` run `vendor/bin/crest` in the service of the project
+(`app`, or the `--service` of `new`; see [Creating a Project](#creating-a-project)):
 
 ```bash
-crest stub:publish project-front
+./crest make:action GET /hello
 ```
 
-A project stub needs no `crest.php`. `--flavor` gives its flavor, as for `new`;
-the default is `adr`:
+Before `./crest install`, they stop with `crest: run './crest install' first`. Without a
+terminal (CI, a pipe), the launcher adds `-T`, which tells `docker compose exec` not to
+ask for a terminal. On Windows, run `./crest` in WSL2.
+
+The `.env` file of the project holds settings that docker compose reads, for example
+`APP_PORT` and the user and group IDs (`UID` and `GID`). The files that the container
+writes belong to the user of these IDs. With rootless docker (docker that runs without
+root), set `UID=0` and `GID=0` in `.env`: rootless docker maps root in the container to
+your user.
+
+The Crest commands of the launcher get `CREST_HOST_ROOT`, the host folder of the project.
+Thus Crest shows host paths, not the paths in the container. The hand-off of a global
+Crest does the same.
+
+The launcher runs `vendor/bin/crest`. If you change `vendor-dir` or `bin-dir` in
+`composer.json` (see [Configuration](#configuration)), change the `crest=` line at the top
+of `./crest`.
+
+### Stubs
+
+Crest generates files from stubs. A stub is a template in the Crest package, with
+placeholders such as `{{ flavor }}`: Crest fills in each placeholder with a value of the
+project. To change a stub, publish a copy with `crest stub:publish`, and edit the copy.
+Crest then uses your copy. `crest new` writes a project from the `project-*` stubs, for
+example the `project-config` stub for `crest.php`. [Custom Stubs](#custom-stubs) and
+[Project Stubs](#project-stubs) tell where each copy goes. For the `project-config` stub,
+see also [Commands after `new`](#commands-after-new).
+
+Some generators also write a base: a class that Crest owns and writes again, for example
+`CrestControllerBase`, which your controllers extend.
+[Generated Bases](#generated-bases) tells when Crest writes a base again.
+
+## Creating a project
+
+`crest new` creates a project. It writes an ADR or an MVC project that runs:
 
 ```bash
-crest stub:publish project-front --flavor=mvc
+crest new my-app
+crest new my-app --flavor=mvc
 ```
 
-The project stubs that are the same in both flavors are in
-`resources/stubs/shared/`, and a publish puts them there. A copy in
-`resources/stubs/<flavor>/` wins over the shared copy for that flavor, and a publish
-of the shared copy prints a note that names it. Crest looks for a stub in the project
-(`resources/stubs/<flavor>/`, then `resources/stubs/shared/`), then in the package, in
-the same order. When the
-flavor does not have the stub and another flavor does, the error names the
-option to use, for example `pass --flavor=mvc`. A
-publish with no name leaves the project stubs out, because they do nothing
-inside a project. It also leaves the fragment stubs (`fragment-*`) out: they
-hold pieces of the framework API and the guidance text that the generators
-print, and a copy does not get the changes of later releases. Publish a
-fragment by name to change it.
+An ADR project has `public/index.php` (the web entry point) and the front controller
+`src/AppFront.php`. It also has `crest.php`, `composer.json`, the docker files, and
+`src/Action/Get.php`, which answers `GET /`. For an MVC project, see
+[The MVC Project](#the-mvc-project).
 
-You can change each project stub on its own. The names that the stubs and
-Crest must agree on come from placeholders: `{{ documentRoot }}`,
-`{{ router }}`, `{{ portVariable }}`, `{{ port }}`, `{{ front }}`,
-`{{ source }}` and `{{ autoloader }}`. Keep these placeholders where the
-packaged copy has them. Then `serve`, `init` and the generated files agree.
-`project-front`, `project-config` and `project-index` must also agree with
-each other on the namespace. `new` decides where each file goes: a stub
-cannot move its file. A published copy must use only the placeholders of the
-packaged copy. If a placeholder has no value, `new` stops before it writes a
-file.
+`new` takes the options in the table below. The view engine (the `--template-engine` row)
+renders the views of an MVC project: with `phtml`, the views are PHP templates in `.phtml`
+files. `--camel-case` and `--get-set` change the models that `make:model` writes from the
+database tables (see [Generating Models](#generating-models)). They set the `models` key
+of `crest.php` (see [Configuration](#configuration)).
 
-In an MVC project, `{{ controllerNamespace }}`, `{{ controllerPath }}`,
-`{{ providerNamespace }}`, `{{ providerPath }}` and `{{ viewsPath }}` come from
-the default paths of the flavor. A stub that depends on the view engine has the
-engine name in its name: `project-phtml-provider`, `project-phtml-layout` and
-`project-phtml-index`.
+| Option | Purpose |
+|---|---|
+| `--flavor=adr\|mvc` | the flavor of the project; defaults to `adr` |
+| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
+| `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
+| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
+| `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
+| `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
+| `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |
+| `--database=none\|mariadb\|mysql\|pgsql\|sqlite` | the database of the project; defaults to `none`. See [The database](#the-database) |
+| `--camel-case` | for MVC: property names in camelCase (`models.camelCase` of `crest.php`). See [Names](#names) |
+| `--get-set` | for MVC: protected properties with a getter and a setter (`models.getSet` of `crest.php`). See [Getters and setters](#getters-and-setters) |
+| `--force` | write into a directory that is not empty, and overwrite files with the same names |
+
+In a terminal, `new` asks for each value that no option gives:
+
+- the flavor
+- the namespace
+- the PHP version
+- the Phalcon version
+- the runtime (`host` or `docker`)
+- the service, for `docker`
+- the database
+
+For an MVC project with a database, `new` asks two more questions. First, it asks if the
+property names of the models are in camelCase. Then it asks if the properties are
+protected, with a getter and a setter.
+
+There is no question for the view engine while there is only one. An empty answer takes
+the default. `--no-interaction` (see [Global Options](#global-options)), or a run without
+a terminal (CI, a pipe), asks nothing and takes the defaults. The options still give
+their values, for example in CI.
+
+The project goes into the folder `<name>` in the working directory, or in `--directory`
+if you give one (see [Global Options](#global-options)). By default, `new` runs nothing:
+no composer, no docker, no network. It writes the files and prints the next steps. For an
+ADR project with no database, [Quick Start](#quick-start) shows the output.
+
+To make `new` run commands, see [Commands after `new`](#commands-after-new). To change
+the files that `new` writes, see [Project Stubs](#project-stubs).
 
 ### The MVC project
 
-`crest new my-app --flavor=mvc` writes the layout of the Phalcon sample
-applications (vokuro, invo):
+`crest new my-app --flavor=mvc` writes the layout of the Phalcon sample applications
+(vokuro, invo). The table below uses these Phalcon terms:
+
+- The DI (dependency injection) container of the application holds its services: the
+  objects that the application uses. These are not the docker container and the docker
+  compose service of [The Runtime](#the-runtime).
+- `FactoryDefault` is the Phalcon DI container with the default services.
+- A provider is a class that registers services in the DI container.
+- `Phalcon\Mvc\Application` handles each request.
+- The dispatcher loads the controller of a URL and calls it.
 
 | Path | Contents |
 |---|---|
@@ -286,16 +387,18 @@ applications (vokuro, invo):
 | `src/Controllers/Base/` | `CrestControllerBase`, the base that Crest owns (see [Generated bases](#generated-bases)) |
 | `themes/default/` | the layout `index.phtml` and the view `index/index.phtml` |
 
-`crest.php` has `'flavor' => 'mvc'` and the paths `command`, `controller`, `form`,
-`model`, `module`, `provider` and `views`. To add a service, run
-`crest make:provider Mailer`. It writes `src/Providers/MailerProvider.php`, a provider
-that implements `Phalcon\Di\ServiceProviderInterface`, and prints the line to add to
-`AppFront::providers()`.
+`crest.php` has `'flavor' => 'mvc'` and the paths (the folders that Crest writes into)
+`command`, `controller`, `form`, `model`, `module`, `provider` and `views` (see
+[Configuration](#configuration)). To add a service, run `crest make:provider Mailer`. It
+writes `src/Providers/MailerProvider.php`, a provider that implements
+`Phalcon\Di\ServiceProviderInterface`. It also prints the line to add to
+`AppFront::providers()`, the list of the providers of the front controller.
 
-A URL with no controller stops in the dispatcher ("handler class cannot be
-loaded"). With `display_errors` off, PHP answers 500. With it on, PHP shows the
-error in the page, with status 200. Add a not-found page if your project needs
-one, for example a dispatcher listener such as the `NotFoundPlugin` of invo.
+A URL with no controller stops in the dispatcher ("handler class cannot be loaded").
+With `display_errors` off, PHP answers 500. With `display_errors` on, PHP shows the error
+in the page, with status 200. Add a not-found page if your project needs one. For
+example, use a dispatcher listener (a class that gets the events of the dispatcher), such
+as the `NotFoundPlugin` of invo.
 
 ### The database
 
@@ -316,9 +419,11 @@ crest new my-app --flavor=mvc --database=mysql
 With a database, `new` also writes:
 
 - `DbProvider.php` in the provider folder (`src/Providers` for MVC, `src/Provider` for
-  ADR). It registers the `db` service. The MVC front controller adds it in
-  `providers()`. The ADR front controller gets a `registerProviders()` override that
-  calls it.
+  ADR). `DbProvider` registers the `db` service: the connection to the database (see
+  [The MVC Project](#the-mvc-project) for services). The MVC front controller adds
+  `DbProvider` in `providers()`. The ADR front controller gets an override of
+  `registerProviders()`, the method that registers the services. The override calls
+  `DbProvider`.
 - The connection values at the end of `.env`:
 
   ```text
@@ -335,25 +440,28 @@ With a database, `new` also writes:
   `DB_NAME=storage/database.sqlite`, relative to the project root.
 - For `mariadb`, `mysql` and `pgsql`: the service `database` in `docker-compose.yml`,
   with a named volume for its data and a health check. The app service starts when the
-  database accepts connections, so `crest make:model` works right after `crest up` and
+  database accepts connections. Thus `crest make:model` works right after `crest up` and
   `crest install`. The database listens on the host only at `127.0.0.1`, on the port
   `DB_PUBLISHED_PORT`: other computers cannot connect to it.
 - For `mariadb`, `mysql` and `pgsql`: the PDO extension in `resources/docker/Dockerfile`.
-- `phalcon/phql` in `composer.json`, for an MVC project with Phalcon v6 (see
-  [Generating models](#generating-models)).
+- `phalcon/phql` in `composer.json`, for an MVC project with Phalcon v6. PHQL is the query
+  language that a model uses to find rows (see [Generating Models](#generating-models)).
 - For `sqlite`: the empty file `storage/database.sqlite` (an empty file is a valid SQLite
   database), `storage/.gitkeep`, and `/storage/database.sqlite` in `.gitignore`.
-  `--force` does not replace a database file that exists: git ignores the file, so nothing
-  can restore its data.
+  `--force` does not replace a database file that exists: git ignores the file, so
+  nothing can restore its data.
 
 docker compose gives the values of `.env` to the app container. PHP on the host does not
-read `.env`: there, `DbProvider` uses its defaults, `127.0.0.1` and the published port.
+read `.env`. There, `DbProvider` uses its defaults: `127.0.0.1` and the published port.
 `DbProvider` reads each value from `getenv()`, then from `$_ENV`, then takes the default.
-A loader such as phpdotenv also reads `.env` on the host, and there `DB_HOST=database` is
-not a known host. Then give PHP on the host `DB_HOST=127.0.0.1` and `DB_PORT` (the
-published port) in its environment: `getenv()` wins over `$_ENV`. To run the project
-with PHP on the host, start only the database, and install the PDO extension on the
-host:
+
+A loader such as phpdotenv (a PHP library that loads `.env`) also reads `.env` on the
+host. There, `DB_HOST=database` is not a known host. Then give PHP on the host
+`DB_HOST=127.0.0.1` and `DB_PORT` (the published port) in its environment: `getenv()`
+wins over `$_ENV`.
+
+To run the project with PHP on the host, start only the database, and install the PDO
+extension on the host:
 
 ```bash
 docker compose up -d database
@@ -361,13 +469,12 @@ docker compose up -d database
 
 If the port is in use on the host, change `DB_PUBLISHED_PORT` in `.env`. Then PHP on the
 host needs `DB_PORT` with the same value in its environment. The MySQL and MariaDB images
-do not accept the user `root`, so a project with the name `root` needs another
+do not accept the user `root`. Thus a project with the name `root` needs another
 `DB_USERNAME`.
 
-The `db` service is shared, and it connects when the project uses it for the first time,
-for example at the first query of a model. Thus the project answers `GET /` when the
-database does not run, and a wrong value gives the connection error at the first use of
-`db`.
+The `db` service is shared. It connects when the project uses it for the first time, for
+example at the first query of a model. Thus the project answers `GET /` when the database
+does not run. A wrong value gives the connection error at the first use of `db`.
 
 With `mysql`, `mariadb` or `pgsql`, the app service cannot have the name `database`:
 
@@ -377,39 +484,26 @@ crest: the service 'database' is the name of the database service; choose anothe
 
 In an ADR project with a database, the front controller already has
 `registerProviders()`. For a new provider, add only the `provide()` line that
-`crest make:provider` prints.
+`crest make:provider` prints. `provide()` is the method of a provider that registers its
+services.
 
-The service and the `.env` lines come from the project stubs `project-compose-mysql`,
-`project-compose-mariadb`, `project-compose-pgsql`, `project-env-database` and
-`project-env-sqlite`. To change one, for example the image, publish it by name in the
-folder that the projects go into:
-
-```bash
-crest stub:publish project-compose-mysql
-```
-
-A copy of a project stub that you published before the database option does not have the
-new placeholders: `{{ dependsOn }}`, `{{ databaseService }}`, `{{ databaseInstall }}`,
-`{{ databaseEnv }}`, `{{ databaseIgnore }}`, `{{ phql }}`, `{{ dbUse }}`,
-`{{ dbProvider }}`, `{{ registerProviders }}` and `{{ models }}`. When the project needs
-one, `new` stops before it writes a file, and names the copy:
-
-```text
-crest: the published stub /path/to/resources/stubs/shared/project-compose.stub has no {{ databaseService }}; publish it again with crest stub:publish project-compose --flavor=adr --force, and make your changes in it again
-```
-
-Without a database, and without `--camel-case` and `--get-set`, such a copy works as
-before.
+To change the service or the `.env` lines of the database, for example the image, see
+[Project Stubs](#project-stubs).
 
 ### Commands after `new`
 
 `new` can run commands after it writes the files, for example `crest up` and
-`crest install`. Publish the `project-config` stub in the folder that the projects go
-into, and add the key `new` to the copy:
+`crest install`. The `new` key of `crest.php` lists these commands. `new` writes
+`crest.php` from the `project-config` stub (see [Stubs](#stubs)). Thus publish the
+`project-config` stub in the folder that the projects go into (see
+[Project Stubs](#project-stubs)):
 
 ```bash
 crest stub:publish project-config
 ```
+
+Then add the key `new` to the copy. Each entry of the key is one command, as a list of
+words:
 
 ```php
 'new' => [
@@ -419,15 +513,16 @@ crest stub:publish project-config
 ```
 
 With the host runtime, use `['composer', 'install']` instead. With the docker runtime,
-composer runs in the container: the host often has no Phalcon, or an older PHP, and then
-`composer install` on the host stops.
+composer runs in the container. This is because the host often has no Phalcon, or an
+older PHP, and then `composer install` on the host stops.
 
-Each entry is one command, as a list of words. There is no shell: pipes, `&&` and
-variables do not work. When the first word is `crest`, the Crest that runs `new` also runs
-the command. Use `crest`, not `./crest`: Crest looks for a relative path from the folder
-where you type the command, not from the project. `new` runs the commands in order, in
-the project folder, and prints `Running: <command>` before each one. At the end, it prints
-`Ran 2 commands from the 'new' key of crest.php`.
+There is no shell: pipes, `&&` and variables do not work. When the first word is
+`crest`, the Crest that runs `new` also runs the command. Use `crest`, not `./crest`.
+This is because Crest looks for a relative path from the folder where you type the
+command, not from the project.
+
+`new` runs the commands in order, in the project folder. It prints `Running: <command>`
+before each one. At the end, it prints `Ran 2 commands from the 'new' key of crest.php`.
 
 The first command that fails stops the list, and `new` returns its exit status:
 
@@ -443,86 +538,180 @@ crest: 'composer' was not found; install it or add it to the PATH
 
 `new` reads the key from the `crest.php` that it writes. Thus it checks the key after it
 writes the files. If the key is not a list of commands, or if PHP cannot parse the file,
-`new` stops before the first command, and the files stay. The error names the published
-stub that `new` used. Change the stub, not the `crest.php` of the project, then run `new`
-again with `--force`:
+`new` stops before the first command. The files stay. The error names the published stub
+that `new` used. Change the stub, not the `crest.php` of the project. Then run `new` again
+with `--force`:
 
 ```text
 crest: my-app/crest.php: 'new' entry 2 in crest.php must be a list of strings, e.g. ['crest', 'up']; the files in my-app/ stay; fix /path/to/resources/stubs/shared/project-config.stub and run new again with --force
 ```
 
 `new` also checks that the written `crest.php` has the flavor of the project. Keep
-`'flavor' => '{{ flavor }}'` in a published `project-config`: a copy with a fixed
-flavor stops `new` in the same way, before the first command.
+`'flavor' => '{{ flavor }}'` in a published `project-config`. A copy with a fixed flavor
+stops `new` in the same way, before the first command.
 
-The key stays in the `crest.php` of the project. No other command reads it, and
-`config:show` does not show it. `init` uses the same stub: it writes the key, but runs
-nothing. Without the key, `new` runs nothing.
+The key stays in the `crest.php` of the project. No other command reads it.
+`config:show` shows the configuration of the project, but not this key (see
+[Command Reference](#command-reference)). `init` uses the same stub: it writes the key,
+but runs nothing (see
+[Adding Crest to an Existing Project](#adding-crest-to-an-existing-project)).
 
-The one-line setup (see [With docker only](../README.md#with-docker-only) in the README)
-runs `new` in a container without docker. There, `crest up` fails. Do not use the key
-with it.
+### The setup script
+
+The `crest-setup` script of [With Docker Only](#with-docker-only) runs `crest new <name>`
+in a one-off `composer:2` container. Each option after the name goes to `new` (see the
+options in [Creating a Project](#creating-a-project)). For example, for a project with
+Phalcon v6:
+
+```bash
+curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app --phalcon v6
+```
+
+In the script, `new` asks no questions: the options give the values, else the defaults
+apply. The project goes into the folder `<name>` in the working directory. The script
+stops with an error on `--directory`, and when the working directory is a system folder
+such as `/usr`. The `--help` option of the script shows the options of `new`.
+
+The working directory has the same path in the container. Thus the errors of `new` show
+host paths (see [The Launcher](#the-launcher)). The script writes your user and group IDs
+into the project `.env`. Then it runs `./crest up` and `./crest install` (see
+[With Docker](#with-docker)).
+
+If `./crest up` or `./crest install` fails, for example because the port is in use, the
+project stays. The script prints the commands to run after you fix the problem.
+
+With rootless docker, the script writes `UID=0` and `GID=0` into `.env` (see
+[The Launcher](#the-launcher)). It also does not change the owner of the project files
+(no `chown`).
+
+The script runs on your host. To read it before it runs:
+
+```bash
+curl -fsSL https://phalcon.io/crest-setup -o crest-setup.sh
+less crest-setup.sh
+sh crest-setup.sh my-app
+```
+
+`https://phalcon.io/crest-setup` points to
+`https://raw.githubusercontent.com/phalcon/crest/master/resources/setup.sh`.
+
+Do not add a `new` key to a published `project-config` stub for the setup command (see
+[Commands after `new`](#commands-after-new)). The script runs `new` in a container
+without docker, so `crest up` fails there. The script runs `./crest up` and
+`./crest install` itself.
 
 ## Adding Crest to an existing project
+
+For an existing project, `crest init` writes `crest.php` (see
+[The Project File](#the-project-file)). If the project does not require Crest yet, add it
+as a dev dependency first. The `composer require` command needs the version `dev-master`
+(see [Installation](#installation)):
 
 ```bash
 composer require --dev phalcon/crest:dev-master
 crest init
 ```
 
-Crest has no tagged release yet, so the `composer require` command gives the version
-`dev-master` (see [Install](../README.md#install) in the README).
+`init` writes `crest.php` in the nearest folder with a `composer.json`. The psr-4 map is
+the `autoload.psr-4` part of `composer.json`: it gives a folder to each namespace prefix,
+for example `"App\\": "src/"`. The generators (the `make:*` commands) get their
+namespaces from this map. Thus `init` needs a psr-4 entry in `composer.json`. Without
+one, `init` stops and tells you to add one, for example `"App\\": "app/"`, and to run
+`composer dump-autoload`.
 
-`init` writes `crest.php` in the nearest folder with a `composer.json`. It asks these
-questions, in this order, each with a proposal:
+`init` asks these questions, in this order. For each question, it proposes a value that it
+finds in the project:
 
 1. The namespace. The proposal is the namespace of the first psr-4 entry whose folder
-   exists. The answer must be in the psr-4 map (`App\Api` under `"App\\": "src/"` is),
-   because the generators get their namespaces from it. The other proposals follow the
-   answer: its folder is the psr-4 folder of the longest prefix, for example `src/Api`.
-2. The flavor: `adr` or `mvc`. For each flavor, `init` counts the default folders of
-   that flavor (item 4) that the project has, and proposes the flavor with the most. A
-   tie gives `adr`. A project with `src/Controllers`, `src/Providers` and
-   `themes/vokuro` gets `mvc`. `--flavor` answers the question.
-3. The front controller: `<namespace>\AppFront` when `AppFront.php` is in that folder.
-   Answer `none` for no front controller.
-4. A folder for each path of the flavor: `action`, `command`, `middleware`, `provider`
-   and `responder` for ADR; `command`, `controller`, `form`, `model`, `module`, `provider`
-   and `views` for MVC. The question says if the folder exists. A class folder is in the
-   folder of the namespace.
-   An answer must be a relative folder in a psr-4 folder, and its folder names must give
-   a usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use.
+   exists. The answer must be in the psr-4 map (`App\Api` under `"App\\": "src/"` is).
+   The other proposals follow the answer: its folder is the psr-4 folder of the longest
+   prefix, for example `src/Api`.
+2. The flavor: `adr` or `mvc`. For each flavor, `init` counts the default folders of that
+   flavor (item 4) that the project has. It proposes the flavor with the most. A tie gives
+   `adr`. A project with `src/Controllers`, `src/Providers` and `themes/vokuro` gets
+   `mvc`. `--flavor` answers the question.
+3. The front controller: `<namespace>\AppFront` when `AppFront.php` is in the folder of
+   the namespace. Answer `none` for no front controller.
+4. A folder for each path of the flavor (the `paths` key of `crest.php`; see
+   [Configuration](#configuration)). The ADR paths are
+   `action`, `command`, `middleware`, `provider` and `responder`. The MVC paths are
+   `command`, `controller`, `form`, `model`, `module`, `provider` and `views`. The
+   question says if the folder exists. A class folder is in the folder of the namespace.
+   An answer must be a relative folder in a psr-4 folder. Its folder names must give a
+   usable namespace: `src/my-actions` gives `App\my-actions`, which PHP cannot use.
    `init` removes a leading `./`.
 
    `views` holds no classes. It is a relative folder in the project, with no psr-4
-   check. Each part of the answer must be a folder name, so `init` refuses an absolute
-   folder, an empty part (`//`), `.` and `..`. The proposal is `themes/default`; when
-   that folder does not exist and `themes/` has one folder only, `init` proposes that
-   folder (`themes/vokuro` in vokuro).
-5. The runtime: docker when the project has `compose.yaml`, `compose.yml`,
-   `docker-compose.yaml` or `docker-compose.yml`, with the service `app`, or the first
-   service. For docker, the service.
+   check. Each part of the answer must be a folder name. Thus `init` refuses an absolute
+   folder, an empty part (`//`), `.` and `..`. The proposal is `themes/default`. When that
+   folder does not exist and `themes/` has one folder only, `init` proposes that folder
+   (`themes/vokuro` in vokuro).
+5. The runtime (see [The Runtime](#the-runtime)). The proposal is docker when the project
+   has `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`. For
+   docker, `init` also asks for the service. The proposal is `app`, or the first service.
 
-Press Enter to accept a proposal. `--no-interaction` accepts all of them. `--force`
-overwrites an existing `crest.php`. If the project does not require Crest, `init` prints
-the `composer require` line. Add `:dev-master` to that line until Crest has a tagged
-release.
+Press Enter to accept a proposal. `--no-interaction` accepts all the proposals (see
+[Global Options](#global-options)). `--force` overwrites an existing `crest.php`. If the
+project does not require Crest, `init` prints the `composer require` line. Add
+`:dev-master` to that line (see [Installation](#installation)).
 
-For an MVC project, `init` also writes the `models` key of `crest.php`, with
-`'camelCase' => false`, so the models of the project keep their property names, and
-`'getSet' => false`, so their properties stay public. See [Names](#names) and
-[Getters and setters](#getters-and-setters).
+For an MVC project, `init` also writes the `models` key of `crest.php` (see
+[Configuration](#configuration)). It writes `'camelCase' => false`, so the models of the
+project keep their property names. It also writes `'getSet' => false`, so the properties
+of the models stay public. See [Names](#names) and
+[Getters and Setters](#getters-and-setters).
 
-`init` needs a psr-4 entry in `composer.json`, because the generators get their
-namespaces from it. Without one, `init` stops and tells you to add one, for example
-`"App\\": "app/"`, and to run `composer dump-autoload`.
+## Running a project
+
+A project runs with docker, or with PHP on the host (see [Quick Start](#quick-start)).
+For the Crest that runs `up`, `down` and `install`, see
+[The Global Crest and the Project Crest](#the-global-crest-and-the-project-crest).
+
+With docker, use `crest up`, `crest install` and `crest down` (see
+[The Launcher](#the-launcher)). `crest down` stops and removes the containers.
+`up --build` rebuilds the image first, and `down --volumes` also removes the named
+volumes.
+
+Without docker, `crest serve` starts PHP's built-in web server for the project (see
+[With PHP on the Host](#with-php-on-the-host)). `.htrouter.php` is the router script of
+PHP's built-in server. `serve` runs `php -S 127.0.0.1:8080 -t public .htrouter.php` in the
+project root. The router and the document root (`public`) are the same as in the
+container.
+
+The port is `--port`, else `APP_PORT` from the environment, else `APP_PORT` in the
+project `.env`, else 8080. docker compose reads `APP_PORT` in the same order.
+
+`serve` reads `.env` as docker compose does: the last `APP_PORT` line wins, and `export`,
+`APP_PORT: <port>`, quotes and `#` comments are allowed. `serve` does not expand
+`${...}`: a value with `${...}` stops `serve` with an error.
+
+`serve` finds the project root from a subfolder. A global Crest passes `serve` to the
+Crest in `vendor/`, as it does the other project commands (see
+[The Global Crest and the Project Crest](#the-global-crest-and-the-project-crest)).
+`serve` stops before PHP starts if `.htrouter.php` or `<vendor-dir>/autoload.php` is
+missing. `vendor-dir` is a setting of composer (see [Configuration](#configuration)).
+
+The server uses the PHP that runs Crest. PHP options on the command line, for example
+`-d extension=phalcon.so`, do not reach the server. Put such settings in `php.ini`.
+
+Press Ctrl+C to stop the server. If the server continues to run, for example after Crest
+stopped in a different way, stop its PHP process:
+
+```bash
+pkill -f -- '-S 127.0.0.1:8080'
+```
+
+Use your port if it is not 8080.
 
 ## Commands that boot the project
 
-`container:list`, `event:list`, `make:model` and `make:scaffold` read the
-services, the listeners and the `db` service, which exist only after the
-application registers them. Thus they start your front controller. Name it in
-`crest.php`:
+Four commands read objects that exist only after the application registers them.
+`container:list` reads the services and lists them, and `event:list` reads the listeners
+of the events manager and lists them (see [Command Reference](#command-reference)).
+`make:model` and `make:scaffold` (see [Generating Scaffolds](#generating-scaffolds)) read
+the `db` service (see [The Database](#the-database)). Thus these commands start your
+front controller: they boot the project. Name the front controller in the `bootstrap`
+key of `crest.php`:
 
 ```php
 return [
@@ -530,9 +719,10 @@ return [
 ];
 ```
 
-Crest constructs the class with the project root. The constructor can take the
-root if the class needs it. The class must declare `boot()`. There is no base
-class and no interface: `boot()` is the whole contract:
+Crest constructs the class with the project root. The constructor can take the root if
+the class needs it. The class must declare `boot()`. There is no class to extend and no
+interface to implement: `boot()` is the whole contract. In this example, `boot()` returns
+a `Phalcon\Container\Container`, a DI container (see [The MVC Project](#the-mvc-project)):
 
 ```php
 use Phalcon\Container\Container;
@@ -554,26 +744,25 @@ final class ApiFront
 }
 ```
 
-`boot()` must return an object. Each command has its own conditions for that
-object:
+`boot()` must return an object. Each command has its own conditions for that object:
 
 | Command | Requires the returned object to |
 |---|---|
-| `container:list` | implement `Phalcon\Contracts\Container\Service\Collection` and `Enumerable` |
+| `container:list` | implement `Phalcon\Contracts\Container\Service\Collection` and `Phalcon\Contracts\Container\Service\Enumerable` |
 | `event:list` | implement `Collection`, and hold a registered `Phalcon\Events\Manager` |
 | `make:model`, `make:scaffold` | implement `Phalcon\Di\DiInterface`, and hold a `db` service that is a `Phalcon\Db\Adapter\AdapterInterface` |
 
-`Phalcon\Container\Container` implements both contracts. Thus `boot()` can
-return a `Phalcon\Container\Container` for `container:list`.
+`Phalcon\Container\Container` implements both contracts of the `container:list` row.
+Thus `boot()` can return a `Phalcon\Container\Container` for `container:list`.
 
-For `event:list`, "registered" means a definition or an instance that exists. A
-manager that the container can only autowire does not count. Then Crest stops with
-an error that says that the bootstrap registers no manager. It does not show zero
-listeners from a new instance that it made itself.
+For `event:list`, "registered" means a definition or an instance that exists. A manager
+that the container can only autowire does not count. In that case, Crest stops with an
+error that says that the bootstrap registers no manager. It does not show zero listeners
+from a new instance that it made itself.
 
-All the other commands, for example the other generators, `about`, `config:show`
-and `route:list`, do not start your front controller. Thus they also work on a
-project that does not run.
+All the other commands, for example the other generators, `about`, `config:show` and
+`route:list`, do not start your front controller. Thus they also work on a project that
+does not run.
 
 ## Generating actions
 
@@ -585,8 +774,13 @@ crest make:action GET /company/{id}
 ```
 
 The class name comes from the routing convention of the framework. Thus the file
-goes where the router looks for it. Placeholders must come last: Crest stops on
+goes where the router looks for it. Route placeholders (the parts in braces, such as
+`{id}`) must come last: Crest stops on
 `/album/{id}/edit`, and tells you to write `/album/edit/{id}`.
+
+`--responder` picks the responder that the action calls. The `json` responder gives a
+JSON response. The view responder renders a template with your renderer: the
+`Renderer` object of the project.
 
 | Option | Purpose |
 |---|---|
@@ -603,7 +797,7 @@ guess a file name.
 ## Generating controllers
 
 In an MVC project, `make:controller` writes a controller and the base class that
-it extends:
+it extends (see [Generated Bases](#generated-bases)):
 
 ```bash
 crest make:controller Users
@@ -620,9 +814,10 @@ In the `Created`, `Updated` and `Kept` lines, Crest prints the full path of each
 file. The examples in this document show the path from the project root.
 
 `UsersController` extends `CrestControllerBase`, which extends
-`Phalcon\Mvc\Controller`, and has an empty `indexAction()`. Crest then prints
-what the dispatcher needs: its default namespace, the URL of `indexAction()`
-with the default routes (`GET /users`), and the name of its view
+`Phalcon\Mvc\Controller`, and has an empty `indexAction()`. With the default
+routes of the Phalcon router, the first part of the URL names the controller.
+Crest then prints what the dispatcher needs: its default namespace, the URL of
+`indexAction()` with the default routes (`GET /users`), and the name of its view
 (`users/index`). The views folder and the engine belong to your project.
 
 A project from `crest new --flavor=mvc` already has `CrestControllerBase` and
@@ -662,8 +857,9 @@ with `Generated by crest.` Do not edit it: when you run `make:controller` or
 not the same, Crest writes the file again. This removes your changes. You own
 the controllers, and Crest writes each one only once. Each module has its own
 copy, in the `Controllers/Base/` folder of the module
-(`src/Modules/Admin/Controllers/Base/`), with the same rules: to get its new
-base, add `--module=<key>` to `make:controller`.
+(`src/Modules/Admin/Controllers/Base/`), with the same rules. For the new base of
+a module, add `--module=<key>` to `make:controller`, with the key of the module
+(see [Generating Modules](#generating-modules)).
 
 - To get the new base after an upgrade of Crest, run `make:controller` again on
   an existing controller. Crest keeps the controller and writes the base:
@@ -688,8 +884,9 @@ base, add `--module=<key>` to `make:controller`.
 ## Generating models
 
 In an MVC project, `make:model` reads a table from the database of the project,
-and writes a model and the base class that it extends. Crest writes relations
-only from FOREIGN KEY constraints (see [Relations](#relations)):
+and writes a model and a base class. The model extends the base (see
+[Generated Bases](#generated-bases)). Crest writes relations only from FOREIGN
+KEY constraints (see [Relations](#relations)):
 
 ```bash
 crest make:model users
@@ -709,9 +906,9 @@ from `crest new --flavor=mvc` with a database has the `db` service (see
 registers it (`crest make:provider Db`).
 
 With the `phalcon/phalcon` package (Phalcon v6), a model also needs
-`phalcon/phql`, because a model uses PHQL to find rows. The extension (Phalcon
-v5) has PHQL. For an MVC project with Phalcon v6, `crest new` with a database
-adds the package to `composer.json`. For another project, install it:
+`phalcon/phql`, the package for PHQL (see [The Database](#the-database)). The
+extension (Phalcon v5) has PHQL. For an MVC project with Phalcon v6, `crest new`
+with a database adds the package to `composer.json`. For another project, install it:
 
 ```bash
 composer require phalcon/phql:1.0.x-dev
@@ -754,43 +951,14 @@ Kept src/Models/Users.php: it exists; pass --force to replace it
 ```
 
 The rules of [Generated bases](#generated-bases) apply to the base of a model
-too: do not edit it (you can change only the aliases of its relations and the
-names in its `PropertyName` attributes, see [Relations](#relations) and
-[Names](#names)), and `--force` replaces the model, but never a base without
-the `Generated by crest.` line. If you add `initialize()` to your model, call
+too. Do not edit it. You can change only the aliases of its relations (in the
+`RelationAlias` attributes, see [Relations](#relations)) and the names in its
+`PropertyName` attributes (see [Names](#names)). `--force` replaces the model,
+but never a base without the `Generated by crest.` line. If you add `initialize()` to your model, call
 `parent::initialize()` first.
 
-Crest stops, and writes no file, when:
-
-- the table name gives no class name (`user-profiles`), or a name that PHP
-  reserves (`list`), and `models.classes` gives it no class (see
-  [Names](#names));
-- the project has no `db` service, the service is not a Phalcon database
-  adapter, or it cannot connect;
-- the table does not exist (in the schema of `models.schema`, when you set it);
-- `models.schema` has a value, and the `db` service is SQLite (see
-  [The schema](#the-schema));
-- a column name is not a property name (`first name`), or it is the name of a
-  property of `Phalcon\Mvc\Model` (`container`), and no `--property` or
-  attribute gives it another name: the error gives the `--property` to use;
-- two columns give the same property name (with `camelCase`, `first_name` and
-  `firstName`): the error tells you to give one of them another name with
-  `--property`;
-- the base is not valid PHP, or Crest cannot use a `RelationAlias` or a
-  `PropertyName` attribute in it (see [Relations](#relations) and
-  [Names](#names));
-- the `models` key of `crest.php` is not correct, or `--property` names a
-  column that the table does not have (see [Names](#names));
-- a published stub has no `{{ columnMap }}` or `{{ property }}`, and the base
-  needs a `columnMap()` (see [Names](#names)), or the published `model-base`
-  has no `{{ schema }}`, and `models.schema` has a value (see
-  [The schema](#the-schema));
-- `models.getSet` is `true`, and a getter or a setter is a method of
-  `Phalcon\Mvc\Model`, two properties give one method name, or a published
-  stub has no `{{ visibility }}` or `{{ methods }}` (see
-  [Getters and setters](#getters-and-setters));
-- `--module` names a module that does not exist (see
-  [Generating modules](#generating-modules)).
+For the errors that stop `make:model` before it writes a file, see
+[When `make:model` Stops](#when-makemodel-stops).
 
 `make:model` is for MVC projects. An ADR project uses repositories, not Active
 Record models, so the command stops there.
@@ -810,7 +978,8 @@ Created src/Modules/Admin/Models/Users.php
 
 The models and their bases go into the `Models` folder of the module, in its
 namespace (`App\Modules\Admin\Models`). `--module` works with one table and
-with `--all`. A relation names a model in the same module, so write the related
+with `--all` (see [All the Tables](#all-the-tables)). A relation names a model
+in the same module, so write the related
 tables into the same module. The lines that tell you to run `make:model` again
 name the option, for example
 `Run make:model --module=admin for customers too: ...`. Crest reads the tables
@@ -890,10 +1059,11 @@ Note: the old files of users stay: src/Models/Users.php and src/Models/Base/User
 Move your code to the new model, delete the old files, and run `make:model` for
 the tables of the note. Crest prints the note on each run until you delete the
 old files. With `--all`, the note names only the related tables that the run
-does not write, such as the tables of `--exclude`. The note also names a
+does not write, such as the tables of `--exclude` (see
+[All the Tables](#all-the-tables)). The note also names a
 related table that has no model yet: `make:model` then writes a model for it.
 The new base does not get the `PropertyName` attributes of the old base: give
-the names again with `--property`.
+the names again with `--property` (see **One property** below).
 
 Crest prints no note when the old base does not have the `Generated by crest.`
 line. Crest also prints no note when another table gets the old class (for
@@ -956,7 +1126,8 @@ the column name.
 base gets a `columnMap()` with each column and its property. Phalcon uses it to
 read and write the rows, but only when the setting `orm.column_renaming` is on,
 as it is by default. The relations use the property names of the two tables:
-with `camelCase`, the `belongsTo()` of `invoices` has `'customerId'`.
+with `camelCase`, the `belongsTo()` of `invoices` has `'customerId'` (see
+[Relations](#relations)).
 
 **When a name changes.** When a property gets another name (a change of
 `camelCase`, a new `--property`, or a changed attribute), Crest prints a line
@@ -976,8 +1147,9 @@ base that changes. Thus it names only the tables of `--exclude` (see
 The summary lists each table that failed: run `make:model` for it again after
 the fix.
 
-**Published stubs.** `model-base` has the placeholder `{{ columnMap }}`, and
-`fragment-model-property` has `{{ property }}`. A copy that you published before
+**Published stubs.** `model-base` has the placeholder `{{ columnMap }}`, and the
+fragment stub `fragment-model-property` (see [Project Stubs](#project-stubs)) has
+`{{ property }}`. A copy that you published before
 Crest added these placeholders does not have them. When a base needs a
 `columnMap()`, Crest stops:
 
@@ -1069,8 +1241,9 @@ continues. A skipped table still gives its relations: with
 `--exclude=invoices`, the base of `customers` has its `hasMany()` to
 `Invoices`.
 
-With `--all`, an error of the list in [Generating models](#generating-models)
-that is about one table makes only that table fail. For example:
+With `--all`, an error of the list in
+[When `make:model` Stops](#when-makemodel-stops) that is about one table makes
+only that table fail. For example:
 
 - its name gives no class name (`user-profiles`) or a name that PHP reserves
   (`list`), and no line of `models.classes` gives it a class;
@@ -1118,7 +1291,8 @@ No relations for users: the table has no foreign keys, and no foreign keys point
 ```
 
 With no foreign keys, write the relations in your model, in `initialize()`
-after `parent::initialize()`:
+after `parent::initialize()`. The `alias` option is the name that you use to read
+the relation (see the aliases below). For example:
 
 ```php
 public function initialize(): void
@@ -1291,8 +1465,8 @@ You can also add a skipped relation in your model, in `initialize()` after
 `parent::initialize()`.
 
 Composite keys work on MySQL and MariaDB: the fields are arrays, for example
-`['order_id', 'line_no']`. On PostgreSQL, composite keys work from cphalcon
-5.24.0 and from the tag of `phalcon/phalcon` after `v6.0.0RC4`. Before these
+`['order_id', 'line_no']`. On PostgreSQL, composite keys work from the C extension
+cphalcon 5.24.0 and from the tag of `phalcon/phalcon` after `v6.0.0RC4`. Before these
 versions, Phalcon gives the wrong columns for a composite key on PostgreSQL. On
 SQLite, Phalcon gives one key for each column of a composite key. Thus Crest
 writes one relation for each column, and each relation uses only a part of the
@@ -1393,11 +1567,12 @@ The limits:
 
 ### Getters and setters
 
-phalcon-devtools with `--get-set` wrote models with protected properties, and a
-getter and a setter for each column. With `'getSet' => true` in the `models`
-key of `crest.php`, each base that `make:model` writes has protected typed
-properties, and a getter and a setter for each property. The base of the table
-`people` (`id`, `first_name`) is:
+phalcon-devtools is the Phalcon Devtools command line tool (see
+[References](#references)). With `--get-set`, it wrote models with protected
+properties, and a getter and a setter for each column. With `'getSet' => true`
+in the `models` key of `crest.php`, each base that `make:model` writes has
+protected typed properties, and a getter and a setter for each property. The
+base of the table `people` (`id`, `first_name`) is:
 
 ```php
 abstract class PeopleBase extends Model
@@ -1558,6 +1733,41 @@ On `phalcon/phalcon` `v6.0.0RC4` and before, a write through `__set()` or
 `assign()` gives a `TypeError` when the value does not have the type of the
 column, also for `'42'`.
 
+### When `make:model` stops
+
+Crest stops, and writes no file, when:
+
+- the table name gives no class name (`user-profiles`), or a name that PHP
+  reserves (`list`), and `models.classes` gives it no class (see
+  [Names](#names));
+- the project has no `db` service, the service is not a Phalcon database
+  adapter, or it cannot connect;
+- the table does not exist (in the schema of `models.schema`, when you set it);
+- `models.schema` has a value, and the `db` service is SQLite (see
+  [The schema](#the-schema));
+- a column name is not a property name (`first name`), or it is the name of a
+  property of `Phalcon\Mvc\Model` (`container`), and no `--property` or
+  attribute gives it another name. The error gives the `--property` to use
+  (see [Names](#names));
+- two columns give the same property name (with `camelCase`, `first_name` and
+  `firstName`): the error tells you to give one of them another name with
+  `--property`;
+- the base is not valid PHP, or Crest cannot use a `RelationAlias` or a
+  `PropertyName` attribute in it (see [Relations](#relations) and
+  [Names](#names));
+- the `models` key of `crest.php` is not correct, or `--property` names a
+  column that the table does not have (see [Names](#names));
+- a published stub has no `{{ columnMap }}` or `{{ property }}`, and the base
+  needs a `columnMap()` (see [Names](#names)), or the published `model-base`
+  has no `{{ schema }}`, and `models.schema` has a value (see
+  [The schema](#the-schema));
+- `models.getSet` is `true`, and a getter or a setter is a method of
+  `Phalcon\Mvc\Model`, two properties give one method name, or a published
+  stub has no `{{ visibility }}` or `{{ methods }}` (see
+  [Getters and setters](#getters-and-setters));
+- `--module` names a module that does not exist (see
+  [Generating modules](#generating-modules)).
+
 ## Generating modules
 
 In an MVC project, `make:module` writes a module: a part of the application
@@ -1604,8 +1814,9 @@ the host does not read `.env` (see [The database](#the-database)).
 
 ### Registration and routes
 
-Crest does not change your front controller or your router. Register the
-module in `run()` of `AppFront`, before `handle()`:
+Crest does not change your front controller or your router. `run()` of
+`AppFront` handles the request and sends the response. Register the module in
+`run()`, before `handle()`:
 
 ```php
 public function run(): int
@@ -1762,6 +1973,9 @@ column: `first_name` gives the label `First name`.
 
 ### The pages
 
+The list and the `new` and `edit` pages use the form that `make:scaffold` writes
+(see [The Form](#the-form)).
+
 | URL | Method | Result |
 |---|---|---|
 | `/users` | any | the list, with 10 rows on each page, and the search form |
@@ -1806,7 +2020,8 @@ nothing. It stops when:
 - no psr-4 entry covers the `form`, `controller` or `model` path;
 - the table does not exist;
 - the table has no primary key, or its primary key has more than one column;
-- `make:model` stops on the table (see [Generating models](#generating-models));
+- `make:model` stops on the table (see
+  [When `make:model` Stops](#when-makemodel-stops));
 - a property has the name of an accessor of `Phalcon\Mvc\Model` (see below);
 - the `edit` form has no fields, for example when the table has only its primary
   key.
@@ -1882,9 +2097,173 @@ $url->setBaseUri('/');
   not a list of the related rows.
 - A `DELETE` that a foreign key refuses gives an error page.
 - A column with the name `page` is also the parameter of the page in the URL.
-- With the `phalcon/phalcon` package (Phalcon v6), a project needs `phalcon/phql`.
-  `crest new` adds it to an MVC project with Phalcon v6 and a database (see
-  [Generating models](#generating-models)).
+- A project with the `phalcon/phalcon` package (Phalcon v6) needs `phalcon/phql`
+  (see [The Database](#the-database)).
+
+## Configuration
+
+`crest.php` is the project file (see [The Project File](#the-project-file)). This
+section shows its keys. This example is the file of an ADR project:
+
+```php
+return [
+    'flavor'    => 'adr',
+    'namespace' => 'App',
+    'bootstrap' => App\AppFront::class,
+    'paths'     => [
+        'action'     => 'src/Action',
+        'command'    => 'src/Command',
+        'middleware' => 'src/Middleware',
+        'provider'   => 'src/Provider',
+        'responder'  => 'src/Responder',
+    ],
+    'runtime'   => ['type' => 'docker', 'service' => 'app'],
+];
+```
+
+A key that is not in the file takes its default: `flavor` `adr`, `namespace` `App`, the
+default paths of the flavor (for `adr`, the paths above), and the host runtime.
+`crest new` writes the `runtime` key, with docker by default (see
+[Creating a Project](#creating-a-project)). Thus the host default does not apply to a new
+project.
+
+The `runtime` key says where the project commands run (see [The Runtime](#the-runtime)).
+
+The `paths` key gives a folder for each kind of file that Crest writes. Crest gets the
+namespace of a path from the psr-4 map of `composer.json`. Thus a psr-4 entry must cover
+each path: `src/Action` under `App\ => src/` gives `App\Action`. For a folder that no
+psr-4 entry covers, give the namespace in the `namespaces` key:
+
+```php
+return [
+    'paths'      => ['action' => 'app/Handlers'],
+    'namespaces' => ['action' => 'Shop\Handlers'],
+];
+```
+
+The `models` key changes the names that `make:model` gives in an MVC project.
+`classes` gives a class to a table, and `camelCase` gives camelCase property names.
+`getSet` gives protected properties with a getter and a setter for each. The option
+`--get-set` of phalcon-devtools (see [References](#references)) does the same.
+`crest new` and `crest init` write the key for an MVC project, with
+`'camelCase' => false` and `'getSet' => false`. `crest new --camel-case` and
+`--get-set` give `true`. `crest config:show` shows the key. See [Names](#names) and
+[Getters and setters](#getters-and-setters):
+
+```php
+return [
+    'models' => [
+        'classes'   => ['users' => 'User'],
+        'camelCase' => true,
+        'getSet'    => true,
+    ],
+];
+```
+
+`models.schema` gives the schema of the tables: `make:model` and `make:scaffold`
+then read the tables of that schema, and each base calls `setSchema()`. See
+[The schema](#the-schema).
+
+Crest reads `vendor-dir` and `bin-dir` as composer does. It uses
+`COMPOSER_VENDOR_DIR` and `COMPOSER_BIN_DIR` first, then `config` in `composer.json`,
+then `vendor` and `<vendor-dir>/bin`. The hand-off runs `<bin-dir>/crest`, and `serve`
+checks `<vendor-dir>/autoload.php`. With the docker runtime, composer runs in the
+container, so Crest reads only `composer.json`, and the two folders must be relative.
+Crest does not expand `~` or `$VAR` in these values: use a relative or an absolute
+path. A custom `vendor-dir` or `bin-dir` needs this version of Crest. It needs it both as
+the global Crest and in the project. An older Crest looks only for `vendor/bin/crest`.
+
+## Custom stubs
+
+A stub is a template that Crest fills in (see [Stubs](#stubs)). To change a stub, copy
+it into `resources/stubs/<flavor>/` in your project. Crest then uses your copy, not the
+packaged stub. A stub that all flavors use, for example `command.stub`, is in
+`resources/stubs/shared/`. Crest looks for a stub in this order: your
+`resources/stubs/<flavor>/`, your `resources/stubs/shared/`, then the same two folders
+in the package. `crest stub:publish` copies each stub into the folder where Crest looks
+for it.
+
+`stub:publish` copies a `project-*` stub, which `new` uses, only when you give its name.
+See [Project Stubs](#project-stubs).
+
+### Project stubs
+
+`crest new` writes the files of a project from the `project-*` stubs (see
+[Creating a Project](#creating-a-project)). To change them, publish them by name in the
+folder that the project goes into (the working directory, or `--directory`), then edit
+the copies. For example, `project-front` is the stub of the front controller:
+
+```bash
+crest stub:publish project-front
+```
+
+A project stub needs no `crest.php`. `--flavor` gives its flavor, as for `new`; the
+default is `adr`:
+
+```bash
+crest stub:publish project-front --flavor=mvc
+```
+
+The project stubs that are the same in both flavors are in `resources/stubs/shared/`,
+and a publish puts them there. A copy in `resources/stubs/<flavor>/` wins over the
+shared copy for that flavor, and a publish of the shared copy prints a note that names
+it. Crest looks for a project stub in the order of [Custom Stubs](#custom-stubs). When
+the flavor does not have the stub and another flavor does, the error names the option to
+use, for example `pass --flavor=mvc`.
+
+A publish with no name leaves the project stubs out, because they do nothing inside a
+project. It also leaves the fragment stubs (`fragment-*`) out. They hold pieces of the
+framework API and the guidance text that the generators print. A copy of a fragment does
+not get the changes of later releases. Publish a fragment by name to change it.
+
+You can change each project stub on its own. The names that the stubs and Crest must
+agree on come from placeholders: `{{ documentRoot }}`, `{{ router }}`,
+`{{ portVariable }}`, `{{ port }}`, `{{ front }}`, `{{ source }}` and
+`{{ autoloader }}`. Their values are:
+
+- `{{ documentRoot }}`: the web root folder, `public`
+- `{{ router }}`: the router script, `.htrouter.php`
+- `{{ portVariable }}`: the port variable, `APP_PORT`
+- `{{ port }}`: the default port, `8080`
+- `{{ front }}`: the name of the front controller class, `AppFront`
+- `{{ source }}`: the source folder, `src`
+- `{{ autoloader }}`: the autoloader, `vendor/autoload.php`
+
+Keep these placeholders where the packaged copy has them. Then `serve`, `init` and the
+generated files agree.
+
+`project-front`, `project-config` and `project-index` must also agree with each other on
+the namespace. `new` decides where each file goes: a stub cannot move its file. A
+published copy must use only the placeholders of the packaged copy. If a placeholder has
+no value, `new` stops before it writes a file.
+
+In an MVC project, `{{ controllerNamespace }}`, `{{ controllerPath }}`,
+`{{ providerNamespace }}`, `{{ providerPath }}` and `{{ viewsPath }}` come from the
+default paths of the flavor. A stub that depends on the view engine has the engine name
+in its name: `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`.
+
+The service of the database and the database lines of `.env` (see
+[The Database](#the-database)) come from the project stubs `project-compose-mysql`,
+`project-compose-mariadb`, `project-compose-pgsql`, `project-env-database` and
+`project-env-sqlite`. To change one, for example the image, publish it by name in the
+folder that the projects go into:
+
+```bash
+crest stub:publish project-compose-mysql
+```
+
+A copy of a project stub that you published before the database option does not have the
+new placeholders: `{{ dependsOn }}`, `{{ databaseService }}`, `{{ databaseInstall }}`,
+`{{ databaseEnv }}`, `{{ databaseIgnore }}`, `{{ phql }}`, `{{ dbUse }}`,
+`{{ dbProvider }}`, `{{ registerProviders }}` and `{{ models }}`. When the project needs
+one, `new` stops before it writes a file, and names the copy:
+
+```text
+crest: the published stub /path/to/resources/stubs/shared/project-compose.stub has no {{ databaseService }}; publish it again with crest stub:publish project-compose --flavor=adr --force, and make your changes in it again
+```
+
+Without a database, and without `--camel-case` and `--get-set`, such a copy works as
+before.
 
 ## Adding commands from a package
 
@@ -1900,20 +2279,19 @@ A package adds commands to Crest in its `composer.json`:
 }
 ```
 
-Crest reads this block from each installed package, and from the root
-project. These commands cannot replace a command or an alias of Crest, and the
-root project replaces a package command with the same name. `crest make:command`
-writes a command and prints its block.
+Crest reads this block from each installed package, and from the root project. These
+commands cannot replace a command or an alias of Crest, and the root project replaces a
+package command with the same name. `crest make:command` writes a command and prints its
+block (see [Command Reference](#command-reference)).
 
-An unknown command gives a hint when Crest knows the package that provides its
-prefix:
+An unknown command gives a hint when Crest knows the package that provides its prefix:
 
 ```text
 crest: unknown command 'migration:run'; provided by phalcon/migrations
 ```
 
-There is no hint when a registered command has that prefix: the package is
-installed, and only the name is wrong.
+There is no hint when a registered command has that prefix: the package is installed,
+and only the name is wrong.
 
 A command extends `Crest\Console\Command\Command` and declares two methods:
 
@@ -1941,9 +2319,10 @@ final class GreetCommand extends Command
 }
 ```
 
-Crest makes the command with `new $class()`, so the constructor must work
-without arguments. Each command also gets the global options (`--config`,
-`--directory`, `--trace`, `--help`, `--quiet`, `--no-interaction`).
+Crest makes the command with `new $class()`, so the constructor must work without
+arguments. Each command also gets the global options (`--config`, `--directory`,
+`--trace`, `--help`, `--quiet`, `--no-interaction`; see
+[Global Options](#global-options)).
 
 These types are the API for a package. Each type has `@api` in its docblock:
 
@@ -1957,13 +2336,79 @@ These types are the API for a package. Each type has `@api` in its docblock:
 | `Crest\Command\Project` | `Project::context($input)` gives the project of the call |
 | `Crest\Project\ProjectContext` | `root()`, `path($key)` and `namespaceFor($key)` |
 
-`Project::context()` finds the project by the rule of the other commands:
-the file that `--config` names, or the nearest `crest.php` in or above
-`--directory` or the working directory. Without `crest.php`, the command
-stops with the `crest init` hint.
+`Project::context()` finds the project as the other commands do (see
+[The Project File](#the-project-file)). Without `crest.php`, the command stops with the
+`crest init` hint.
 
-A public element with `@internal` in its docblock is not part of the API,
-and it can change in any release. Tools that read the tag, for example an
-IDE or a rule of a static analyzer, can report its use from another package. Do
-not extend `Crest\Command\ProjectCommand`: it is the base of the commands of
-Crest, and it changes with them.
+A public element with `@internal` in its docblock is not part of the API, and it can
+change in any release. Tools that read the tag, for example an IDE or a rule of a static
+analyzer, can report its use from another package. Do not extend
+`Crest\Command\ProjectCommand`: it is the base of the commands of Crest, and it changes
+with them.
+
+## Command reference
+
+The table shows the aliases in parentheses. Run `crest` with no arguments, or
+`crest list`, for the same listing from the tool itself. In a project, the listing shows
+only the commands for the flavor of the project (see [Overview](#overview)).
+`crest --help` shows the help of `list`, because `crest` with no command runs `list`.
+An unknown option with no command, or a `crest.php` that is not valid, stops the listing
+with an error.
+
+| Command | Description |
+|---|---|
+| `about` (`info`, `i`) | environment and version report |
+| `config:show` | the project configuration that Crest resolved, and where each value came from |
+| `container:list` | services registered in the project container |
+| `down` | stop and remove the project containers |
+| `event:list` | listeners attached to the project events manager |
+| `init` | write `crest.php` for an existing project |
+| `install` | install composer dependencies in the project container |
+| `list` (`commands`, `enumerate`) | the available commands |
+| `make:action` | create an ADR action for a route |
+| `make:command` | create a Crest command |
+| `make:controller` | create an MVC controller |
+| `make:middleware` | create an ADR middleware |
+| `make:model` | create an MVC model from a database table, or from each table with `--all` (relations come only from foreign keys) |
+| `make:module` | create an MVC module |
+| `make:provider` | create a service provider |
+| `make:responder` | create an ADR responder |
+| `make:scaffold` | create MVC CRUD pages for a database table |
+| `new` | create an ADR or MVC project |
+| `route:list` | every route the application answers |
+| `serve` (`server`) | start PHP's built-in web server for the project |
+| `stub:publish` | copy packaged stubs into the project for editing |
+| `up` | start the project containers |
+
+`make:command` works in each flavor. `make:provider` works in ADR and MVC projects, with
+a stub for each flavor. `make:controller`, `make:model`, `make:module` and
+`make:scaffold` are for MVC projects only. These commands are for ADR projects only:
+`make:action`, `make:middleware`, `make:responder`, `route:list`, `container:list` and
+`event:list`. A command for one flavor stops with an error in a project of a different
+flavor:
+
+```text
+crest: make:responder does not support the 'mvc' flavor of this project; it supports: adr
+```
+
+### Global options
+
+| Option | Purpose |
+|---|---|
+| `--config=<file>` | explicit path to `crest.php` |
+| `--directory=<dir>` | where Crest starts to look for `crest.php`; for `new` and `init`, the directory to use |
+| `--trace` | full exception trace |
+| `--help`, `-h` | usage for the current command |
+| `--quiet`, `-q` | suppress non-essential output |
+| `--no-interaction`, `-n` | ask no questions; use the default answers |
+| `--version`, `-V` | Crest version |
+
+## References
+
+- [Crest - GitHub Repository][github]
+- [Crest on Packagist][packagist]
+- [Phalcon Devtools][devtools]
+
+[devtools]: https://docs.phalcon.io/6.0/devtools/
+[github]: https://github.com/phalcon/crest
+[packagist]: https://packagist.org/packages/phalcon/crest
