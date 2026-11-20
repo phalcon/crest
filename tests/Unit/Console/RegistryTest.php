@@ -16,7 +16,10 @@ namespace Crest\Tests\Unit\Console;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Registry;
+use Crest\Tests\Support\Console\AbstractFakeCommand;
+use Crest\Tests\Support\Console\ArgumentCommand;
 use Crest\Tests\Support\Console\FakeCommand;
+use Crest\Tests\Support\Console\OptionalArgumentCommand;
 use Crest\Tests\Support\Console\ThrowingCommand;
 use Crest\Tests\Support\InstalledPackages;
 use Crest\Tests\Support\ScratchDirectory;
@@ -118,6 +121,23 @@ final class RegistryTest extends TestCase
         );
     }
 
+    public function testDescriptionsListTheOtherCommandsWhenAContributedClassCannotBeCreated(): void
+    {
+        $this->installExtra([
+            self::KEY => [
+                'commands' => [
+                    'abstract' => AbstractFakeCommand::class,
+                    'argument' => ArgumentCommand::class,
+                    'fake'     => FakeCommand::class,
+                ],
+            ],
+        ]);
+
+        $registry = (new Registry())->withDiscovery(self::KEY);
+
+        $this->assertSame(['fake' => 'A command that exists only for tests'], $registry->descriptions());
+    }
+
     public function testDiscoveryAddsACommandOfTheRootProject(): void
     {
         // The root project has no entry in installed.json: its own
@@ -146,6 +166,24 @@ final class RegistryTest extends TestCase
 
         $this->assertSame(['fake' => FakeCommand::class], $registry->all());
         $this->assertSame(['fake' => 'A command that exists only for tests'], $registry->descriptions());
+    }
+
+    public function testDiscoveryIgnoresACommandWhoseConstructorNeedsAnArgument(): void
+    {
+        $this->installExtra([
+            self::KEY => ['commands' => ['argument' => ArgumentCommand::class, 'fake' => FakeCommand::class]],
+        ]);
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
+    }
+
+    public function testDiscoveryIgnoresAnAbstractCommand(): void
+    {
+        $this->installExtra([
+            self::KEY => ['commands' => ['abstract' => AbstractFakeCommand::class, 'fake' => FakeCommand::class]],
+        ]);
+
+        $this->assertSame(['fake' => FakeCommand::class], (new Registry())->withDiscovery(self::KEY)->all());
     }
 
     public function testDiscoveryIgnoresANonArrayCommandsEntry(): void
@@ -253,6 +291,16 @@ final class RegistryTest extends TestCase
 
         // No withDiscovery() call, so the contributed command stays invisible.
         $this->assertSame([], (new Registry())->all());
+    }
+
+    public function testDiscoveryKeepsACommandWhoseConstructorArgumentsAreOptional(): void
+    {
+        $this->installExtra([self::KEY => ['commands' => ['optional' => OptionalArgumentCommand::class]]]);
+
+        $this->assertSame(
+            ['optional' => OptionalArgumentCommand::class],
+            (new Registry())->withDiscovery(self::KEY)->all()
+        );
     }
 
     public function testDiscoveryKeepsASeededAliasForAContributedName(): void

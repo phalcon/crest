@@ -398,8 +398,9 @@ final class ModelRelations
     /**
      * The alias of a belongsTo() (spec 3.2): the key column without `_id`, as
      * fromTable() joins a name (`customer_id` gives Customer). If the key has
-     * more than one column, or the column gives no name, the alias is the
-     * class of the referenced table. An alias is not a class name, so a
+     * more than one column, or the column gives no name, the alias comes from
+     * the name of the referenced table (`customers` gives Customers). A line
+     * of `models.classes` does not change it. An alias is not a class name, so a
      * reserved word is a correct alias.
      */
     private static function keyAlias(ReferenceInterface $reference): string

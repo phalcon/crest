@@ -96,10 +96,8 @@ final class ForeignKeysSchemaTest extends AbstractDatabaseTestCase
 
     public function testTheSameKeyInTwoSchemasGivesOneKeyInEach(): void
     {
-        // The two keys have the same name in the two schemas. cphalcon before
-        // 5.24.0 gives one key with the columns of both on PostgreSQL.
-        $this->skipCompositeKeyOnOldCphalcon();
-
+        // The two keys have the same name in the two schemas, and they are
+        // identical. Each schema gives one key.
         $this->createTables(
             CustomersMigration::class,
             InvoicesMigration::class,

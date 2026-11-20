@@ -16,6 +16,7 @@ namespace Crest\Console;
 use Composer\Autoload\ClassLoader;
 use Crest\Console\Command\Command;
 use Crest\Console\Exceptions\Exception;
+use ReflectionClass;
 
 use function array_keys;
 use function file_get_contents;
@@ -25,6 +26,7 @@ use function is_string;
 use function is_subclass_of;
 use function json_decode;
 use function ksort;
+use function method_exists;
 use function sprintf;
 use function str_starts_with;
 
@@ -73,6 +75,24 @@ final class Registry
     }
 
     /**
+     * True when `new $class()` can create the class: it is a Command, it can be
+     * instantiated (it is not abstract or an interface, and its constructor is
+     * public), and its constructor needs no argument.
+     */
+    private static function creatable(string $class): bool
+    {
+        if (false === is_subclass_of($class, Command::class)) {
+            return false;
+        }
+
+        $reflection  = new ReflectionClass($class);
+        $constructor = $reflection->getConstructor();
+
+        return true === $reflection->isInstantiable()
+            && (null === $constructor || 0 === $constructor->getNumberOfRequiredParameters());
+    }
+
+    /**
      * The array under a key of $data, or an empty array when $data or the
      * value is not an array.
      *
@@ -114,7 +134,8 @@ final class Registry
     }
 
     /**
-     * The decoded JSON of a file, or null when the file does not exist.
+     * The decoded JSON of a file, or null when the file does not exist, cannot be
+     * read, or does not hold valid JSON.
      */
     private static function json(string $file): mixed
     {
@@ -261,8 +282,8 @@ final class Registry
      * packages and commands in one method put its cognitive complexity well
      * past what the analyzers allow. Anything malformed is skipped rather than
      * rejected - a broken contributor must not stop the scan. A name that is
-     * in $seeded stays with the seeded command, and a class that is not a
-     * Command is skipped.
+     * in $seeded stays with the seeded command. A class that is not a Command, cannot
+     * be instantiated, or has a constructor that needs an argument is skipped.
      *
      * @param mixed                 $extra  The package's `extra.<key>` value,
      *                                      whatever it holds.
@@ -285,7 +306,7 @@ final class Registry
                 continue;
             }
 
-            if (true === isset($seeded[$name]) || false === is_subclass_of($class, Command::class)) {
+            if (true === isset($seeded[$name]) || false === self::creatable($class)) {
                 continue;
             }
 
@@ -308,8 +329,16 @@ final class Registry
         }
 
         $this->discovered = true;
-        $key              = $this->discoveryKey;
-        $seeded           = $this->commands + $this->aliases;
+
+        // Composer 1 and early 2.0 releases do not have the method.
+        // InstalledVersions does the same check.
+        // @phpstan-ignore function.alreadyNarrowedType
+        if (false === method_exists(ClassLoader::class, 'getRegisteredLoaders')) {
+            return;
+        }
+
+        $key    = $this->discoveryKey;
+        $seeded = $this->commands + $this->aliases;
 
         foreach (array_keys(ClassLoader::getRegisteredLoaders()) as $vendor) {
             foreach (self::extras($vendor) as $extra) {

@@ -40,7 +40,7 @@ composer require --dev phalcon/crest:dev-master
 
 This copy is the project Crest, in `vendor/bin/crest`. It runs the commands that work on
 the project, for example the generators (the `make:*` commands). See
-[The Global Crest and the Project Crest](docs/index.md#the-global-crest-and-the-project-crest).
+[The global Crest and the project Crest](docs/index.md#the-global-crest-and-the-project-crest).
 
 To create projects, also install Crest globally. This copy is the global Crest. The global
 composer `vendor/bin` folder must be in your `PATH`:
@@ -51,9 +51,9 @@ composer global require phalcon/crest:dev-master
 
 ## Quick start
 
-`crest new` creates a project (see [Creating a Project](docs/index.md#creating-a-project)). Run it with
+`crest new` creates a project (see [Creating a project](docs/index.md#creating-a-project)). Run it with
 the global Crest of [Install](#install). On a host with docker and no PHP, use
-[With Docker Only](#with-docker-only) instead.
+[With Docker only](#with-docker-only) instead.
 
 ```bash
 crest new my-app                      # create an MVC project
@@ -61,11 +61,11 @@ crest new my-app --flavor=adr         # create an ADR project
 ```
 
 In a terminal, `new` asks for each value that no option gives. An empty answer takes the
-default (see [Creating a Project](docs/index.md#creating-a-project)).
+default (see [Creating a project](docs/index.md#creating-a-project)).
 
 For an MVC project with no database, the output of `new` gives two ways to run the
 project. With docker, you use `./crest`, a script that `crest new` writes into the project
-(see [The Launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next
+(see [The launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next
 two sections explain each way. The output is:
 
 ```text
@@ -97,14 +97,14 @@ cd my-app
 ```
 
 `./crest up` starts the containers. `./crest install` installs the composer dependencies
-(see [The Launcher](docs/index.md#the-launcher)). A v5 project compiles the Phalcon extension in
+(see [The launcher](docs/index.md#the-launcher)). A v5 project compiles the Phalcon extension in
 `./crest up`. This takes some minutes. Then `GET /` answers on http://localhost:8080/.
 
 ### With PHP on the host
 
 Without docker, create the project with `crest new my-app --runtime=host`: the project
-Crest then runs with the PHP of the host (see [The Runtime](docs/index.md#the-runtime)). With PHP and
-composer on the host, and no docker, run:
+Crest then runs with the PHP of the host (see [The runtime](docs/index.md#the-runtime)). With PHP and
+composer on the host, run:
 
 ```bash
 cd my-app
@@ -113,7 +113,7 @@ crest serve
 ```
 
 `crest serve` starts PHP's built-in web server for the project (see
-[Running a Project](docs/index.md#running-a-project)). By default, `crest serve` listens on
+[Running a project](docs/index.md#running-a-project)). By default, `crest serve` listens on
 `127.0.0.1:8080`.
 
 ### With Docker only
@@ -131,13 +131,13 @@ Then `GET /` answers on http://localhost:8080/. On Windows, run the command in t
 Windows Subsystem for Linux (WSL2).
 
 For another port, set `APP_PORT`. The script writes it into the project `.env`, the file
-of settings that docker compose reads (see [The Launcher](docs/index.md#the-launcher)):
+of settings that docker compose reads (see [The launcher](docs/index.md#the-launcher)):
 
 ```bash
 curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
 ```
 
-[The Setup Script](docs/index.md#the-setup-script) gives the details: the options, the errors, and how
+[The setup script](docs/index.md#the-setup-script) gives the details: the options, the errors, and how
 to read the script before it runs.
 
 ## Documentation
