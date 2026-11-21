@@ -8,3 +8,10 @@ parameters:
     bootstrapFiles:
         - %currentWorkingDirectory%/vendor/autoload.php
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Registry::discover() checks for Composer 1 and early 2.0 releases.
+        # phpstan sees only the Composer in vendor/, which has the method.
+        -
+            identifier: function.alreadyNarrowedType
+            path: %currentWorkingDirectory%/src/Console/Registry.php
+            count: 1

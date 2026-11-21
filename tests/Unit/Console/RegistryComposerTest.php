@@ -22,12 +22,14 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function fclose;
+use function file_get_contents;
 use function file_put_contents;
 use function getenv;
 use function json_encode;
 use function proc_close;
 use function proc_open;
 use function stream_get_contents;
+use function trim;
 
 /**
  * The command discovery reads what a real `composer install` writes: the
@@ -54,44 +56,33 @@ final class RegistryComposerTest extends TestCase
         $this->removeScratchDirectory();
     }
 
-    public function testDiscoveryReadsACustomVendorDir(): void
+    /**
+     * @return iterable<string, array{?string}>
+     */
+    public static function vendorDirs(): iterable
     {
-        file_put_contents(
-            $this->root . '/package/composer.json',
-            (string) json_encode([
-                'name'    => 'crest-test/package',
-                'version' => '1.0.0',
-                'extra'   => [self::KEY => ['commands' => ['fake' => FakeCommand::class]]],
-            ])
-        );
-        file_put_contents(
-            $this->root . '/composer.json',
-            (string) json_encode([
-                'require'      => ['crest-test/package' => '1.0.0'],
-                'config'       => ['vendor-dir' => 'lib'],
-                'repositories' => [
-                    ['type' => 'path', 'url' => 'package', 'options' => ['symlink' => false]],
-                    ['packagist.org' => false],
-                ],
-                'extra'        => [self::KEY => ['commands' => ['boom' => ThrowingCommand::class]]],
-            ])
-        );
-
-        [$status, $output] = $this->composer(['install', '--no-interaction', '--no-progress', '--no-plugins']);
-
-        $this->assertSame(0, $status, $output);
-
-        $this->loader = new ClassLoader($this->root . '/lib');
-        $this->loader->register();
-
-        $this->assertSame(
-            ['fake' => FakeCommand::class, 'boom' => ThrowingCommand::class],
-            (new Registry())->withDiscovery(self::KEY)->all()
-        );
+        yield 'the default vendor folder' => [null];
+        yield 'a custom vendor-dir' => ['lib'];
     }
 
-    public function testDiscoveryReadsWhatComposerInstalls(): void
+    /**
+     * @dataProvider vendorDirs
+     */
+    public function testDiscoveryReadsWhatComposerInstalls(?string $vendorDir): void
     {
+        $project = [
+            'require'      => ['crest-test/package' => '1.0.0'],
+            'repositories' => [
+                ['type' => 'path', 'url' => 'package', 'options' => ['symlink' => false]],
+                ['packagist.org' => false],
+            ],
+            'extra'        => [self::KEY => ['commands' => ['boom' => ThrowingCommand::class]]],
+        ];
+
+        if (null !== $vendorDir) {
+            $project['config'] = ['vendor-dir' => $vendorDir];
+        }
+
         file_put_contents(
             $this->root . '/package/composer.json',
             (string) json_encode([
@@ -100,17 +91,7 @@ final class RegistryComposerTest extends TestCase
                 'extra'   => [self::KEY => ['commands' => ['fake' => FakeCommand::class]]],
             ])
         );
-        file_put_contents(
-            $this->root . '/composer.json',
-            (string) json_encode([
-                'require'      => ['crest-test/package' => '1.0.0'],
-                'repositories' => [
-                    ['type' => 'path', 'url' => 'package', 'options' => ['symlink' => false]],
-                    ['packagist.org' => false],
-                ],
-                'extra'        => [self::KEY => ['commands' => ['boom' => ThrowingCommand::class]]],
-            ])
-        );
+        file_put_contents($this->root . '/composer.json', (string) json_encode($project));
 
         [$status, $output] = $this->composer(['install', '--no-interaction', '--no-progress', '--no-plugins']);
 
@@ -118,7 +99,7 @@ final class RegistryComposerTest extends TestCase
 
         // The autoloader of composer registers a class loader for each vendor
         // folder. This one stands for the autoloader of the project.
-        $this->loader = new ClassLoader($this->root . '/vendor');
+        $this->loader = new ClassLoader($this->root . '/' . ($vendorDir ?? 'vendor'));
         $this->loader->register();
 
         $this->assertSame(
@@ -130,10 +111,11 @@ final class RegistryComposerTest extends TestCase
     /**
      * Runs composer in the scratch folder. It needs no network: the root
      * turns packagist off, and the package comes from a path repository.
-     * The `COMPOSER`, `COMPOSER_VENDOR_DIR` and `COMPOSER_BIN_DIR` variables of
-     * the caller are not passed on, so they cannot change the result (for example
-     * the vendor folder). Stderr goes into
-     * stdout. The test fails if composer is not in PATH.
+     * The `COMPOSER`, `COMPOSER_VENDOR_DIR` and `COMPOSER_BIN_DIR` variables
+     * of the caller are not passed on, so they cannot change the result (for
+     * example the vendor folder). Stderr goes into a file, so a large stderr
+     * cannot block composer. The output has stdout, then stderr. The test
+     * fails if composer is not in PATH.
      *
      * @param list<string> $arguments
      *
@@ -142,12 +124,15 @@ final class RegistryComposerTest extends TestCase
     private function composer(array $arguments): array
     {
         $environment = getenv();
+        $stderr      = $this->root . '/composer.stderr';
 
         unset($environment['COMPOSER'], $environment['COMPOSER_VENDOR_DIR'], $environment['COMPOSER_BIN_DIR']);
 
+        // The @ stops the "Exec failed" warning that the child process gives
+        // when it cannot start composer.
         $process = @proc_open(
             ['composer', ...$arguments],
-            [1 => ['pipe', 'w'], 2 => ['redirect', 1]], // @phpstan-ignore argument.type
+            [1 => ['pipe', 'w'], 2 => ['file', $stderr, 'w']],
             $pipes,
             $this->root,
             $environment
@@ -161,12 +146,14 @@ final class RegistryComposerTest extends TestCase
 
         fclose($pipes[1]);
 
-        $status = proc_close($process);
+        $status  = proc_close($process);
+        $output .= (string) file_get_contents($stderr);
 
-        // No shell is used: the child process exits with 127 when it cannot start
-        // the command.
+        // No shell is used: the child process exits with 127 when it cannot
+        // start the command. The output gives the cause, for example a
+        // composer wrapper that cannot find php.
         if (127 === $status) {
-            $this->fail('composer is not in PATH');
+            $this->fail(trim('composer is not in PATH, or it cannot start. ' . $output));
         }
 
         return [$status, $output];

@@ -282,8 +282,9 @@ final class Registry
      * packages and commands in one method put its cognitive complexity well
      * past what the analyzers allow. Anything malformed is skipped rather than
      * rejected - a broken contributor must not stop the scan. A name that is
-     * in $seeded stays with the seeded command. A class that is not a Command, cannot
-     * be instantiated, or has a constructor that needs an argument is skipped.
+     * in $seeded stays with the seeded command. A class that is not a
+     * Command, cannot be instantiated, or has a constructor that needs an
+     * argument is skipped.
      *
      * @param mixed                 $extra  The package's `extra.<key>` value,
      *                                      whatever it holds.
@@ -332,7 +333,6 @@ final class Registry
 
         // Composer 1 and early 2.0 releases do not have the method.
         // InstalledVersions does the same check.
-        // @phpstan-ignore function.alreadyNarrowedType
         if (false === method_exists(ClassLoader::class, 'getRegisteredLoaders')) {
             return;
         }

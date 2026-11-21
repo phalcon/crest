@@ -20,7 +20,7 @@ use Crest\Console\Parsing\Definition;
 
 final class ArgumentCommand extends Command
 {
-    public function __construct(private readonly string $required)
+    public function __construct(public readonly string $required)
     {
     }
 
@@ -32,7 +32,7 @@ final class ArgumentCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $output->line('hello ' . $input->argumentString('subject') . $this->required);
+        $output->line('hello ' . $input->argumentString('subject'));
 
         return 0;
     }

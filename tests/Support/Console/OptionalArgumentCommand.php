@@ -20,7 +20,7 @@ use Crest\Console\Parsing\Definition;
 
 final class OptionalArgumentCommand extends Command
 {
-    public function __construct(private readonly string $optional = 'none')
+    public function __construct(public readonly string $optional = 'none')
     {
     }
 
@@ -32,7 +32,7 @@ final class OptionalArgumentCommand extends Command
 
     public function handle(Input $input, Output $output): int
     {
-        $output->line('hello ' . $input->argumentString('subject') . $this->optional);
+        $output->line('hello ' . $input->argumentString('subject'));
 
         return 0;
     }
