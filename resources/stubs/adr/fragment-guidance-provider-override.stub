@@ -1,0 +1,4 @@
+Nothing registers it yet. Add this line to registerProviders() in
+{{ front }}, after the parent call:
+
+        (new \{{ namespace }}\{{ class }}())->provide($container);
