@@ -554,9 +554,10 @@ crest: the service 'database' is the name of the database service; choose anothe
 ```
 
 In an ADR project with a database, the front controller already has
-`registerProviders()`. For a new provider, add only the `provide()` line that
-`crest make:provider` prints. `provide()` is the method of a provider that registers its
-services.
+`registerProviders()`. For a new provider, `crest make:provider` prints only the
+`provide()` line to add to it. `provide()` is the method of a provider that registers its
+services. Crest reads the front controller from the `bootstrap` key of `crest.php`. When
+it cannot load that class, it prints the whole override.
 
 To change the service or the `.env` lines of the database, for example the image, see
 [Project stubs](#project-stubs).

@@ -149,6 +149,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `make:model`: with `models.schema`, a published `model-base` needs `{{ schema }}`. Publish it again with `crest stub:publish model-base --force`. [#69](https://github.com/phalcon/crest/issues/69)
 - Changed `ModelProperties::of()` and `ForeignKeys::read()`: each one takes the schema as an optional last parameter. [#69](https://github.com/phalcon/crest/issues/69)
 - Changed the default flavor to `mvc`: `new` with no `--flavor`, the flavor that `init` proposes for a tie, a `crest.php` with no `flavor` key, and `stub:publish --flavor`. An ADR project whose `crest.php` has no `flavor` key must add `'flavor' => 'adr'`.
+- Changed `make:provider` in an ADR project: when the front controller of the `bootstrap` key declares `registerProviders()`, it prints only the `provide()` line, from the new stub `fragment-guidance-provider-override`. A second override was a "cannot redeclare" error. [#81](https://github.com/phalcon/crest/issues/81)
 
 ### Fixed
 
