@@ -15,13 +15,37 @@ namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\ProviderCommand;
 use Crest\Tests\Support\NamedArtifactCommandTestCase;
+use Crest\Tests\Support\Project\EmptyFront;
+use Crest\Tests\Support\Project\InheritedProvidersFront;
+use Crest\Tests\Support\Project\ProvidersFront;
 
 use function file_get_contents;
+use function file_put_contents;
+use function spl_autoload_register;
+use function spl_autoload_unregister;
 
 use const PHP_EOL;
 
 final class ProviderCommandTest extends NamedArtifactCommandTestCase
 {
+    /**
+     * The crest.php of an ADR project whose front controller has no
+     * registerProviders() of its own.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function frontsWithNoOverride(): iterable
+    {
+        yield 'no front controller' => ["['flavor' => 'adr']"];
+        yield 'a front that inherits registerProviders()' => [
+            "['flavor' => 'adr', 'bootstrap' => \\" . InheritedProvidersFront::class . '::class]',
+        ];
+        yield 'a front with no registerProviders()' => [
+            "['flavor' => 'adr', 'bootstrap' => \\" . EmptyFront::class . '::class]',
+        ];
+        yield 'a front that crest cannot load' => ["['flavor' => 'adr', 'bootstrap' => \\App\\Front\\Missing::class]"];
+    }
+
     public function testACliProjectStopsWithBothFlavorsInTheError(): void
     {
         $this->writeCrestPhp("['flavor' => 'cli']");
@@ -58,6 +82,65 @@ final class ProviderCommandTest extends NamedArtifactCommandTestCase
         );
         $this->assertStringContainsString('    new \Shop\Services\MailerProvider(),' . PHP_EOL, $stdout);
         $this->assertStringContainsString('$di->register(new \Shop\Services\MailerProvider()).' . PHP_EOL, $stdout);
+    }
+
+    public function testAFrontWhoseParentIsMissingGetsTheWholeOverride(): void
+    {
+        // The file of the front loads, but its parent class is not there.
+        file_put_contents(
+            $this->root . '/BrokenFront.php',
+            "<?php\n\nnamespace Scratch;\n\nfinal class BrokenFront extends MissingFront\n{\n}\n"
+        );
+
+        $loader = function (string $class): void {
+            if ('Scratch\\BrokenFront' === $class) {
+                require $this->root . '/BrokenFront.php';
+            }
+        };
+
+        spl_autoload_register($loader);
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\Scratch\\BrokenFront::class]");
+
+        try {
+            $status = $this->runCommand(['Cache']);
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            '    protected function registerProviders(Container $container): void' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testAFrontWithItsOwnOverrideGetsOnlyTheProvideLine(): void
+    {
+        // A second registerProviders() in the front is a fatal error
+        // ("cannot redeclare"), so only the line to add is printed.
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\" . ProvidersFront::class . '::class]');
+
+        $this->runCommand(['Cache']);
+
+        $expected = 'Created ' . $this->root . '/src/Provider/CacheProvider.php' . PHP_EOL
+            . 'Nothing registers it yet. Add this line to registerProviders() in' . PHP_EOL
+            . ProvidersFront::class . ', after the parent call:' . PHP_EOL
+            . PHP_EOL
+            . '        (new \App\Provider\CacheProvider())->provide($container);' . PHP_EOL;
+
+        $this->assertSame($expected, $this->readStdout());
+    }
+
+    public function testAnMvcProjectGetsItsGuidanceWhateverItsFrontDeclares(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => \\" . ProvidersFront::class . '::class]');
+
+        $this->runCommand(['Mailer']);
+
+        $this->assertStringContainsString(
+            'Nothing registers it yet. Add it to providers() in your front controller:',
+            $this->readStdout()
+        );
     }
 
     public function testAnMvcProjectGetsTheProvidersGuidance(): void
@@ -117,11 +200,16 @@ final class ProviderCommandTest extends NamedArtifactCommandTestCase
         );
     }
 
-    public function testTheRegistrationSnippetIsPrintedWithTheParentCall(): void
+    /**
+     * @dataProvider frontsWithNoOverride
+     */
+    public function testTheRegistrationSnippetIsPrintedWithTheParentCall(string $crestPhp): void
     {
         // The whole hint is the deliverable, asserted as one block: the blank
         // lines make it paste-able, and the parent:: line is what keeps the ADR
         // services registered. Losing either is a silent failure downstream.
+        $this->writeCrestPhp($crestPhp);
+
         $this->runCommand(['Cache']);
 
         $expected = 'Created ' . $this->root . '/src/Provider/CacheProvider.php' . PHP_EOL

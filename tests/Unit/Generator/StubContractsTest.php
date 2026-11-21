@@ -100,6 +100,7 @@ final class StubContractsTest extends TestCase
         'fields'         => "'id'",
         'form'           => 'GeneratedForm',
         'formNamespace'  => 'App\\Generated\\Forms',
+        'front'          => 'App\\Generated\\GeneratedFront',
         'imports'        => '',
         'key'            => 'id',
         'keyLabel'       => 'Id',
