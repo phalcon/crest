@@ -33,8 +33,8 @@ use const SORT_STRING;
 /**
  * The tables that make:model --all writes (#52, spec 3.2): the tables of the
  * database, with no views, no internal tables of SQLite, and no tables of
- * --exclude. With models.schema (#69), the tables and the views are those of
- * the schema. Each table gets its class here, before crest writes a file. A
+ * --exclude. With --views (#88), the views too. With models.schema (#69), the
+ * tables and the views are those of the schema. Each table gets its class here, before crest writes a file. A
  * table that gives no class, or that gives the class of another table,
  * fails: crest writes the other tables, and lists the failed tables at the
  * end.
@@ -69,11 +69,16 @@ final class ModelTables
      * database does not have stops crest before it writes a file: with a
      * typo, crest would write the table that the user wants to skip.
      *
-     * @param list<string> $exclude The names of --exclude, without spaces
-     * @param ModelNames   $names   The classes of models.classes (#53)
+     * @param list<string> $exclude   The names of --exclude, without spaces
+     * @param ModelNames   $names     The classes of models.classes (#53)
+     * @param bool         $withViews --views: the views get models too (#88)
      */
-    public static function of(AdapterInterface $adapter, array $exclude, ModelNames $names): self
-    {
+    public static function of(
+        AdapterInterface $adapter,
+        array $exclude,
+        ModelNames $names,
+        bool $withViews = false
+    ): self {
         $schema = $names->schema();
 
         // MySQL and MariaDB throw for a schema that does not exist.
@@ -104,6 +109,12 @@ final class ModelTables
             if (false === $internal && false === in_array($table, $views, true)) {
                 $tables[] = $table;
             }
+        }
+
+        // MySQL and PostgreSQL also list the views as tables, SQLite does
+        // not. So the views come from listViews() on each driver.
+        if (true === $withViews) {
+            $tables = [...$tables, ...$views];
         }
 
         $notes   = [];

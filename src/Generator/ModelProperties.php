@@ -35,11 +35,14 @@ final class ModelProperties
      * property names come from ModelNames, which checks them (#53). A null
      * schema is the default schema of the connection (#69).
      *
+     * A view is a table here (#88). On SQLite, tableExists() does not find a
+     * view (cphalcon #17768), so crest also asks viewExists().
+     *
      * @return array<string, string>
      */
     public static function of(AdapterInterface $adapter, string $table, ?string $schema = null): array
     {
-        if (false === $adapter->tableExists($table, $schema)) {
+        if (false === $adapter->tableExists($table, $schema) && false === $adapter->viewExists($table, $schema)) {
             throw new Exception(
                 null === $schema
                     ? sprintf("table '%s' was not found in the database of the 'db' service", $table)

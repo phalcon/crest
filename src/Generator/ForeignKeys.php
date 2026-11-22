@@ -35,8 +35,10 @@ use const SORT_STRING;
  * in this map. So make:model --all does not read each table again for each
  * model.
  *
- * The map has the tables of listTables(): on MySQL and PostgreSQL also the
- * views, on SQLite also sqlite_sequence. They have no keys.
+ * The map has the tables of listTables() and the views of listViews(), on
+ * SQLite also sqlite_sequence. They have no keys. SQLite does not list the
+ * views as tables, MySQL and PostgreSQL do. make:model --views writes the
+ * views (#88), so the map has them on each driver.
  *
  * The tables and the keys are those of the schema of the run (#69), or of
  * the default schema. A key whose referenced table is not a table of the run
@@ -77,7 +79,7 @@ final class ForeignKeys
     public static function read(AdapterInterface $adapter, string $table = '', ?string $schema = null): self
     {
         $keys   = [];
-        $listed = $adapter->listTables($schema);
+        $listed = [...$adapter->listTables($schema), ...$adapter->listViews($schema)];
 
         foreach ($listed as $name) {
             $keys[$name] = array_values($adapter->describeReferences($name, $schema));

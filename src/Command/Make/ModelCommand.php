@@ -414,7 +414,8 @@ final class ModelCommand extends ProjectCommand
             ->option('exclude=s', 'With --all: the tables to skip, separated by commas')
             ->option('force', 'Overwrite an existing model')
             ->option('module=s', 'Write the models into a module, e.g. admin')
-            ->option('property=s', 'For one table: property names, as column=name, separated by commas');
+            ->option('property=s', 'For one table: property names, as column=name, separated by commas')
+            ->option('views', 'With --all: also create a model for each view');
     }
 
     public function handle(Input $input, Output $output): int
@@ -435,6 +436,12 @@ final class ModelCommand extends ProjectCommand
 
         if (null !== $exclude && false === $all) {
             throw new Exception('--exclude is only for --all');
+        }
+
+        $views = true === $input->option('views');
+
+        if (true === $views && false === $all) {
+            throw new Exception('--views is only for --all');
         }
 
         if (null !== $property && true === $all) {
@@ -460,7 +467,7 @@ final class ModelCommand extends ProjectCommand
         $force = true === $input->option('force');
 
         if (true === $all) {
-            return $this->all($config, $module, $names, $excluded, $force, $output);
+            return $this->all($config, $module, $names, $excluded, $force, $views, $output);
         }
 
         $this->one($config, $module, $names->withGiven($table, $given), $table, $force, $output);
@@ -656,6 +663,7 @@ final class ModelCommand extends ProjectCommand
      * their lines can come in the wrong order.
      *
      * @param list<string> $exclude The names of --exclude, without spaces
+     * @param bool         $views   --views: the views get models too (#88)
      */
     private function all(
         Config $config,
@@ -663,6 +671,7 @@ final class ModelCommand extends ProjectCommand
         ModelNames $names,
         array $exclude,
         bool $force,
+        bool $views,
         Output $output
     ): int {
         [$path, $namespace] = self::folder($config, $module);
@@ -670,7 +679,7 @@ final class ModelCommand extends ProjectCommand
 
         $names->checkSchema($adapter);
 
-        $tables = ModelTables::of($adapter, $exclude, $names);
+        $tables = ModelTables::of($adapter, $exclude, $names, $views);
 
         foreach ($tables->notes as $note) {
             $output->line($note);
