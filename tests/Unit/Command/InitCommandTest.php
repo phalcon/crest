@@ -99,6 +99,36 @@ final class InitCommandTest extends TestCase
         $this->assertFileDoesNotExist($this->root . '/crest.php');
     }
 
+    public function testADatabaseAnswerAddsTheDatabase(): void
+    {
+        // #95: the last question. The questions: namespace, flavor, front
+        // controller, the six ADR paths, runtime, database.
+        $this->answers("\n\n\n\n\n\n\n\n\n\nsqlite\n");
+
+        $this->assertSame(0, $this->init([], true));
+        $this->assertFileExists($this->root . '/src/Provider/DbProvider.php');
+        $this->assertFileExists($this->root . '/storage/database.sqlite');
+    }
+
+    public function testADatabaseIsAddedAfterCrestPhp(): void
+    {
+        // #95: the work of make:database, from the crest.php that init writes.
+        $this->assertSame(0, $this->init(['--flavor', 'mvc', '--database', 'sqlite']));
+
+        $stdout = $this->readStdout();
+
+        $this->assertStringStartsWith(
+            'Created ' . $this->root . '/crest.php' . PHP_EOL
+            . 'Next: composer require --dev phalcon/crest' . PHP_EOL
+            . 'Created ' . $this->root . '/src/Providers/DbProvider.php' . PHP_EOL
+            . 'Created ' . $this->root . '/storage/database.sqlite' . PHP_EOL,
+            $stdout
+        );
+        $this->assertStringContainsString('    new \App\Providers\DbProvider($this->projectRoot),' . PHP_EOL, $stdout);
+        $this->assertStringEndsWith('Then crest make:model <table> reads it.' . PHP_EOL, $stdout);
+        $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
+    }
+
     public function testADirectoryThatDoesNotExistIsReported(): void
     {
         // A walk up from it would find the composer.json of the scratch root.
@@ -158,11 +188,28 @@ final class InitCommandTest extends TestCase
         $this->assertSame('Kept', Config::discover($this->root)->namespace());
     }
 
+    public function testAnExistingDbProviderStopsBeforeCrestPhp(): void
+    {
+        // A run that stops changes nothing.
+        mkdir($this->root . '/src/Providers', 0o775, true);
+        file_put_contents($this->root . '/src/Providers/DbProvider.php', 'mine');
+
+        $this->assertSame(1, $this->init(['--flavor', 'mvc', '--database', 'sqlite']));
+        $this->assertSame(
+            'crest: ' . $this->root . '/src/Providers/DbProvider.php already exists; pass --force to overwrite'
+            . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileDoesNotExist($this->root . '/crest.php');
+        $this->assertFileDoesNotExist($this->root . '/storage/database.sqlite');
+        $this->assertSame('mine', (string) file_get_contents($this->root . '/src/Providers/DbProvider.php'));
+    }
+
     public function testAnMvcAnswerAsksForTheMvcPaths(): void
     {
         // The questions: namespace, flavor, front controller, the seven MVC
-        // paths, runtime.
-        $this->answers("\nmvc\n\n\n\n\n\n\n\n\n\n");
+        // paths, runtime, database.
+        $this->answers("\nmvc\n\n\n\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringContainsString(
@@ -181,8 +228,8 @@ final class InitCommandTest extends TestCase
     public function testAnMvcAnswerOfNoneForTheViewsIsAProjectWithNoViews(): void
     {
         // The questions: namespace, flavor, front controller, six MVC paths,
-        // none for the views, runtime.
-        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n");
+        // none for the views, runtime, database.
+        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringContainsString(
@@ -238,6 +285,16 @@ final class InitCommandTest extends TestCase
         $this->assertSame($this->root . '/themes/vokuro', $config->path('views'));
         $this->assertTrue($config->runtime()->isDocker());
         $this->assertSame('app', $config->runtime()->service);
+    }
+
+    public function testAnUnknownDatabaseStopsBeforeTheQuestions(): void
+    {
+        $this->assertSame(1, $this->init(['--database', 'oracle'], true));
+        $this->assertSame(
+            "crest: unknown database 'oracle'; expected none, mariadb, mysql, pgsql or sqlite" . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileDoesNotExist($this->root . '/crest.php');
     }
 
     public function testAnUnknownFlavorStopsBeforeTheQuestions(): void
@@ -317,7 +374,7 @@ final class InitCommandTest extends TestCase
         // #85: with no views folder, init looks for no .volt file.
         mkdir($this->root . '/docs', 0o775, true);
         file_put_contents($this->root . '/docs/page.volt', '{{ content() }}');
-        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n");
+        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringNotContainsString('templateEngine', (string) file_get_contents($this->root . '/crest.php'));
@@ -372,12 +429,24 @@ final class InitCommandTest extends TestCase
         $this->assertSame('App', Config::discover($this->root)->namespace());
     }
 
+    public function testForceWritesAnExistingDbProviderAgain(): void
+    {
+        mkdir($this->root . '/src/Providers', 0o775, true);
+        file_put_contents($this->root . '/src/Providers/DbProvider.php', 'stale');
+
+        $this->assertSame(0, $this->init(['--flavor', 'mvc', '--database', 'sqlite', '--force']));
+        $this->assertStringContainsString(
+            'final class DbProvider',
+            (string) file_get_contents($this->root . '/src/Providers/DbProvider.php')
+        );
+    }
+
     public function testInteractiveAnswersAreWritten(): void
     {
         // The questions: namespace, flavor, front controller, the six paths,
-        // runtime, and the service for docker. The namespace is in the psr-4
-        // map.
-        $this->answers("App\\Shop\nadr\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\n\ndocker\nweb\n");
+        // runtime, the service for docker, and the database. The namespace is
+        // in the psr-4 map.
+        $this->answers("App\\Shop\nadr\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\n\ndocker\nweb\n\n");
 
         $status = $this->init([], true);
         $config = Config::discover($this->root);
@@ -388,6 +457,14 @@ final class InitCommandTest extends TestCase
         $this->assertSame($this->root . '/src/Shop/Action', $config->path('action'));
         $this->assertSame($this->root . '/src/Shop/Commands', $config->path('command'));
         $this->assertSame('web', $config->runtime()->service);
+    }
+
+    public function testNoDatabaseWritesNoProvider(): void
+    {
+        // The default answer is none, as in `crest new`.
+        $this->assertSame(0, $this->init(['--flavor', 'adr']));
+        $this->assertFileDoesNotExist($this->root . '/src/Provider/DbProvider.php');
+        $this->assertStringNotContainsString('DbProvider', $this->readStdout());
     }
 
     public function testNoInteractionWritesTheProposals(): void
@@ -401,7 +478,7 @@ final class InitCommandTest extends TestCase
     public function testNoneWritesNoFrontController(): void
     {
         file_put_contents($this->root . '/src/AppFront.php', "<?php\n");
-        $this->answers("\n\nnone\n\n\n\n\n\n\n\n");
+        $this->answers("\n\nnone\n\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertNull(Config::discover($this->root)->bootstrap());
@@ -429,8 +506,8 @@ final class InitCommandTest extends TestCase
         $this->writeComposerJson(['App\\' => 'src/', 'Admin\\' => 'admin/']);
         mkdir($this->root . '/admin/Controllers', 0o775, true);
         // The questions: namespace, flavor, front controller, the seven MVC
-        // paths, runtime.
-        $this->answers("Admin\n\n\n\n\n\n\n\n\n\n\n");
+        // paths, runtime, database.
+        $this->answers("Admin\n\n\n\n\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertStringStartsWith('Root namespace [App]: Flavor (mvc, adr) [mvc]: ', $this->readStderr());
@@ -439,7 +516,7 @@ final class InitCommandTest extends TestCase
 
     public function testTheQuestionsComeInOrder(): void
     {
-        $this->answers("\n\n\n\n\n\n\n\n\n\n");
+        $this->answers("\n\n\n\n\n\n\n\n\n\n\n");
 
         $this->init([], true);
 
@@ -453,7 +530,8 @@ final class InitCommandTest extends TestCase
             . 'provider folder (does not exist yet) [src/Provider]: '
             . 'repository folder (does not exist yet) [src/Repository]: '
             . 'responder folder (does not exist yet) [src/Responder]: '
-            . 'Runtime (host, docker) [host]: ',
+            . 'Runtime (host, docker) [host]: '
+            . 'Database (none, mariadb, mysql, pgsql, sqlite) [none]: ',
             $this->readStderr()
         );
     }
