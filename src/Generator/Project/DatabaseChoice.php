@@ -98,6 +98,16 @@ enum DatabaseChoice: string
     }
 
     /**
+     * The arguments of `new DbProvider(...)` in the front controller. The
+     * SQLite provider gets the project root, because DB_NAME is relative to
+     * it.
+     */
+    public function arguments(): string
+    {
+        return self::SQLITE === $this ? '$this->projectRoot' : '';
+    }
+
+    /**
      * The PDO extension of a server database, for the Dockerfile and for PHP
      * on the host. The php image has pdo_sqlite.
      */

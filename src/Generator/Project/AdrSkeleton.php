@@ -139,7 +139,7 @@ final class AdrSkeleton implements Skeleton
             . "        (new \\%s\\DbProvider(%s))->provide(\$container);\n"
             . "    }\n",
             $this->providerNamespace($answers),
-            DatabaseChoice::SQLITE === $answers->database ? '$this->projectRoot' : ''
+            $answers->database->arguments()
         );
     }
 }

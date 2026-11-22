@@ -14,12 +14,9 @@ declare(strict_types=1);
 namespace Crest\Command\Make;
 
 use Crest\Console\Output;
+use Crest\Project\Bootstrap;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
-use Error;
-use ReflectionClass;
-
-use function class_exists;
 
 /**
  * Generates a service provider for the flavor's container.
@@ -42,33 +39,6 @@ use function class_exists;
  */
 final class ProviderCommand extends NamedArtifactCommand
 {
-    /**
-     * The class name of the front controller when it declares
-     * registerProviders() itself. Null when the front inherits the method or
-     * has none, or when crest cannot load the front.
-     */
-    private static function overriding(string $front): ?string
-    {
-        try {
-            if (false === class_exists($front)) {
-                return null;
-            }
-        } catch (Error) {
-            // The file of the front loads, but its parent class is not there.
-            return null;
-        }
-
-        $class = new ReflectionClass($front);
-
-        if (false === $class->hasMethod('registerProviders')) {
-            return null;
-        }
-
-        return $class->getName() === $class->getMethod('registerProviders')->getDeclaringClass()->getName()
-            ? $class->getName()
-            : null;
-    }
-
     protected function description(): string
     {
         return 'Create a service provider';
@@ -88,7 +58,9 @@ final class ProviderCommand extends NamedArtifactCommand
     protected function guidance(Config $config, Output $output, array $values, string $variant = ''): void
     {
         $bootstrap = $config->bootstrap();
-        $front     = Flavor::ADR === $config->flavor() && null !== $bootstrap ? self::overriding($bootstrap) : null;
+        $front     = Flavor::ADR === $config->flavor() && null !== $bootstrap
+            ? Bootstrap::overriding($bootstrap)
+            : null;
 
         if (null === $front) {
             parent::guidance($config, $output, $values, $variant);
