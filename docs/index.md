@@ -398,7 +398,7 @@ of `crest.php` (see [Configuration](#configuration)).
 | Option | Purpose |
 |---|---|
 | `--flavor=mvc\|adr` | the flavor of the project; defaults to `mvc` |
-| `--template-engine=<engine>` | the view engine of an MVC project: `phtml`, the default and the only engine for now. An ADR project has no views, so `new` stops when you give it |
+| `--template-engine=phtml\|none` | the view engine of an MVC project: `phtml`, the default, or `none` for a project with no views (see [The MVC project](#the-mvc-project)). An ADR project has no views, so `new` stops when you give it |
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
@@ -412,6 +412,7 @@ of `crest.php` (see [Configuration](#configuration)).
 In a terminal, `new` asks for each value that no option gives:
 
 - the flavor
+- the view engine, for MVC
 - the namespace
 - the PHP version
 - the Phalcon version
@@ -423,8 +424,7 @@ For an MVC project with a database, `new` asks two more questions. First, it ask
 property names of the models are in camelCase. Then it asks if the properties are
 protected, with a getter and a setter.
 
-There is no question for the view engine while there is only one. An empty answer takes
-the default. `--no-interaction` (see [Global options](#global-options)), or a run without
+An empty answer takes the default. `--no-interaction` (see [Global options](#global-options)), or a run without
 a terminal (CI, a pipe), asks nothing and takes the defaults. The options still give
 their values, for example in CI.
 
@@ -464,6 +464,14 @@ the files that `new` writes, see [Project stubs](#project-stubs).
 `crest make:provider Mailer`. It writes `src/Providers/MailerProvider.php`, a provider
 that implements `Phalcon\Di\ServiceProviderInterface`. It also prints the line to add to
 `AppFront::providers()`, the list of the providers of the front controller.
+
+With `--template-engine=none`, the project has no views, for example an application that
+only returns JSON. `new` writes no `ViewProvider`, no layout and no view, and `crest.php`
+has `'views' => false`. The front controller calls `useImplicitView(false)`: without it,
+`Phalcon\Mvc\Application` needs a `view` service for each request. `IndexController`
+returns its response, `{"status":"ok"}`. In this project, `make:scaffold` stops, because
+it writes views. `make:module` writes no `views` folder, and `make:controller` names no
+view.
 
 A URL with no controller stops in the dispatcher ("handler class cannot be loaded").
 With `display_errors` off, PHP answers 500. With `display_errors` on, PHP shows the error
@@ -720,7 +728,8 @@ finds in the project:
    check. Each part of the answer must be a folder name. Thus `init` refuses an absolute
    folder, an empty part (`//`), `.` and `..`. The proposal is `themes/default`. When that
    folder does not exist and `themes/` has one folder only, `init` proposes that folder
-   (`themes/vokuro` in [vokuro][vokuro]).
+   (`themes/vokuro` in [vokuro][vokuro]). The answer `none` is a project with no views:
+   `init` writes `'views' => false` (see [The MVC project](#the-mvc-project)).
 5. The runtime (see [The runtime](#the-runtime)). The proposal is docker when the project
    has `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`. For
    docker, `init` also asks for the service. The proposal is `app`, or the first service.
@@ -904,7 +913,8 @@ show the path from the project root.
 routes of the Phalcon router, the first part of the URL names the controller.
 Crest then prints what the dispatcher needs: its default namespace, the URL of
 `indexAction()` with the default routes (`GET /users`), and the name of its view
-(`users/index`). The views folder and the engine belong to your project.
+(`users/index`). The views folder and the engine belong to your project. In a project
+with no views (`'views' => false`), Crest names no view: the action returns its response.
 
 A project from `crest new --flavor=mvc` already has `CrestControllerBase` and
 `IndexController`, and its dispatcher has the default namespace. Thus in that
@@ -1988,6 +1998,10 @@ layout of the project. Add a layout in the `views/` folder of the module. For
 one views folder for the whole application, change the `setViewsDir()` line of
 `Module.php` to the views folder of the project.
 
+In a project with no views (`'views' => false`), the module has no `views/` folder, and
+`Module.php` changes only the dispatcher. The printed registration also calls
+`useImplicitView(false)`, as the front controller of the project does.
+
 A project with no `dispatcher` or `view` service must change
 `registerServices()`.
 
@@ -2109,6 +2123,7 @@ Crest does these checks before it writes a file. Thus a run that stops changes
 nothing. It stops when:
 
 - the project is not an MVC project;
+- the project has no views (`'views' => false`);
 - `--module` names a module that does not exist;
 - the table name gives no class name, and `models.classes` gives it no class;
 - the dispatcher cannot find a controller of that class from a URL (see
@@ -2303,6 +2318,9 @@ except `namespaces` and `new`. `declared`: `crest.php` sets the key. `default`: 
 does not set the key, or sets it to `null`, and Crest uses its default value. Each key of
 `paths` has its own origin.
 
+In an MVC project, `'views' => false` is a project with no views (see
+[The MVC project](#the-mvc-project)). `config:show` then shows `none` for `views`.
+
 The `runtime` key says where the project commands run (see [The runtime](#the-runtime)).
 
 The `paths` key gives a folder for each kind of file that Crest writes. Crest gets the
@@ -2459,6 +2477,12 @@ crest: the published stub /path/to/resources/stubs/shared/project-compose.stub h
 
 Without a database, and without `--camel-case` and `--get-set`, such a copy works as
 before.
+
+The MVC `project-front` also has `{{ viewUse }}`, `{{ viewProvider }}` and
+`{{ implicitView }}`, and `project-readme` has `{{ viewsRow }}`, for a project with no
+views. A copy from before them works for a project with views. For
+`--template-engine=none`, `new` stops on a copy of `project-front` with no
+`{{ implicitView }}`.
 
 ## Adding commands from a package
 
