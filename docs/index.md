@@ -35,6 +35,7 @@ stops with an error in a project of the other flavor:
 | `make:model` | — | ✓ |
 | `make:module` | — | ✓ |
 | `make:provider` | ✓ | ✓ |
+| `make:repository` | ✓ | — |
 | `make:responder` | ✓ | — |
 | `make:scaffold` | — | ✓ |
 | `new` | ✓ | ✓ |
@@ -499,7 +500,10 @@ With a database, `new` also writes:
 
 - `DbProvider.php` in the provider folder (`src/Providers` for MVC, `src/Provider` for
   ADR). `DbProvider` registers the `db` service: the connection to the database (see
-  [The MVC project](#the-mvc-project) for services). The MVC front controller adds
+  [The MVC project](#the-mvc-project) for services). In an MVC project, `db` is a
+  `Phalcon\Db` adapter, which the models use. In an ADR project, `db` is a
+  `Phalcon\DataMapper\Pdo\Connection`, which the repositories use (see
+  [Generating repositories](#generating-repositories)). The MVC front controller adds
   `DbProvider` in `providers()`. The ADR front controller gets an override of
   `registerProviders()`, the method that registers the services. The override calls
   `DbProvider`.
@@ -719,7 +723,7 @@ finds in the project:
 4. A folder for each path of the flavor (the `paths` key of `crest.php`; see
    [Configuration](#configuration)). The MVC paths are `command`, `controller`, `form`,
    `model`, `module`, `provider` and `views`. The ADR paths are `action`, `command`,
-   `middleware`, `provider` and `responder`. The question says if the folder exists. A
+   `middleware`, `provider`, `repository` and `responder`. The question says if the folder exists. A
    class folder is in the folder of the namespace. An answer must be a relative folder in
    a psr-4 folder. Its folder names must give a usable namespace: `src/my-actions` gives
    `App\my-actions`, which PHP cannot use. `init` removes a leading `./`.
@@ -2261,6 +2265,45 @@ A view action names a template, but Crest does not create the template.
 belong to your renderer. Crest prints the name of the template, and does not
 guess a file name.
 
+## Generating repositories
+
+**ADR** For ADR projects (see the flavor table in [Overview](#overview)).
+
+An ADR project reads and writes its tables through repositories, not through the
+Active Record models of `make:model`. `make:repository` reads a table through the `db`
+service of the project, a `Phalcon\DataMapper\Pdo\Connection` (see
+[The database](#the-database)), and writes a repository for it:
+
+```bash
+crest make:repository users
+```
+
+```text
+Created src/Repository/Base/UsersRepositoryBase.php
+Created src/Repository/UsersRepository.php
+Nothing registers it: the container makes it when a class asks for it. Give
+\App\Repository\UsersRepository to the constructor of an action or a domain class.
+It needs the Phalcon\DataMapper\Pdo\Connection service, which the DbProvider
+of crest new --database registers.
+```
+
+| File | Owner | On another run |
+|---|---|---|
+| `src/Repository/Base/UsersRepositoryBase.php` | Crest | writes it again when the table changes |
+| `src/Repository/UsersRepository.php` | you | keeps it, unless `--force` |
+
+The base has the name of the table, its primary key and its columns (the constants
+`TABLE`, `PRIMARY_KEY` and `COLUMNS`). It also has four methods that use the primary
+key: `find()`, `add()`, `update()` and `delete()`. A row is an array, with the column
+names as keys. `add()` gives the id of the new row, and a `null` value writes `NULL`. Add
+the other queries of your application to `UsersRepository`, through `$this->connection`
+and `$this->queryFactory`.
+
+The class name comes from the table name, as for `make:model`: `user_profiles` gives
+`UserProfilesRepository`. The table must have a primary key with one column. Crest stops
+on a table with no primary key, on a composite primary key, and on a table that the
+database does not have.
+
 ## Configuration
 
 `crest.php` is the project file (see [The project file](#the-project-file)). This
@@ -2310,6 +2353,7 @@ return [
         'command'    => 'src/Command',
         'middleware' => 'src/Middleware',
         'provider'   => 'src/Provider',
+        'repository' => 'src/Repository',
         'responder'  => 'src/Responder',
     ],
     'runtime'   => ['type' => 'docker', 'service' => 'app'],
@@ -2606,6 +2650,7 @@ with an error.
 | `make:model` | create an MVC model from a database table, or from each table with `--all` (relations come only from foreign keys) |
 | `make:module` | create an MVC module |
 | `make:provider` | create a service provider |
+| `make:repository` | create an ADR repository for a database table |
 | `make:responder` | create an ADR responder |
 | `make:scaffold` | create MVC CRUD pages for a database table |
 | `new` | create an ADR or MVC project |
