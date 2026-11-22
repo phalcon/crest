@@ -160,10 +160,24 @@ final class InitCommandTest extends TestCase
             . 'model folder (does not exist yet) [src/Models]: '
             . 'module folder (does not exist yet) [src/Modules]: '
             . 'provider folder (does not exist yet) [src/Providers]: '
-            . 'views folder (does not exist yet) [themes/default]: ',
+            . 'views folder (does not exist yet), or none for no views [themes/default]: ',
             $this->readStderr()
         );
         $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
+    }
+
+    public function testAnMvcAnswerOfNoneForTheViewsIsAProjectWithNoViews(): void
+    {
+        // The questions: namespace, flavor, front controller, six MVC paths,
+        // none for the views, runtime.
+        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n");
+
+        $this->assertSame(0, $this->init([], true));
+        $this->assertStringContainsString(
+            "        'views'      => false,\n",
+            (string) file_get_contents($this->root . '/crest.php')
+        );
+        $this->assertFalse(Config::discover($this->root)->hasViews());
     }
 
     public function testAnMvcCrestPhpKeepsThePropertyNames(): void

@@ -82,6 +82,8 @@ final class GeneratedMvcProjectTest extends TestCase
 
     private const DATABASE_NAMESPACE = 'Scaffolded\\MvcWithDatabase';
 
+    private const NO_VIEWS_NAMESPACE = 'Scaffolded\\MvcWithNoViews';
+
     private const ROOT_NAMESPACE = 'Scaffolded\\Mvc';
 
     /** @var list<Closure> */
@@ -223,6 +225,20 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->assertStringContainsString('<h1>shop-db</h1>', $this->get('/'));
     }
 
+    public function testAProjectWithNoViewsAnswersGetSlashWithJson(): void
+    {
+        // The front of a project with no views turns the implicit view off,
+        // and IndexController returns its response (#83).
+        $this->project = $this->generate('shop-api', self::NO_VIEWS_NAMESPACE, ['--template-engine', 'none']);
+
+        $this->assertStringContainsString(
+            '->useImplicitView(false)',
+            (string) file_get_contents($this->project . '/src/AppFront.php')
+        );
+        $this->assertSame('{"status":"ok"}', $this->get('/', false, false));
+        $this->assertFalse(Config::discover($this->project)->hasViews());
+    }
+
     public function testCrestBootsTheGeneratedFrontController(): void
     {
         $this->assertInstanceOf(
@@ -236,6 +252,13 @@ final class GeneratedMvcProjectTest extends TestCase
         $this->project = $this->generate('shop-db', self::DATABASE_NAMESPACE, ['--database', 'mysql']);
 
         $this->assertParsesAndImportsResolve(['crest.php', 'src/AppFront.php', 'src/Providers/DbProvider.php']);
+    }
+
+    public function testEveryFileOfAProjectWithNoViewsParsesAndItsImportsResolve(): void
+    {
+        $this->project = $this->generate('shop-api', self::NO_VIEWS_NAMESPACE, ['--template-engine', 'none']);
+
+        $this->assertParsesAndImportsResolve(['crest.php', 'src/AppFront.php', 'src/Controllers/IndexController.php']);
     }
 
     public function testEveryGeneratedFileParsesAndItsImportsResolve(): void
@@ -439,9 +462,11 @@ final class GeneratedMvcProjectTest extends TestCase
      * the content of the response.
      *
      * With $modules, the application registers the module admin and its
-     * routes, as the guidance of make:module says.
+     * routes, as the guidance of make:module says. With no $views, the
+     * application has no implicit view, as the front of a project with no
+     * views (#83).
      */
-    private function get(string $uri, bool $modules = false): string
+    private function get(string $uri, bool $modules = false, bool $views = true): string
     {
         // The class that crest.php names, as Bootstrap reads it. A literal
         // class name here would make PHPStan look for a class that exists only
@@ -468,6 +493,7 @@ final class GeneratedMvcProjectTest extends TestCase
         $_SERVER['REQUEST_URI']    = $uri;
 
         $application = new Application($container);
+        $application->useImplicitView($views);
 
         if (true === $modules) {
             $router = $container->getShared('router');

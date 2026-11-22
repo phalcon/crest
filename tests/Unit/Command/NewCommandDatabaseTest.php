@@ -668,10 +668,10 @@ final class NewCommandDatabaseTest extends TestCase
 
     public function testTheCamelCaseQuestionIsOnlyForAnMvcProjectWithADatabase(): void
     {
-        // Flavor, namespace, PHP version, Phalcon version, runtime, service,
-        // database, camelCase, getSet. The getSet question comes after the
-        // camelCase question (#70).
-        $this->answers("mvc\n\n\n\n\n\nmysql\nyes\nyes\n");
+        // Flavor, template engine, namespace, PHP version, Phalcon version,
+        // runtime, service, database, camelCase, getSet. The getSet question
+        // comes after the camelCase question (#70).
+        $this->answers("mvc\n\n\n\n\n\n\nmysql\nyes\nyes\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringEndsWith(
@@ -816,7 +816,7 @@ final class NewCommandDatabaseTest extends TestCase
     public function testWithoutADatabaseAnMvcProjectGetsNoCamelCaseQuestion(): void
     {
         // No tables yet: camelCase false, with no question.
-        $this->answers("mvc\n\n\n\n\n\n\n");
+        $this->answers("mvc\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringEndsWith('Database (none, mariadb, mysql, pgsql, sqlite) [none]: ', $this->readStderr());

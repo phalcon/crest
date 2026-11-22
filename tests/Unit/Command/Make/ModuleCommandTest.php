@@ -70,6 +70,29 @@ final class ModuleCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/src/Modules');
     }
 
+    public function testAModuleOfAProjectWithNoViewsHasNoViews(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['views' => false]]");
+
+        $status = $this->runCommand(['admin']);
+
+        $module = (string) file_get_contents($this->root . self::MODULE);
+        $stdout = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertDirectoryDoesNotExist($this->root . '/src/Modules/Admin/views');
+        $this->assertStringNotContainsString("getShared('view')", $module);
+        $this->assertStringNotContainsString('use Phalcon\Mvc\View;', $module);
+        $this->assertStringContainsString("setDefaultNamespace('App\\Modules\\Admin\\Controllers');", $module);
+        $this->assertStringNotContainsString('/src/Modules/Admin/views', $stdout);
+        $this->assertStringContainsString(
+            '    $application = new Application($this->boot());' . PHP_EOL
+            . '    $application->useImplicitView(false);' . PHP_EOL
+            . '    $application->registerModules([' . PHP_EOL,
+            $stdout
+        );
+    }
+
     public function testAModulePathOutsidePsr4StopsTheCommand(): void
     {
         $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['module' => 'lib/Modules']]");

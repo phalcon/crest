@@ -89,6 +89,16 @@ final class ScaffoldCommandTest extends TestCase
         $this->assertScaffoldStops(['users'], "no psr-4 autoload entry covers 'lib/Things'");
     }
 
+    public function testAProjectWithNoViewsStopsBeforeTheBoot(): void
+    {
+        $this->front(", 'paths' => ['views' => false]");
+
+        $this->assertScaffoldStops(
+            ['users'],
+            "make:scaffold writes views, and this project has no views ('views' => false in crest.php)"
+        );
+    }
+
     public function testATableThatEndsInControllerStopsBeforeTheBoot(): void
     {
         $this->assertScaffoldStops(

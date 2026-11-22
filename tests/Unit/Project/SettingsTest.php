@@ -160,6 +160,28 @@ final class SettingsTest extends TestCase
         );
     }
 
+    public function testTheRenderedConfigGivesAProjectWithNoViewsBack(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+
+        $settings = new Settings(
+            Flavor::MVC,
+            'App',
+            null,
+            ['controller' => 'src/Controllers', 'views' => false],
+            Runtime::host()
+        );
+
+        $this->assertStringContainsString("        'views'      => false,\n", $settings->replacements()['paths']);
+
+        file_put_contents(
+            $this->root . '/crest.php',
+            (new Stub(Paths::stubs()))->render('mvc', 'project-config', $settings->replacements())
+        );
+
+        $this->assertFalse(Config::discover($this->root)->hasViews());
+    }
+
     public function testTheRenderedConfigGivesTheFlavorBack(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
