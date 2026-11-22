@@ -14,6 +14,8 @@ declare(strict_types=1);
 namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\DataMapper\Pdo\Connection;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Di\DiInterface;
 use Throwable;
@@ -22,11 +24,14 @@ use function get_debug_type;
 use function sprintf;
 
 /**
- * The database connection of an MVC project: the `db` service of its DI.
+ * The database connection of a project: the `db` service of its container.
+ * In an MVC project, a Phalcon\Db adapter in the DI (adapter()). In an ADR
+ * project, a DataMapper connection (connection(), #84).
  *
- * crest makes no connection of its own. The models of the project use the
- * `db` service, so a table that crest reads through it is a table that the
- * models read. Bootstrap boots the front controller that crest.php names.
+ * crest makes no connection of its own. The models and the repositories of
+ * the project use the `db` service, so a table that crest reads through it is
+ * a table that they read. Bootstrap boots the front controller that crest.php
+ * names.
  */
 final class Database
 {
@@ -66,5 +71,48 @@ final class Database
         }
 
         return $adapter;
+    }
+
+    /**
+     * The DataMapper connection of an ADR project: the `db` service, as
+     * `crest new --database` registers it (#84). The connection connects at
+     * its first query.
+     */
+    public static function connection(Config $config): Connection
+    {
+        $container = Bootstrap::container($config);
+
+        if (false === $container instanceof Collection) {
+            throw new Exception(
+                sprintf(
+                    '%s is not a Phalcon container; make:repository needs the container of an ADR project',
+                    get_debug_type($container)
+                )
+            );
+        }
+
+        if (false === $container->has(self::SERVICE)) {
+            throw new Exception(
+                "the project container has no 'db' service; register a "
+                . 'Phalcon\DataMapper\Pdo\Connection with the alias db (crest make:provider Db)'
+            );
+        }
+
+        try {
+            $connection = $container->get(self::SERVICE);
+        } catch (Throwable $exception) {
+            throw new Exception("the 'db' service failed: " . $exception->getMessage(), previous: $exception);
+        }
+
+        if (false === $connection instanceof Connection) {
+            throw new Exception(
+                sprintf(
+                    "the 'db' service is %s, not a Phalcon\DataMapper\Pdo\Connection",
+                    get_debug_type($connection)
+                )
+            );
+        }
+
+        return $connection;
     }
 }

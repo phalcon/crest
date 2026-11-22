@@ -1,0 +1,4 @@
+Nothing registers it: the container makes it when a class asks for it. Give
+\{{ namespace }}\{{ class }} to the constructor of an action or a domain class.
+It needs the Phalcon\DataMapper\Pdo\Connection service, which the DbProvider
+of crest new --database registers.
