@@ -21,6 +21,7 @@ use function count;
 use function implode;
 use function in_array;
 use function sprintf;
+use function str_ends_with;
 use function strtolower;
 
 /**
@@ -45,6 +46,11 @@ final class TemplateEngines
     public const NONE = 'none';
 
     /**
+     * The Volt engine (#85). Its views are `.volt` files.
+     */
+    public const VOLT = 'volt';
+
+    /**
      * @param list<string> $names The engines of the flavor. The first is the
      *                            default.
      */
@@ -52,6 +58,19 @@ final class TemplateEngines
         private readonly Flavor $flavor,
         private readonly array $names,
     ) {
+    }
+
+    /**
+     * The placeholders of the stub of a file (#85): `[[ name ]]` for a Volt
+     * view, because Volt itself uses `{{ }}`, `{% %}` and `{# #}`. Each other
+     * file has `{{ name }}`. The view engine owns the form, and the file
+     * extension names the engine.
+     *
+     * @return array{string, string}
+     */
+    public static function delimiters(string $file): array
+    {
+        return true === str_ends_with($file, '.' . self::VOLT) ? ['[[ ', ' ]]'] : ['{{ ', ' }}'];
     }
 
     /**

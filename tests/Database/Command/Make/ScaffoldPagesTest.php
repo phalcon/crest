@@ -481,6 +481,71 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
         $this->assertStringNotContainsString('<script>alert', $content);
     }
 
+    public function testAVoltProjectServesAStringKeyWithASpace(): void
+    {
+        // #85: the url_encode filter of Volt gives a+b; the controller
+        // decodes it with urldecode().
+        $project = $this->scaffolded(
+            'VoltKey',
+            'countries',
+            ScaffoldCountriesMigration::class,
+            options: ['--template-engine', 'volt']
+        );
+
+        $this->assertFileExists($project . '/themes/default/countries/index.volt');
+        $this->assertStringContainsString('name="code"', $this->page($project, '/countries/new'));
+        $this->assertRedirect(
+            $this->request($project, 'POST', '/countries/create', ['code' => 'a b', 'name' => 'x']),
+            '/countries'
+        );
+        $this->assertStringContainsString('/countries/edit/a+b', $this->page($project, '/countries'));
+        $this->assertStringContainsString('<td>x</td>', $this->page($project, '/countries'));
+        $this->assertStringNotContainsString('name="code"', $this->page($project, '/countries/edit/a+b'));
+        $this->assertStringContainsString('action="/countries/save/a+b"', $this->page($project, '/countries/edit/a+b'));
+        $this->assertRedirect(
+            $this->request($project, 'POST', '/countries/save/a+b', ['name' => 'y']),
+            '/countries'
+        );
+        $this->assertSame('y', $this->value($project, "SELECT name FROM countries WHERE code = 'a b'"));
+        $this->assertRedirect($this->request($project, 'POST', '/countries/delete/a+b'), '/countries');
+        $this->assertSame(0, $this->rows($project, 'countries'));
+    }
+
+    public function testAVoltProjectShowsTheListAndItsPages(): void
+    {
+        // With models.getSet: the list reads each row through the getters.
+        $project = $this->scaffolded(
+            'VoltList',
+            'users',
+            ScaffoldUsersMigration::class,
+            false,
+            true,
+            ['--template-engine', 'volt']
+        );
+
+        $this->assertStringContainsString('<p>No rows.</p>', $this->page($project, '/users'));
+
+        for ($row = 1; $row <= 12; $row++) {
+            $this->insertUser($project, 'ann ' . $row);
+        }
+
+        $this->insertUser($project, '<b>bob</b>');
+
+        $first = $this->page($project, '/users/search?name=ann');
+
+        $this->assertSame(10, substr_count($first, '/users/edit/'));
+        $this->assertStringContainsString('action="/users/search"', $first);
+        $this->assertStringContainsString('/users/search?name=ann&page=2', $first);
+        $this->assertStringNotContainsString('Previous', $first);
+
+        $second = $this->page($project, '/users/search?name=ann&page=2');
+
+        $this->assertSame(2, substr_count($second, '/users/edit/'));
+        $this->assertStringContainsString('Previous', $second);
+        $this->assertStringNotContainsString('Next', $second);
+        $this->assertStringContainsString('&lt;b&gt;bob&lt;/b&gt;', $this->page($project, '/users/search?name=bob'));
+    }
+
     public function testAWhitespaceOnlyInputStoresNull(): void
     {
         $project = $this->scaffolded('Whitespace', 'users', ScaffoldUsersMigration::class);
@@ -674,11 +739,12 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
      * migration.
      *
      * @param class-string<AbstractSchema> $migration
+     * @param list<string>                 $options
      */
-    private function project(string $case, string $migration): string
+    private function project(string $case, string $migration, array $options = []): string
     {
         $driver  = $this->getDriver();
-        $project = $this->generate('mvc', $driver, 'Generated\\Scaffold\\' . $case);
+        $project = $this->generate('mvc', $driver, 'Generated\\Scaffold\\' . $case, $options);
 
         if ('sqlite' !== $driver) {
             $this->databaseValues(true, false);
@@ -778,15 +844,17 @@ final class ScaffoldPagesTest extends AbstractNewCommandTestCase
      * A project with the pages of a table.
      *
      * @param class-string<AbstractSchema> $migration
+     * @param list<string>                 $options   the options of new
      */
     private function scaffolded(
         string $case,
         string $table,
         string $migration,
         bool $camelCase = false,
-        bool $getSet = false
+        bool $getSet = false,
+        array $options = []
     ): string {
-        $project = $this->project($case, $migration);
+        $project = $this->project($case, $migration, $options);
         $file    = $project . '/crest.php';
 
         if (true === $camelCase) {

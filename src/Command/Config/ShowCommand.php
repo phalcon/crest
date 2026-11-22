@@ -80,6 +80,9 @@ final class ShowCommand extends ProjectCommand
             foreach ($models as $row) {
                 $items[] = $row;
             }
+
+            // The view engine (#85): no key is phtml.
+            $items[] = ['templateEngine', $config->templateEngine(), $this->origin($config, 'templateEngine')];
         }
 
         $output->table(['ITEM', 'VALUE', 'ORIGIN'], $items);

@@ -41,6 +41,7 @@ use Phalcon\Mvc\Dispatcher;
 use Phalcon\Mvc\Model;
 use Phalcon\Mvc\ModuleDefinitionInterface;
 use Phalcon\Mvc\View;
+use Phalcon\Mvc\View\Engine\Volt\Compiler;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -204,6 +205,7 @@ final class StubContractsTest extends TestCase
                 || true === str_starts_with($name, Stub::FRAGMENT_PREFIX)
                 // A view has no class.
                 || true === str_starts_with($name, 'scaffold-view-')
+                || true === str_starts_with($name, 'scaffold-volt-view-')
             ) {
                 continue;
             }
@@ -220,6 +222,16 @@ final class StubContractsTest extends TestCase
         yield 'scaffold-view-index' => ['scaffold-view-index'];
         yield 'scaffold-view-new' => ['scaffold-view-new'];
         yield 'scaffold-view-edit' => ['scaffold-view-edit'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function voltViewStubs(): iterable
+    {
+        yield 'scaffold-volt-view-index' => ['scaffold-volt-view-index'];
+        yield 'scaffold-volt-view-new' => ['scaffold-volt-view-new'];
+        yield 'scaffold-volt-view-edit' => ['scaffold-volt-view-edit'];
     }
 
     /**
@@ -263,6 +275,21 @@ final class StubContractsTest extends TestCase
 
         $this->assertNotEmpty(token_get_all($rendered, TOKEN_PARSE));
         $this->assertFalse(str_contains($rendered, '{{'), sprintf("view '%s' left a placeholder unrendered", $name));
+    }
+
+    /**
+     * A Volt view has [[ name ]] for crest, and keeps the {{ }} of Volt
+     * (#85). It renders to a template that the Volt compiler compiles to PHP
+     * that parses.
+     *
+     * @dataProvider voltViewStubs
+     */
+    public function testAVoltViewStubCompilesAndLeavesNoPlaceholder(string $name): void
+    {
+        $rendered = (new Stub(Paths::stubs()))->render('mvc', $name, self::REPLACEMENTS, '[[ ', ' ]]');
+
+        $this->assertFalse(str_contains($rendered, '[['), sprintf("view '%s' left a placeholder unrendered", $name));
+        $this->assertNotEmpty(token_get_all((new Compiler())->compileString($rendered), TOKEN_PARSE));
     }
 
     /**

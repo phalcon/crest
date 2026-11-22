@@ -27,6 +27,7 @@ use Crest\Generator\ModelProperties;
 use Crest\Generator\ModuleLocation;
 use Crest\Generator\Outcome;
 use Crest\Generator\Placement;
+use Crest\Generator\Project\TemplateEngines;
 use Crest\Generator\Stub;
 use Crest\Project\Config;
 use Crest\Project\Database;
@@ -39,6 +40,7 @@ use function array_values;
 use function count;
 use function dirname;
 use function htmlspecialchars;
+use function in_array;
 use function method_exists;
 use function sprintf;
 use function str_replace;
@@ -71,6 +73,21 @@ final class ScaffoldCommand extends ProjectCommand
     private const BASE_FOLDER = 'Base';
 
     private const KEPT = 'Kept %s: it exists; pass --force to replace it';
+
+    /**
+     * The id of the URL as the controller reads it. An integer key is a cast.
+     * The views encode a text key: phtml with rawurlencode(), Volt with its
+     * url_encode filter, which is urlencode() (#85). So the controller decodes
+     * it with the function that goes with the engine.
+     */
+    private static function keyValue(string $type, string $engine): string
+    {
+        if ('int' === $type) {
+            return '(int) $id';
+        }
+
+        return TemplateEngines::VOLT === $engine ? 'urldecode($id)' : 'rawurldecode($id)';
+    }
 
     /**
      * The folder and the namespace of a kind of class: a path of the project,
@@ -107,6 +124,15 @@ final class ScaffoldCommand extends ProjectCommand
         if (false === $config->hasViews()) {
             throw new Exception(
                 "make:scaffold writes views, and this project has no views ('views' => false in crest.php)"
+            );
+        }
+
+        // The views of the engine of the project (#85).
+        $engine = $config->templateEngine();
+
+        if (false === in_array($engine, [Config::PHTML, TemplateEngines::VOLT], true)) {
+            throw new Exception(
+                sprintf("unknown templateEngine '%s' in crest.php; expected phtml or volt", $engine)
             );
         }
 
@@ -203,7 +229,7 @@ final class ScaffoldCommand extends ProjectCommand
             'formNamespace'  => $formNamespace,
             'key'            => $parts['names'][$key->getName()],
             'keyLabel'       => htmlspecialchars(ucfirst(str_replace('_', ' ', $key->getName()))),
-            'keyValue'       => 'int' === ModelProperties::type($key->getType()) ? '(int) $id' : 'rawurldecode($id)',
+            'keyValue'       => self::keyValue(ModelProperties::type($key->getType()), $engine),
             'model'          => $parts['class'],
             'modelNamespace' => $parts['namespace'],
             'namespace'      => $placement->namespace,
@@ -231,10 +257,17 @@ final class ScaffoldCommand extends ProjectCommand
 
         $views = null === $module ? $config->path('views') : $module->folder(ModuleLocation::VIEWS);
 
-        foreach (['index', 'new', 'edit'] as $view) {
-            $file = $views . '/' . $route . '/' . $view . '.phtml';
+        // A Volt view is a .volt file from scaffold-volt-view-<view> (#85).
+        $volt = TemplateEngines::VOLT === $engine ? TemplateEngines::VOLT . '-' : '';
 
-            $this->report($output, $writer->renderOnce($file, 'scaffold-view-' . $view, $values, $force), $file);
+        foreach (['index', 'new', 'edit'] as $view) {
+            $file = $views . '/' . $route . '/' . $view . '.' . $engine;
+
+            $this->report(
+                $output,
+                $writer->renderOnce($file, 'scaffold-' . $volt . 'view-' . $view, $values, $force),
+                $file
+            );
         }
 
         $output->write(

@@ -102,6 +102,15 @@ final class SettingsTest extends TestCase
         );
     }
 
+    public function testAnEngineIsTheTemplateEngineKey(): void
+    {
+        $volt = new Settings(Flavor::MVC, 'App', null, [], Runtime::host(), engine: 'volt');
+        $none = new Settings(Flavor::MVC, 'App', null, [], Runtime::host());
+
+        $this->assertSame("    'templateEngine' => 'volt',\n", $volt->replacements()['templateEngine']);
+        $this->assertSame('', $none->replacements()['templateEngine']);
+    }
+
     public function testNoBootstrapIsNoLine(): void
     {
         $this->assertSame(

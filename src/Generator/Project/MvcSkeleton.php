@@ -31,9 +31,18 @@ use Crest\Project\Flavor;
  * With the engine none (#83), the project has no views: no view provider, no
  * layout and no view. The front turns the implicit view off, and
  * IndexController returns JSON (project-none-controller).
+ *
+ * With Volt (#85), Volt writes the compiled views into VOLT_CACHE. A
+ * .gitignore in that folder keeps them out of git, and a v6 project requires
+ * phalcon/volt: the phalcon/phalcon package has no Volt parser.
  */
 final class MvcSkeleton implements Skeleton
 {
+    /**
+     * The folder of the compiled Volt views, relative to the project root.
+     */
+    public const VOLT_CACHE = 'var/cache/volt';
+
     /**
      * The requirement of PHQL in composer.json, after the requirement of
      * Phalcon. A model finds rows with PHQL. The extension (v5) has it; the
@@ -48,9 +57,15 @@ final class MvcSkeleton implements Skeleton
      */
     private const SEED = 'IndexController';
 
+    /**
+     * The requirement of the Volt parser in the composer.json of a v6
+     * project with Volt, after the requirement of Phalcon.
+     */
+    private const VOLT = ",\n        \"phalcon/volt\": \"^1.0\"";
+
     public function engines(): TemplateEngines
     {
-        return new TemplateEngines($this->flavor(), ['phtml', TemplateEngines::NONE]);
+        return new TemplateEngines($this->flavor(), ['phtml', TemplateEngines::VOLT, TemplateEngines::NONE]);
     }
 
     public function entry(): string
@@ -95,13 +110,19 @@ final class MvcSkeleton implements Skeleton
      * The base and the controller come from the stubs of make:controller.
      * The base is the same file as make:controller writes. Thus a later
      * make:controller finds it the same, or updates it.
+     *
+     * With Volt, the cache folder gets a .gitignore that keeps the compiled
+     * views out of git, and keeps the folder itself.
      */
     public function seed(Stub $stub, Answers $answers): array
     {
         $namespace = $this->controllerNamespace($answers);
         $base      = ControllerBase::namespace($namespace);
+        $cache     = TemplateEngines::VOLT === $this->engine($answers)
+            ? [self::VOLT_CACHE . '/.gitignore' => "*\n!.gitignore\n"]
+            : [];
 
-        return [
+        return $cache + [
             ControllerBase::file($this->path('controller')) => $stub->render(
                 $this->flavor()->value,
                 'controller-base',
@@ -132,6 +153,7 @@ final class MvcSkeleton implements Skeleton
     {
         $none  = DatabaseChoice::NONE === $answers->database;
         $views = TemplateEngines::NONE !== $this->engine($answers);
+        $volt  = TemplateEngines::VOLT === $this->engine($answers);
 
         return [
             'baseFolder'          => ControllerBase::FOLDER,
@@ -146,9 +168,7 @@ final class MvcSkeleton implements Skeleton
             'providerNamespace'   => $this->providerNamespace($answers),
             'providerPath'        => $this->path('provider'),
             'seed'                => self::SEED,
-            'viewProvider'        => true === $views
-                ? "            new ViewProvider(\$this->projectRoot . '/" . $this->path('views') . "'),\n"
-                : '',
+            'viewProvider'        => true === $views ? $this->viewProvider($volt) : '',
             'viewUse'             => true === $views
                 ? 'use ' . $this->providerNamespace($answers) . "\\ViewProvider;\n"
                 : '',
@@ -157,6 +177,8 @@ final class MvcSkeleton implements Skeleton
                 ? '| `' . $this->path('views') . '/` | The views. `GET /` shows the view `index/index` in the layout '
                     . "`index` |\n"
                 : '',
+            'volt'                => true === $volt && 'v6' === $answers->phalcon ? self::VOLT : '',
+            'voltCache'           => self::VOLT_CACHE,
         ];
     }
 
@@ -200,5 +222,16 @@ final class MvcSkeleton implements Skeleton
     private function providerNamespace(Answers $answers): string
     {
         return $answers->namespace . '\\Providers';
+    }
+
+    /**
+     * The line of ViewProvider in providers() of the front. The Volt provider
+     * also gets the cache folder.
+     */
+    private function viewProvider(bool $volt): string
+    {
+        $cache = true === $volt ? ", \$this->projectRoot . '/" . self::VOLT_CACHE . "'" : '';
+
+        return "            new ViewProvider(\$this->projectRoot . '/" . $this->path('views') . "'" . $cache . "),\n";
     }
 }

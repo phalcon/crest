@@ -86,6 +86,8 @@ final class AdrSkeleton implements Skeleton
             'providerNamespace' => $this->providerNamespace($answers),
             'registerProviders' => $this->registerProviders($answers),
             'seed'              => self::SEED,
+            // An ADR project has no views, so no Volt (#85).
+            'volt'              => '',
         ];
     }
 

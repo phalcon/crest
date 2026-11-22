@@ -23,6 +23,7 @@ use Crest\Tests\Support\ScratchDirectory;
 use PHPUnit\Framework\TestCase;
 
 use function chdir;
+use function dirname;
 use function file_get_contents;
 use function file_put_contents;
 use function getcwd;
@@ -72,6 +73,17 @@ final class InitCommandTest extends TestCase
 
         $this->closeStreams();
         $this->removeScratchDirectory();
+    }
+
+    /**
+     * A .volt file in the views folder, or in a folder in it.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function voltViews(): iterable
+    {
+        yield 'the layout' => ['index.volt'];
+        yield 'a view of a controller' => ['index/index.volt'];
     }
 
     public function testAComposerJsonWithoutAUsablePsr4EntryStops(): void
@@ -300,6 +312,17 @@ final class InitCommandTest extends TestCase
         );
     }
 
+    public function testAProjectWithNoViewsIsNotVoltForAVoltFileElsewhere(): void
+    {
+        // #85: with no views folder, init looks for no .volt file.
+        mkdir($this->root . '/docs', 0o775, true);
+        file_put_contents($this->root . '/docs/page.volt', '{{ content() }}');
+        $this->answers("\nmvc\n\n\n\n\n\n\n\nnone\n\n");
+
+        $this->assertSame(0, $this->init([], true));
+        $this->assertStringNotContainsString('templateEngine', (string) file_get_contents($this->root . '/crest.php'));
+    }
+
     public function testAVokuroLikeProjectGetsAWorkingCrestPhp(): void
     {
         $this->writeComposerJson(['Vokuro\\' => 'src/']);
@@ -321,6 +344,19 @@ final class InitCommandTest extends TestCase
             . 'Next: composer require --dev phalcon/crest' . PHP_EOL,
             $this->readStdout()
         );
+    }
+
+    /**
+     * @dataProvider voltViews
+     */
+    public function testAVoltFileInTheViewsGivesTheVoltEngine(string $view): void
+    {
+        // #85: init asks no question; the views of the project tell.
+        mkdir(dirname($this->root . '/themes/default/' . $view), 0o775, true);
+        file_put_contents($this->root . '/themes/default/' . $view, '{{ content() }}');
+
+        $this->assertSame(0, $this->init(['--flavor', 'mvc']));
+        $this->assertSame('volt', Config::discover($this->root)->templateEngine());
     }
 
     public function testDefinitionNamesItselfInit(): void
@@ -369,6 +405,15 @@ final class InitCommandTest extends TestCase
 
         $this->assertSame(0, $this->init([], true));
         $this->assertNull(Config::discover($this->root)->bootstrap());
+    }
+
+    public function testNoVoltFileGivesNoTemplateEngineKey(): void
+    {
+        mkdir($this->root . '/themes/default', 0o775, true);
+        file_put_contents($this->root . '/themes/default/index.phtml', '<?= $this->getContent() ?>');
+
+        $this->assertSame(0, $this->init(['--flavor', 'mvc']));
+        $this->assertStringNotContainsString('templateEngine', (string) file_get_contents($this->root . '/crest.php'));
     }
 
     public function testTheEndOfInputWritesNothing(): void

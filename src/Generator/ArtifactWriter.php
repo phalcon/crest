@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Generator\Project\TemplateEngines;
 
 use function dirname;
 use function file_get_contents;
@@ -113,7 +114,7 @@ final class ArtifactWriter
             throw new Exception(sprintf('%s already exists; pass --force to overwrite', $file));
         }
 
-        self::write($file, $this->stub->render($this->flavor, $name, $replacements));
+        self::write($file, $this->contents($file, $name, $replacements));
     }
 
     /**
@@ -128,7 +129,7 @@ final class ArtifactWriter
             return Outcome::Kept;
         }
 
-        self::write($file, $this->stub->render($this->flavor, $name, $replacements));
+        self::write($file, $this->contents($file, $name, $replacements));
 
         return Outcome::Created;
     }
@@ -145,7 +146,7 @@ final class ArtifactWriter
      */
     public function renderOwned(string $file, string $name, array $replacements): Outcome
     {
-        $contents = $this->stub->render($this->flavor, $name, $replacements);
+        $contents = $this->contents($file, $name, $replacements);
 
         if (false === is_file($file)) {
             self::write($file, $contents);
@@ -172,5 +173,16 @@ final class ArtifactWriter
         self::write($file, $contents);
 
         return Outcome::Updated;
+    }
+
+    /**
+     * The stub rendered with the placeholders of the file: a Volt view has
+     * `[[ name ]]` (#85).
+     *
+     * @param array<string, string> $replacements
+     */
+    private function contents(string $file, string $name, array $replacements): string
+    {
+        return $this->stub->render($this->flavor, $name, $replacements, ...TemplateEngines::delimiters($file));
     }
 }

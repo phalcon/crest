@@ -137,6 +137,17 @@ final class ConfigTest extends TestCase
         Config::discover($this->root);
     }
 
+    public function testATemplateEngineIsReadInLowercase(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['templateEngine' => 'Volt'];\n");
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame('volt', $config->templateEngine());
+        $this->assertTrue($config->isDeclared('templateEngine'));
+    }
+
     public function testAViewsPathOfFalseIsAProjectWithNoViews(): void
     {
         $this->writeComposerJson(['App\\' => 'src/']);
@@ -467,6 +478,17 @@ final class ConfigTest extends TestCase
         $this->writeCrestPhp("['flavor' => 'adr']");
 
         $this->assertSame('App\Action', Config::discover($this->root)->namespaceFor('action'));
+    }
+
+    public function testNoTemplateEngineIsPhtml(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['templateEngine' => null];\n");
+
+        $config = Config::discover($this->root);
+
+        $this->assertSame('phtml', $config->templateEngine());
+        $this->assertFalse($config->isDeclared('templateEngine'));
     }
 
     public function testPsr4DirectoryMatchOnlyCountsWholeSegments(): void

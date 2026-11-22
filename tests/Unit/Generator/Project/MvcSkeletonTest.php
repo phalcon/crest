@@ -74,7 +74,7 @@ final class MvcSkeletonTest extends TestCase
 
     public function testItHasThePhtmlEngineAndNoViews(): void
     {
-        $this->assertSame(['phtml', 'none'], (new MvcSkeleton())->engines()->names());
+        $this->assertSame(['phtml', 'volt', 'none'], (new MvcSkeleton())->engines()->names());
     }
 
     public function testItIsTheMvcFlavor(): void
@@ -209,9 +209,46 @@ final class MvcSkeletonTest extends TestCase
                 'viewsPath'           => 'themes/default',
                 'viewsRow'            => '| `themes/default/` | The views. `GET /` shows the view `index/index` in the '
                     . "layout `index` |\n",
+                'volt'                => '',
+                'voltCache'           => 'var/cache/volt',
             ],
             (new MvcSkeleton())->values($this->answers('phtml'))
         );
+    }
+
+    public function testVoltGivesItsViewsItsCacheAndThePackageForV6(): void
+    {
+        $skeleton = new MvcSkeleton();
+
+        $this->assertSame(
+            [
+                'project-provider-dispatcher' => 'src/Providers/DispatcherProvider.php',
+                'project-provider-url'        => 'src/Providers/UrlProvider.php',
+                'project-volt-provider'       => 'src/Providers/ViewProvider.php',
+                'project-volt-layout'         => 'themes/default/index.volt',
+                'project-volt-index'          => 'themes/default/index/index.volt',
+            ],
+            $skeleton->files($this->answers('volt'))
+        );
+        $this->assertSame(
+            "*\n!.gitignore\n",
+            $skeleton->seed(new Stub(Paths::stubs()), $this->answers('volt'))['var/cache/volt/.gitignore'] ?? null
+        );
+        $this->assertArrayNotHasKey(
+            'var/cache/volt/.gitignore',
+            $skeleton->seed(new Stub(Paths::stubs()), $this->answers('phtml'))
+        );
+
+        $values = $skeleton->values($this->answers('volt', DatabaseChoice::NONE, 'v6'));
+
+        $this->assertSame(",\n        \"phalcon/volt\": \"^1.0\"", $values['volt']);
+        $this->assertSame(
+            "            new ViewProvider(\$this->projectRoot . '/themes/default', "
+            . "\$this->projectRoot . '/var/cache/volt'),\n",
+            $values['viewProvider']
+        );
+        // The extension (v5) has the Volt parser.
+        $this->assertSame('', $skeleton->values($this->answers('volt'))['volt']);
     }
 
     private function answers(

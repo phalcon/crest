@@ -34,6 +34,17 @@ final class TemplateEnginesTest extends TestCase
         $this->closeStreams();
     }
 
+    /**
+     * @return iterable<string, array{string, array{string, string}}>
+     */
+    public static function files(): iterable
+    {
+        yield 'a Volt view' => ['themes/default/index.volt', ['[[ ', ' ]]']];
+        yield 'a phtml view' => ['themes/default/index.phtml', ['{{ ', ' }}']];
+        yield 'a class' => ['src/Controllers/IndexController.php', ['{{ ', ' }}']];
+        yield 'a name that only has volt in it' => ['src/volt.php', ['{{ ', ' }}']];
+    }
+
     public function testAFlavorWithNoEnginesHasNone(): void
     {
         $engines = new TemplateEngines(Flavor::ADR, []);
@@ -111,6 +122,16 @@ final class TemplateEnginesTest extends TestCase
         $this->expectExceptionMessage("the 'adr' flavor has no views; remove --template-engine");
 
         (new TemplateEngines(Flavor::ADR, []))->choose($this->interactiveOutput(), 'phtml');
+    }
+
+    /**
+     * @dataProvider files
+     *
+     * @param array{string, string} $expected
+     */
+    public function testTheFileGivesTheDelimiters(string $file, array $expected): void
+    {
+        $this->assertSame($expected, TemplateEngines::delimiters($file));
     }
 
     public function testTheFirstEngineIsTheDefault(): void

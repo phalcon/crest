@@ -63,6 +63,18 @@ final class NewCommandTest extends TestCase
     }
 
     /**
+     * A copy from before #85 drops the templateEngine key or phalcon/volt of
+     * a Volt project.
+     *
+     * @return iterable<string, array{string, string, list<string>}>
+     */
+    public static function oldVoltStubs(): iterable
+    {
+        yield 'config templateEngine' => ['project-config', 'templateEngine', []];
+        yield 'composer volt' => ['project-composer', 'volt', ['--phalcon', 'v6']];
+    }
+
+    /**
      * @return iterable<string, array{string}>
      */
     public static function unusablePhpVersions(): iterable
@@ -302,7 +314,7 @@ final class NewCommandTest extends TestCase
 
     public function testAnOldPublishedFrontStillWorksForAProjectWithViews(): void
     {
-        $this->publishFrontWithoutImplicitView();
+        $this->publishWithout('mvc', 'project-front', 'implicitView');
 
         $this->assertSame(0, $this->runCommand(['my-app']));
         $this->assertStringContainsString(
@@ -315,12 +327,31 @@ final class NewCommandTest extends TestCase
     {
         // A copy from before #83 has no {{ implicitView }}: the project would
         // need a view service that it does not have.
-        $copy = $this->publishFrontWithoutImplicitView();
+        $copy = $this->publishWithout('mvc', 'project-front', 'implicitView');
 
         $this->assertSame(1, $this->runCommand(['my-app', '--template-engine', 'none']));
         $this->assertSame(
             'crest: the published stub ' . $copy . ' has no {{ implicitView }}; publish it again with '
             . 'crest stub:publish project-front --flavor=mvc --force, and make your changes in it again' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
+    /**
+     * @dataProvider oldVoltStubs
+     *
+     * @param list<string> $options
+     */
+    public function testAnOldPublishedStubStopsAVoltProject(string $name, string $placeholder, array $options): void
+    {
+        // A shared stub, where stub:publish puts it.
+        $copy = $this->publishWithout('shared', $name, $placeholder);
+
+        $this->assertSame(1, $this->runCommand(['my-app', '--template-engine', 'volt', ...$options]));
+        $this->assertSame(
+            'crest: the published stub ' . $copy . ' has no {{ ' . $placeholder . ' }}; publish it again with '
+            . 'crest stub:publish ' . $name . ' --flavor=mvc --force, and make your changes in it again' . PHP_EOL,
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
@@ -393,11 +424,11 @@ final class NewCommandTest extends TestCase
 
     public function testAnUnknownTemplateEngineIsRejected(): void
     {
-        $status = $this->runCommand(['my-app', '--flavor', 'mvc', '--template-engine', 'volt']);
+        $status = $this->runCommand(['my-app', '--flavor', 'mvc', '--template-engine', 'twig']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            "unknown template engine 'volt'; expected phtml or none",
+            "unknown template engine 'twig'; expected phtml or volt or none",
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
@@ -1044,13 +1075,13 @@ final class NewCommandTest extends TestCase
     public function testTheFlavorIsTheFirstQuestion(): void
     {
         // Flavor, template engine, namespace, PHP version, Phalcon version,
-        // runtime, service, database. MVC has two engines: phtml, and none
-        // for no views (#83).
+        // runtime, service, database. MVC has three engines: phtml, volt
+        // (#85), and none for no views (#83).
         $this->answers("mvc\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringStartsWith(
-            'Flavor (mvc, adr) [mvc]: Template engine (phtml, none) [phtml]: Root namespace [App]: ',
+            'Flavor (mvc, adr) [mvc]: Template engine (phtml, volt, none) [phtml]: Root namespace [App]: ',
             $this->readStderr()
         );
         $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
@@ -1501,6 +1532,28 @@ final class NewCommandTest extends TestCase
         $this->assertStringContainsString('Running: crest up --build' . PHP_EOL, $this->readStdout());
     }
 
+    public function testVoltGivesAnMvcProjectWithVoltViews(): void
+    {
+        $this->assertSame(0, $this->runCommand(['my-app', '--template-engine', 'volt', '--phalcon', 'v6']));
+
+        $layout = $this->read('themes/default/index.volt');
+
+        $this->assertStringContainsString("    'templateEngine' => 'volt',\n", $this->read('crest.php'));
+        $this->assertStringContainsString(
+            "use Phalcon\\Mvc\\View\\Engine\\Volt;\n",
+            $this->read('src/Providers/ViewProvider.php')
+        );
+        $this->assertStringContainsString(
+            "new ViewProvider(\$this->projectRoot . '/themes/default', \$this->projectRoot . '/var/cache/volt'),",
+            $this->read('src/AppFront.php')
+        );
+        $this->assertStringContainsString("    <title>my-app</title>\n", $layout);
+        $this->assertStringContainsString("{{ content() }}\n", $layout);
+        $this->assertStringContainsString('<h1>my-app</h1>', $this->read('themes/default/index/index.volt'));
+        $this->assertSame("*\n!.gitignore\n", $this->read('var/cache/volt/.gitignore'));
+        $this->assertStringContainsString("\"phalcon/volt\": \"^1.0\"\n", $this->read('composer.json'));
+    }
+
     public function testWithoutANewKeyNothingRuns(): void
     {
         // The packaged stub has no key: the D01 behavior.
@@ -1579,27 +1632,6 @@ final class NewCommandTest extends TestCase
     }
 
     /**
-     * Publishes the MVC front without {{ implicitView }}, as a copy from
-     * before #83, where new reads the copies. Gives the path of the copy.
-     */
-    private function publishFrontWithoutImplicitView(): string
-    {
-        $copy = Stub::overridePath($this->root, 'mvc', 'project-front');
-
-        mkdir(dirname($copy), 0o775, true);
-        file_put_contents(
-            $copy,
-            str_replace(
-                '{{ implicitView }}',
-                '',
-                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), 'mvc', 'project-front'))
-            )
-        );
-
-        return $copy;
-    }
-
-    /**
      * Publishes the packaged project-config stub with a `new` key, where new
      * reads its overrides: the mvc folder by default, or the shared folder,
      * where stub:publish puts it.
@@ -1617,6 +1649,27 @@ final class NewCommandTest extends TestCase
                 (string) file_get_contents(Stub::packagedPath(Paths::stubs(), Stub::SHARED, 'project-config'))
             )
         );
+    }
+
+    /**
+     * Publishes a packaged stub without one placeholder, as a copy from before
+     * the placeholder, where new reads the copies. Gives the path of the copy.
+     */
+    private function publishWithout(string $folder, string $name, string $placeholder): string
+    {
+        $copy = Stub::overridePath($this->root, $folder, $name);
+
+        mkdir(dirname($copy), 0o775, true);
+        file_put_contents(
+            $copy,
+            str_replace(
+                '{{ ' . $placeholder . ' }}',
+                '',
+                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), $folder, $name))
+            )
+        );
+
+        return $copy;
     }
 
     private function read(string $path): string

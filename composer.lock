@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a8b498e8b12ba42d4b48adfe7b899b46",
+    "content-hash": "10f03eeb01ada899b57f42d498429eb8",
     "packages": [],
     "packages-dev": [
         {
@@ -1523,6 +1523,89 @@
             ],
             "time": "2026-10-30T14:07:19+00:00",
             "published-time": "2026-10-30T14:10:14+00:00"
+        },
+        {
+            "name": "phalcon/volt",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/phalcon/volt.git",
+                "reference": "52b752a05fdab9f4d0908eb24496a78684f8ddfd"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/phalcon/volt/zipball/52b752a05fdab9f4d0908eb24496a78684f8ddfd",
+                "reference": "52b752a05fdab9f4d0908eb24496a78684f8ddfd",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ctype": "*",
+                "ext-mbstring": "*",
+                "php": ">=8.1 <9.0"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.95",
+                "pds/skeleton": "^1.0",
+                "phalcon/code-quality": "^1.0",
+                "phalcon/ide-stubs": "^5.8",
+                "phalcon/talon": "^1.0.0",
+                "phpstan/phpstan": "^2.0",
+                "phpunit/phpunit": "^10.5",
+                "squizlabs/php_codesniffer": "^4.0"
+            },
+            "suggest": {
+                "phalcon/phalcon": "The Phalcon framework this module integrates with"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Phalcon\\Volt\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Phalcon Team",
+                    "email": "team@phalcon.io",
+                    "homepage": "https://phalcon.io/en/team"
+                },
+                {
+                    "name": "Contributors",
+                    "homepage": "https://github.com/phalcon/volt/graphs/contributors"
+                }
+            ],
+            "description": "Phalcon Volt is an HTML template engine for server-side rendering.",
+            "homepage": "https://phalcon.io",
+            "keywords": [
+                "engine",
+                "html",
+                "phalcon",
+                "template",
+                "volt"
+            ],
+            "support": {
+                "discussions": "https://phalcon.io/discussions/",
+                "docs": "https://phalcon.io/docs/",
+                "email": "support@phalcon.io",
+                "issues": "https://github.com/phalcon/volt/issues",
+                "rss": "https://blog.phalcon.io/rss",
+                "source": "https://github.com/phalcon/volt"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/phalcon",
+                    "type": "github"
+                },
+                {
+                    "url": "https://opencollective.com/phalcon",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2026-11-20T00:31:19+00:00",
+            "published-time": "2026-11-20T00:32:31+00:00"
         },
         {
             "name": "phar-io/manifest",

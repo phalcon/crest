@@ -21,6 +21,7 @@ use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
 use Crest\Generator\Project\Skeletons;
+use Crest\Generator\Project\TemplateEngines;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Project\Flavor;
@@ -30,6 +31,7 @@ use Crest\Project\Settings;
 use Crest\Project\Survey;
 
 use function array_map;
+use function glob;
 use function is_file;
 use function sprintf;
 
@@ -44,6 +46,23 @@ use function sprintf;
  */
 final class InitCommand extends Command
 {
+    /**
+     * Volt when the views folder, or a folder in it, has a .volt file (#85).
+     * Else null: no templateEngine key, which is phtml. A project with no
+     * views folder gets null.
+     */
+    private static function engine(string $root, false | string $views): ?string
+    {
+        if (false === $views) {
+            return null;
+        }
+
+        $folder = $root . '/' . $views;
+        $files  = [...(glob($folder . '/*.volt') ?: []), ...(glob($folder . '/*/*.volt') ?: [])];
+
+        return [] === $files ? null : TemplateEngines::VOLT;
+    }
+
     public function define(): Definition
     {
         return Definition::for('init', 'Write crest.php for an existing project')
@@ -93,7 +112,8 @@ final class InitCommand extends Command
             // names. ADR and CLI get no models key. With no getSet answer,
             // Settings writes getSet false, which keeps the public properties
             // (#70).
-            Flavor::MVC === $flavor ? false : null
+            Flavor::MVC === $flavor ? false : null,
+            engine: self::engine($root, $paths['views'] ?? false)
         );
 
         // The lookup uses the flavor: a copy in the mvc/ folder of the

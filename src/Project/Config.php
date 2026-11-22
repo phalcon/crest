@@ -28,6 +28,7 @@ use function ksort;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
+use function strtolower;
 use function substr;
 use function trim;
 
@@ -51,6 +52,11 @@ final class Config implements ProjectContext
      * so their folder need not be in a psr-4 folder of composer.json.
      */
     public const NO_CLASS_PATHS = ['views'];
+
+    /**
+     * The view engine of an MVC project with no `templateEngine` key (#85).
+     */
+    public const PHTML = 'phtml';
 
     /**
      * The default paths that all flavors share: an artifact that is the same
@@ -80,6 +86,7 @@ final class Config implements ProjectContext
         private readonly array $declared = [],
         private readonly ?string $bootstrap = null,
         private readonly mixed $models = [],
+        private readonly string $templateEngine = self::PHTML,
     ) {
     }
 
@@ -211,7 +218,7 @@ final class Config implements ProjectContext
 
         // `namespaces` is deliberately absent: nothing reads its origin yet, and
         // tracking a key no caller asks about is a claim with no way to be wrong.
-        foreach (['bootstrap', 'flavor', 'namespace', 'paths', 'runtime'] as $key) {
+        foreach (['bootstrap', 'flavor', 'namespace', 'paths', 'runtime', 'templateEngine'] as $key) {
             if (true === isset($declared[$key])) {
                 $stated[] = $key;
             }
@@ -260,6 +267,12 @@ final class Config implements ProjectContext
             $bootstrap = $declared['bootstrap'];
         }
 
+        // The view engine of an MVC project (#85). No key is phtml.
+        $engine = self::PHTML;
+        if (true === isset($declared['templateEngine']) && true === is_string($declared['templateEngine'])) {
+            $engine = strtolower($declared['templateEngine']);
+        }
+
         return new self(
             $flavor,
             $namespace,
@@ -275,7 +288,8 @@ final class Config implements ProjectContext
             $stated,
             $bootstrap,
             // make:model checks the models key (#53), so a bad value stops only make:model.
-            $declared['models'] ?? []
+            $declared['models'] ?? [],
+            $engine
         );
     }
 
@@ -450,5 +464,14 @@ final class Config implements ProjectContext
     public function source(): string
     {
         return $this->source;
+    }
+
+    /**
+     * The view engine of an MVC project, in lowercase: the `templateEngine`
+     * key, else phtml (#85). make:scaffold writes its views for it.
+     */
+    public function templateEngine(): string
+    {
+        return $this->templateEngine;
     }
 }

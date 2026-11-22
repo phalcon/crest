@@ -20,6 +20,7 @@ use function file_get_contents;
 use function glob;
 use function is_file;
 use function preg_match_all;
+use function preg_quote;
 use function rtrim;
 use function sort;
 use function sprintf;
@@ -71,9 +72,10 @@ final class Stub
     private const OVERRIDE_DIRECTORY = 'resources/stubs';
 
     /**
-     * A placeholder: a name between `{{ ` and ` }}`.
+     * A placeholder: a name between two delimiters, by default `{{ ` and
+     * ` }}`. A Volt view has `[[ ` and ` ]]` (#85).
      */
-    private const PLACEHOLDER = '/\{\{ \w+ \}\}/';
+    private const PLACEHOLDER = '/%s\w+%s/';
 
     private string $packagedRoot;
 
@@ -200,19 +202,30 @@ final class Stub
      * that is already in the text: a value can have the text of a
      * placeholder, for example a column name of another table (#51).
      *
+     * The view engine owns the form of the placeholders (#85): a Volt view
+     * uses `{{ }}` itself, so its stubs have `[[ name ]]`, and the check
+     * looks only for the form of the stub (TemplateEngines::delimiters()).
+     *
      * @param array<string, string> $replacements
      */
-    public function render(string $flavor, string $name, array $replacements): string
-    {
+    public function render(
+        string $flavor,
+        string $name,
+        array $replacements,
+        string $open = '{{ ',
+        string $close = ' }}'
+    ): string {
         $path     = $this->resolve($flavor, $name);
         $template = (string) file_get_contents($path);
         $pairs    = [];
 
         foreach ($replacements as $key => $value) {
-            $pairs['{{ ' . $key . ' }}'] = $value;
+            $pairs[$open . $key . $close] = $value;
         }
 
-        preg_match_all(self::PLACEHOLDER, $template, $matches);
+        $pattern = sprintf(self::PLACEHOLDER, preg_quote($open, '/'), preg_quote($close, '/'));
+
+        preg_match_all($pattern, $template, $matches);
 
         foreach ($matches[0] as $placeholder) {
             if (false === isset($pairs[$placeholder])) {

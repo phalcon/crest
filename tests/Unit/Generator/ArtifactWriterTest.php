@@ -70,6 +70,18 @@ final class ArtifactWriterTest extends TestCase
         $this->writer()->render($file, 'thing', ['class' => 'Thing'], false);
     }
 
+    public function testAVoltFileGetsTheVoltPlaceholders(): void
+    {
+        // #85: crest has [[ name ]] in a Volt view, and keeps {{ }} for Volt.
+        file_put_contents($this->root . '/packaged/adr/view.stub', '[[ class ]] {{ class }}');
+
+        $file = $this->root . '/out/index.volt';
+
+        $this->writer()->renderOnce($file, 'view', ['class' => 'Thing'], false);
+
+        $this->assertSame('Thing {{ class }}', (string) file_get_contents($file));
+    }
+
     public function testDirectoryMakesAMissingFolderAndSaysSo(): void
     {
         // make:module prints a Created line only for a folder that it makes.

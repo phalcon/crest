@@ -53,6 +53,9 @@ final class Settings
      *                                               CLI have no models.
      * @param bool|null                   $getSet    The models.getSet answer of an MVC project
      *                                               (#70). Null gives false in the models key.
+     * @param string|null                 $engine    The view engine of an MVC project with an
+     *                                               engine other than phtml (#85). Null gives no
+     *                                               templateEngine key.
      */
     public function __construct(
         public readonly Flavor $flavor,
@@ -62,6 +65,7 @@ final class Settings
         public readonly Runtime $runtime,
         public readonly ?bool $camelCase = null,
         public readonly ?bool $getSet = null,
+        public readonly ?string $engine = null,
     ) {
     }
 
@@ -85,9 +89,12 @@ final class Settings
                     var_export($this->camelCase, true),
                     var_export($this->getSet ?? false, true)
                 ),
-            'namespace' => $this->namespace,
-            'paths'     => $this->pathLines(),
-            'runtime'   => $this->runtime->render(),
+            'namespace'      => $this->namespace,
+            'paths'          => $this->pathLines(),
+            'runtime'        => $this->runtime->render(),
+            'templateEngine' => null === $this->engine
+                ? ''
+                : sprintf("    'templateEngine' => %s,\n", var_export($this->engine, true)),
         ];
     }
 
