@@ -28,6 +28,7 @@ use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ModelCommand;
 use Crest\Command\Make\ModuleCommand;
 use Crest\Command\Make\ProviderCommand;
+use Crest\Command\Make\RepositoryCommand;
 use Crest\Command\Make\ResponderCommand;
 use Crest\Command\Make\ScaffoldCommand;
 use Crest\Command\NewCommand;
@@ -115,6 +116,7 @@ final class Commands
             ->add('make:model', ModelCommand::class)
             ->add('make:module', ModuleCommand::class)
             ->add('make:provider', ProviderCommand::class)
+            ->add('make:repository', RepositoryCommand::class)
             ->add('make:responder', ResponderCommand::class)
             ->add('make:scaffold', ScaffoldCommand::class)
             ->add('new', NewCommand::class)

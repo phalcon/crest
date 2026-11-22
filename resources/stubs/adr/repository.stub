@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ baseNamespace }}\{{ base }};
+
+/**
+ * The repository of the table {{ table }}. Add the queries of your
+ * application here.
+ */
+final class {{ class }} extends {{ base }}
+{
+}

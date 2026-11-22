@@ -167,6 +167,8 @@ enum DatabaseChoice: string
         $values = [
             'adapter'         => $this->adapter(),
             'charset'         => $this->charset(),
+            'dsnCharset'      => '' === $this->charset() ? '' : ';charset=utf8mb4',
+            'dsnDriver'       => $this->dsnDriver(),
             'databaseFile'    => self::SQLITE === $this ? self::SQLITE_FILE : '',
             'databaseIgnore'  => self::SQLITE === $this ? '/' . self::SQLITE_FILE . "\n" : '',
             'databaseInstall' => $this->install(),
@@ -204,6 +206,20 @@ enum DatabaseChoice: string
         return match ($this) {
             self::MARIADB, self::MYSQL            => "            'charset'  => 'utf8mb4',\n",
             self::NONE, self::PGSQL, self::SQLITE => '',
+        };
+    }
+
+    /**
+     * The driver at the start of a PDO DSN, for the DataMapper connection of
+     * an ADR project (#84). MariaDB uses the MySQL driver.
+     */
+    private function dsnDriver(): string
+    {
+        return match ($this) {
+            self::MARIADB, self::MYSQL => 'mysql',
+            self::NONE                 => '',
+            self::PGSQL                => 'pgsql',
+            self::SQLITE               => 'sqlite',
         };
     }
 

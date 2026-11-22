@@ -112,6 +112,8 @@ final class Config implements ProjectContext
                     'action'     => Layout::SOURCE . '/Action',
                     'middleware' => Layout::SOURCE . '/Middleware',
                     'provider'   => Layout::SOURCE . '/Provider',
+                    // make:repository (#84).
+                    'repository' => Layout::SOURCE . '/Repository',
                     'responder'  => Layout::SOURCE . '/Responder',
                 ],
                 Flavor::CLI => [],

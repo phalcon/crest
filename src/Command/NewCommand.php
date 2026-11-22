@@ -675,10 +675,12 @@ final class NewCommand extends Command
             $output->line(sprintf('The database: sqlite, in %s.', DatabaseChoice::SQLITE_FILE));
         }
 
-        // make:model is MVC only.
-        if (Flavor::MVC === $skeleton->flavor()) {
-            $output->line('Then crest make:model <table> reads it.');
-        }
+        // make:model is MVC only, make:repository ADR only (#84).
+        $output->line(
+            Flavor::MVC === $skeleton->flavor()
+                ? 'Then crest make:model <table> reads it.'
+                : 'Then crest make:repository <table> reads it.'
+        );
     }
 
     /**
