@@ -26,16 +26,20 @@ use function str_replace;
 use function unlink;
 
 /**
- * make:database and `crest init --database` in a project that exists (#95):
- * a project from `crest new` with no database. After the printed line in the
- * front controller, the db service of the project opens its SQLite file.
+ * make:database and `crest init --database` in a project that exists (#95,
+ * #96): a project from `crest new` with no database, and the driver of the
+ * suite. After the printed line in the front controller, the db service of
+ * the project opens its SQLite file, or connects to the database of the
+ * suite with the DB_* values that docker compose gives to the app container.
  *
  * The generated classes stay loaded in the PHP process, so each test has a
  * namespace of its own.
  *
+ * @group mysql
+ * @group pgsql
  * @group sqlite
  */
-final class DatabaseCommandSqliteTest extends AbstractNewCommandTestCase
+final class DatabaseCommandTest extends AbstractNewCommandTestCase
 {
     public function testAnAdrProjectGetsADbService(): void
     {
@@ -83,7 +87,11 @@ final class DatabaseCommandSqliteTest extends AbstractNewCommandTestCase
 
         $this->assertSame(
             0,
-            $this->runThroughKernel('init', InitCommand::class, ['--database', 'sqlite', '--directory', $project]),
+            $this->runThroughKernel(
+                'init',
+                InitCommand::class,
+                ['--database', $this->getDriver(), '--directory', $project]
+            ),
             $this->readStderr()
         );
 
@@ -108,18 +116,30 @@ final class DatabaseCommandSqliteTest extends AbstractNewCommandTestCase
     }
 
     /**
-     * The table customers in the SQLite file that make:database writes.
+     * The table customers: in the SQLite file that make:database writes, or
+     * in the database of the suite, with its values in the environment.
      */
     private function createCustomers(string $project): void
     {
-        (new CustomersMigration(new PDO('sqlite:' . $project . '/storage/database.sqlite'), false))->create();
+        if ('sqlite' === $this->getDriver()) {
+            (new CustomersMigration(new PDO('sqlite:' . $project . '/storage/database.sqlite'), false))->create();
+
+            return;
+        }
+
+        $this->databaseValues(true, false);
+        $this->createTables(CustomersMigration::class);
     }
 
     private function makeDatabase(string $project): void
     {
         $this->assertSame(
             0,
-            $this->runThroughKernel('make:database', DatabaseCommand::class, ['sqlite', '--directory', $project]),
+            $this->runThroughKernel(
+                'make:database',
+                DatabaseCommand::class,
+                [$this->getDriver(), '--directory', $project]
+            ),
             $this->readStderr()
         );
     }
