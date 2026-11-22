@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ baseNamespace }}\{{ base }};
+use Phalcon\Http\ResponseInterface;
+
+/**
+ * The project has no views, so each action returns its response.
+ */
+final class {{ class }} extends {{ base }}
+{
+    public function indexAction(): ResponseInterface
+    {
+        return $this->response->setJsonContent(['status' => 'ok']);
+    }
+}

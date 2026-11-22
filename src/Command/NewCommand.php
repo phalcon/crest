@@ -25,6 +25,7 @@ use Crest\Generator\Project\Answers;
 use Crest\Generator\Project\DatabaseChoice;
 use Crest\Generator\Project\Skeleton;
 use Crest\Generator\Project\Skeletons;
+use Crest\Generator\Project\TemplateEngines;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use Crest\Process\Runner;
@@ -150,7 +151,9 @@ final class NewCommand extends Command
 
     /**
      * The placeholders of #54, and the project stub of each. A copy of a stub
-     * that a team published before #54 does not have them (spec 3.5).
+     * that a team published before #54 does not have them (spec 3.5). From
+     * #83, implicitView: a project with no views needs it. The other values
+     * of the views are lines that a copy from before #83 has as text.
      */
     private const PLACEHOLDERS = [
         'databaseEnv'       => 'env',
@@ -160,6 +163,7 @@ final class NewCommand extends Command
         'dbProvider'        => 'front',
         'dbUse'             => 'front',
         'dependsOn'         => 'compose',
+        'implicitView'      => 'front',
         'models'            => 'config',
         'phql'              => 'composer',
         'registerProviders' => 'front',
@@ -202,7 +206,10 @@ final class NewCommand extends Command
         return Definition::for('new', 'Create an ADR or MVC project')
             ->argument('name', true, 'Project directory, e.g. my-app')
             ->option('flavor=s', 'Flavor: mvc or adr', 'mvc')
-            ->option('template-engine=s', 'The view engine of an MVC project: phtml. Default: phtml')
+            ->option(
+                'template-engine=s',
+                'The view engine of an MVC project: phtml, or none for no views. Default: phtml'
+            )
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
             ->option('phalcon=s', 'Phalcon: v5 (extension) or v6 (package)', 'v5')
@@ -289,12 +296,19 @@ final class NewCommand extends Command
         $stub = new Stub(Paths::stubs(), $parent);
 
         // crest.php holds the decisions of the user. `crest init` writes it
-        // through the same stub and the same Settings.
+        // through the same stub and the same Settings. A project with no
+        // views gets `'views' => false` (#83).
+        $paths = Config::defaultPaths($flavor);
+
+        if (TemplateEngines::NONE === $engine) {
+            $paths['views'] = false;
+        }
+
         $settings = new Settings(
             $flavor,
             $namespace,
             $namespace . '\\' . Layout::FRONT,
-            Config::defaultPaths($flavor),
+            $paths,
             $runtime,
             $camelCase,
             $getSet

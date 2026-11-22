@@ -17,6 +17,7 @@ use Closure;
 use Crest\Console\Exceptions\Exception;
 use Crest\Console\Output;
 use Crest\Generator\ClassName;
+use Crest\Generator\Project\TemplateEngines;
 use Crest\Project\Config;
 use Crest\Project\Runtime;
 use Crest\Project\Survey;
@@ -111,11 +112,19 @@ final class Questions
      * absolute or an empty folder is not in a psr-4 folder. A folder with no
      * classes (Config::NO_CLASS_PATHS, `views`) must only be a relative folder
      * in the project, with a name in each part. A leading `./` is removed.
+     *
+     * For `views`, the answer `none` gives false: an MVC project with no views
+     * (#83).
      */
-    public static function path(Output $output, string $root, string $key, string $default): string
+    public static function path(Output $output, string $root, string $key, string $default): false | string
     {
         $state  = true === is_dir($root . '/' . $default) ? 'exists' : 'does not exist yet';
-        $folder = static function (string $answer) use ($root, $key, $default): string {
+        $views  = 'views' === $key;
+        $folder = static function (string $answer) use ($root, $key, $default, $views): false | string {
+            if (true === $views && TemplateEngines::NONE === $answer) {
+                return false;
+            }
+
             $folder = rtrim($answer, '/');
             $folder = true === str_starts_with($folder, './') ? substr($folder, 2) : $folder;
             $parts  = explode('/', $folder);
@@ -163,8 +172,10 @@ final class Questions
             return $folder;
         };
 
+        $hint = true === $views ? ', or ' . TemplateEngines::NONE . ' for no views' : '';
+
         return $folder(
-            $output->ask(sprintf('%s folder (%s)', $key, $state), $default, self::checkWith($folder))
+            $output->ask(sprintf('%s folder (%s)%s', $key, $state, $hint), $default, self::checkWith($folder))
         );
     }
 

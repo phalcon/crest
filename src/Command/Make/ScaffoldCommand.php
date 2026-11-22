@@ -102,6 +102,14 @@ final class ScaffoldCommand extends ProjectCommand
         $table  = $input->argumentString('table');
         $force  = true === $input->option('force');
         $config = $this->config($input);
+
+        // The pages are views (#83).
+        if (false === $config->hasViews()) {
+            throw new Exception(
+                "make:scaffold writes views, and this project has no views ('views' => false in crest.php)"
+            );
+        }
+
         $value  = $input->optionStringOrNull('module');
         $module = null === $value ? null : ModuleLocation::existing($config, $value);
         $names  = ModelNames::of($config->models());

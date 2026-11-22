@@ -31,6 +31,10 @@ use Crest\Project\Flavor;
  *
  * crest does not change the front controller or the router. It prints the
  * registration and the routes instead (the stub fragment-guidance-module).
+ *
+ * In a project with no views (#83), the module has no views folder, its
+ * Module.php does not set the views (the stub module-no-views), and the
+ * guidance keeps the implicit view off (fragment-guidance-module-no-views).
  */
 final class ModuleCommand extends NamedArtifactCommand
 {
@@ -38,17 +42,23 @@ final class ModuleCommand extends NamedArtifactCommand
     {
         $config   = $this->config($input);
         $location = ModuleLocation::of($config, $input->argumentString('name'));
+        $views    = $config->hasViews();
+        $parts    = [ModuleLocation::CONTROLLERS, ModuleLocation::MODELS];
+
+        if (true === $views) {
+            $parts[] = ModuleLocation::VIEWS;
+        }
 
         $this->writer($config)->render(
             $location->file(),
-            $this->key(),
+            true === $views ? $this->key() : $this->key() . '-no-views',
             ['class' => ModuleLocation::NAME, 'module' => $location->key, 'namespace' => $location->namespace],
             true === $input->option('force')
         );
 
         $output->success('Created ' . $location->file());
 
-        foreach ([ModuleLocation::CONTROLLERS, ModuleLocation::MODELS, ModuleLocation::VIEWS] as $part) {
+        foreach ($parts as $part) {
             $folder = $location->folder($part);
 
             if (true === ArtifactWriter::directory($folder)) {
@@ -56,7 +66,12 @@ final class ModuleCommand extends NamedArtifactCommand
             }
         }
 
-        $this->guidance($config, $output, ['module' => $location->key, 'namespace' => $location->namespace]);
+        $this->guidance(
+            $config,
+            $output,
+            ['module' => $location->key, 'namespace' => $location->namespace],
+            true === $views ? '' : 'no-views'
+        );
 
         return 0;
     }

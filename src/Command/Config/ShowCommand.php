@@ -19,6 +19,7 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ModelNames;
+use Crest\Generator\Project\TemplateEngines;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
 use Crest\Project\Locator;
@@ -84,6 +85,12 @@ final class ShowCommand extends ProjectCommand
         $output->table(['ITEM', 'VALUE', 'ORIGIN'], $items);
 
         $paths = $config->paths();
+
+        // `'views' => false` (#83): the row says that the project has no views.
+        if (Flavor::MVC === $config->flavor() && false === $config->hasViews()) {
+            $paths['views'] = TemplateEngines::NONE;
+        }
+
         ksort($paths);
 
         $rows = [];

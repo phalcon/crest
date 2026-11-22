@@ -46,12 +46,13 @@ final class Settings
         . "    ],\n";
 
     /**
-     * @param array<string, string> $paths
-     * @param bool|null             $camelCase The models.camelCase answer of an MVC project.
-     *                                         Null gives no models key: ADR and CLI have no
-     *                                         models.
-     * @param bool|null             $getSet    The models.getSet answer of an MVC project (#70).
-     *                                         Null gives false in the models key.
+     * @param array<string, false|string> $paths     False for `views`: an MVC project with no
+     *                                               views (#83).
+     * @param bool|null                   $camelCase The models.camelCase answer of an MVC
+     *                                               project. Null gives no models key: ADR and
+     *                                               CLI have no models.
+     * @param bool|null                   $getSet    The models.getSet answer of an MVC project
+     *                                               (#70). Null gives false in the models key.
      */
     public function __construct(
         public readonly Flavor $flavor,
