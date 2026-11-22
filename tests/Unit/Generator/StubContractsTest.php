@@ -87,6 +87,7 @@ final class StubContractsTest extends TestCase
         'alias'          => 'Generated',
         'aliases'        => '',
         'aliasNote'      => '',
+        'arguments'      => '$this->projectRoot',
         'attributes'     => '',
         'base'           => 'GeneratedBase',
         'baseNamespace'  => 'App\\Generated\\Base',
