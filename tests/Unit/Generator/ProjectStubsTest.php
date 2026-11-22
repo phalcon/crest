@@ -17,11 +17,13 @@ use Crest\Console\PackageVersion;
 use Crest\Generator\Stub;
 use Crest\Paths;
 use ParseError;
+use Phalcon\Mvc\View\Engine\Volt\Compiler;
 use PHPUnit\Framework\TestCase;
 
 use function array_keys;
 use function class_exists;
 use function extension_loaded;
+use function in_array;
 use function interface_exists;
 use function json_decode;
 use function preg_match_all;
@@ -102,12 +104,20 @@ final class ProjectStubsTest extends TestCase
         'seed'                => 'Get',
         'service'             => 'app',
         'source'              => 'src',
+        'templateEngine'      => '',
         'v5'                  => '',
         'viewProvider'        => "            new ViewProvider(\$this->projectRoot . '/themes/default'),\n",
         'viewUse'             => "use App\\Providers\\ViewProvider;\n",
         'viewsPath'           => 'themes/default',
         'viewsRow'            => "| `themes/default/` | The views |\n",
+        'volt'                => '',
+        'voltCache'           => 'var/cache/volt',
     ];
+
+    /**
+     * The project stubs of the Volt views. They have `[[ name ]]` (#85).
+     */
+    private const VOLT_VIEWS = ['project-volt-index', 'project-volt-layout'];
 
     /**
      * The project stubs that import classes.
@@ -126,6 +136,7 @@ final class ProjectStubsTest extends TestCase
         yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
         yield 'mvc/project-provider-url' => ['mvc', 'project-provider-url'];
+        yield 'mvc/project-volt-provider' => ['mvc', 'project-volt-provider'];
     }
 
     /**
@@ -145,6 +156,7 @@ final class ProjectStubsTest extends TestCase
         yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
         yield 'mvc/project-provider-dispatcher' => ['mvc', 'project-provider-dispatcher'];
         yield 'mvc/project-provider-url' => ['mvc', 'project-provider-url'];
+        yield 'mvc/project-volt-provider' => ['mvc', 'project-volt-provider'];
         yield 'shared/project-config' => ['adr', 'project-config'];
         yield 'shared/project-htrouter' => ['adr', 'project-htrouter'];
         yield 'shared/project-index' => ['adr', 'project-index'];
@@ -156,6 +168,26 @@ final class ProjectStubsTest extends TestCase
     public static function projectStubs(): iterable
     {
         yield from self::packagedNames();
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function voltViews(): iterable
+    {
+        foreach (self::VOLT_VIEWS as $name) {
+            yield $name => [$name];
+        }
+    }
+
+    /**
+     * The placeholders of a stub: `[[ name ]]` for a Volt view (#85).
+     *
+     * @return array{string, string}
+     */
+    private static function delimiters(string $name): array
+    {
+        return true === in_array($name, self::VOLT_VIEWS, true) ? ['[[ ', ' ]]'] : ['{{ ', ' }}'];
     }
 
     /**
@@ -179,6 +211,16 @@ final class ProjectStubsTest extends TestCase
         }
 
         return $stubs;
+    }
+
+    /**
+     * A Volt view of `new` compiles to PHP that parses (#85).
+     *
+     * @dataProvider voltViews
+     */
+    public function testAVoltViewCompiles(string $name): void
+    {
+        $this->assertNotEmpty(token_get_all((new Compiler())->compileString($this->render('mvc', $name)), TOKEN_PARSE));
     }
 
     /**
@@ -218,8 +260,9 @@ final class ProjectStubsTest extends TestCase
      */
     public function testNoPlaceholderIsLeftUnrendered(string $flavor, string $name): void
     {
+        // A Volt view keeps the {{ }} of Volt, and has [[ ]] for crest (#85).
         $this->assertFalse(
-            str_contains($this->render($flavor, $name), '{{'),
+            str_contains($this->render($flavor, $name), true === in_array($name, self::VOLT_VIEWS, true) ? '[[' : '{{'),
             sprintf("stub '%s' left a placeholder unrendered", $name)
         );
     }
@@ -267,6 +310,29 @@ final class ProjectStubsTest extends TestCase
         $this->assertIsArray($json);
         $this->assertSame(
             ['php' => '>=8.4', 'ext-phalcon' => '^5', 'phalcon/phql' => '1.0.x-dev'],
+            $json['require']
+        );
+    }
+
+    public function testTheComposerStubTakesVoltAfterPhql(): void
+    {
+        // The values of MvcSkeleton for an MVC v6 project with a database and
+        // Volt (#85).
+        $rendered = (new Stub(Paths::stubs()))->render(
+            'adr',
+            'project-composer',
+            [
+                ...self::REPLACEMENTS,
+                'phql' => ",\n        \"phalcon/phql\": \"1.0.x-dev\"",
+                'volt' => ",\n        \"phalcon/volt\": \"^1.0\"",
+            ]
+        );
+
+        $json = json_decode($rendered, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($json);
+        $this->assertSame(
+            ['php' => '>=8.4', 'ext-phalcon' => '^5', 'phalcon/phql' => '1.0.x-dev', 'phalcon/volt' => '^1.0'],
             $json['require']
         );
     }
@@ -323,7 +389,12 @@ final class ProjectStubsTest extends TestCase
         ];
 
         foreach (self::packagedNames() as [$flavor, $name]) {
-            $rendered = (new Stub(Paths::stubs()))->render($flavor, $name, [...self::REPLACEMENTS, ...$layout]);
+            $rendered = (new Stub(Paths::stubs()))->render(
+                $flavor,
+                $name,
+                [...self::REPLACEMENTS, ...$layout],
+                ...self::delimiters($name)
+            );
 
             foreach ($defaults as $default) {
                 $this->assertStringNotContainsString(
@@ -367,6 +438,9 @@ final class ProjectStubsTest extends TestCase
                 'mvc/project-provider-dispatcher',
                 'mvc/project-provider-url',
                 'mvc/project-readme',
+                'mvc/project-volt-index',
+                'mvc/project-volt-layout',
+                'mvc/project-volt-provider',
             ],
             array_keys(self::packagedNames())
         );
@@ -374,6 +448,6 @@ final class ProjectStubsTest extends TestCase
 
     private function render(string $flavor, string $name): string
     {
-        return (new Stub(Paths::stubs()))->render($flavor, $name, self::REPLACEMENTS);
+        return (new Stub(Paths::stubs()))->render($flavor, $name, self::REPLACEMENTS, ...self::delimiters($name));
     }
 }

@@ -247,6 +247,18 @@ final class ShowCommandTest extends TestCase
         );
     }
 
+    public function testAVoltProjectShowsItsEngine(): void
+    {
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['flavor' => 'mvc', 'templateEngine' => 'Volt'];\n"
+        );
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(PHP_EOL . 'templateEngine volt declared' . PHP_EOL, $this->normalized());
+    }
+
     /**
      * @dataProvider wrongModelsKeys
      */
@@ -262,6 +274,7 @@ final class ShowCommandTest extends TestCase
         $this->assertStringContainsString(
             'service app default' . PHP_EOL
             . 'models ' . $message . ' declared' . PHP_EOL
+            . 'templateEngine phtml default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL,
             $output
@@ -367,6 +380,7 @@ final class ShowCommandTest extends TestCase
             . 'camelCase true declared' . PHP_EOL
             . 'getSet false default' . PHP_EOL
             . 'schema none default' . PHP_EOL
+            . 'templateEngine phtml default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL
@@ -415,6 +429,7 @@ final class ShowCommandTest extends TestCase
             . 'camelCase false default' . PHP_EOL
             . 'getSet false default' . PHP_EOL
             . 'schema none default' . PHP_EOL
+            . 'templateEngine phtml default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'admin ' . $this->root . '/backend declared' . PHP_EOL
@@ -445,6 +460,7 @@ final class ShowCommandTest extends TestCase
             . 'camelCase false default' . PHP_EOL
             . 'getSet false default' . PHP_EOL
             . 'schema none default' . PHP_EOL
+            . 'templateEngine phtml default' . PHP_EOL
             . PHP_EOL
             . 'PATH LOCATION ORIGIN' . PHP_EOL
             . 'command ' . $this->root . '/src/Command default' . PHP_EOL

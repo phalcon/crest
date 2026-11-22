@@ -181,6 +181,27 @@ final class StubTest extends TestCase
         $this->assertFalse($stub->hasPlaceholder('adr', 'action', 'new'));
     }
 
+    public function testOtherDelimitersCheckTheirOwnPlaceholders(): void
+    {
+        file_put_contents($this->root . '/packaged/adr/view.stub', '[[ a ]]|[[ b ]]|{{ c }}');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($this->root . '/packaged/adr/view.stub has no value for [[ b ]]');
+
+        (new Stub($this->root . '/packaged'))->render('adr', 'view', ['a' => 'X'], '[[ ', ' ]]');
+    }
+
+    public function testOtherDelimitersReplaceOnlyTheirPlaceholders(): void
+    {
+        // A Volt view (#85): [[ name ]] is crest, {{ name }} is Volt.
+        file_put_contents($this->root . '/packaged/adr/view.stub', '[[ a ]]|{{ a }}');
+
+        $this->assertSame(
+            'X|{{ a }}',
+            (new Stub($this->root . '/packaged'))->render('adr', 'view', ['a' => 'X'], '[[ ', ' ]]')
+        );
+    }
+
     public function testPackagedFolderFallsBackToTheSharedFolder(): void
     {
         file_put_contents($this->root . '/packaged/shared/command.stub', 'shared');

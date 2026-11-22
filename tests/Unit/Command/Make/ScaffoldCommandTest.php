@@ -79,6 +79,13 @@ final class ScaffoldCommandTest extends TestCase
         );
     }
 
+    public function testAnUnknownTemplateEngineStopsBeforeTheBoot(): void
+    {
+        $this->front(", 'templateEngine' => 'twig'");
+
+        $this->assertScaffoldStops(['users'], "unknown templateEngine 'twig' in crest.php; expected phtml or volt");
+    }
+
     /**
      * @dataProvider paths
      */

@@ -110,6 +110,7 @@ final class AdrSkeletonTest extends TestCase
                 'providerNamespace' => 'Acme\\Shop\\Provider',
                 'registerProviders' => '',
                 'seed'              => 'Get',
+                'volt'              => '',
             ],
             (new AdrSkeleton())->values($this->answers())
         );

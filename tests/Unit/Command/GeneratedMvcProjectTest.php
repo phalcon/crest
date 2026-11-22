@@ -86,6 +86,8 @@ final class GeneratedMvcProjectTest extends TestCase
 
     private const ROOT_NAMESPACE = 'Scaffolded\\Mvc';
 
+    private const VOLT_NAMESPACE = 'Scaffolded\\MvcWithVolt';
+
     /** @var list<Closure> */
     private array $autoloaders = [];
 
@@ -237,6 +239,19 @@ final class GeneratedMvcProjectTest extends TestCase
         );
         $this->assertSame('{"status":"ok"}', $this->get('/', false, false));
         $this->assertFalse(Config::discover($this->project)->hasViews());
+    }
+
+    public function testAVoltProjectShowsTheIndexViewInTheLayout(): void
+    {
+        // #85: the Volt engine compiles the views into var/cache/volt, which
+        // new writes with its .gitignore.
+        $this->project = $this->generate('shop-volt', self::VOLT_NAMESPACE, ['--template-engine', 'volt']);
+
+        $content = $this->get('/');
+
+        $this->assertStringContainsString('<title>shop-volt</title>', $content);
+        $this->assertStringContainsString('<h1>shop-volt</h1>', $content);
+        $this->assertSame('volt', Config::discover($this->project)->templateEngine());
     }
 
     public function testCrestBootsTheGeneratedFrontController(): void

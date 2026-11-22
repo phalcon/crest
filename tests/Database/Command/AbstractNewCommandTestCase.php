@@ -144,13 +144,15 @@ abstract class AbstractNewCommandTestCase extends AbstractDatabaseTestCase
      * Runs `new` with the database of the test, and loads the classes of the
      * project as its composer.json does: the root namespace maps to src/. The
      * project has no vendor/ yet.
+     *
+     * @param list<string> $options
      */
-    protected function generate(string $flavor, string $database, string $namespace): string
+    protected function generate(string $flavor, string $database, string $namespace, array $options = []): string
     {
         $status = $this->runProjectCommand(
             'new',
             NewCommand::class,
-            ['shop', '--flavor', $flavor, '--database', $database, '--namespace', $namespace]
+            ['shop', '--flavor', $flavor, '--database', $database, '--namespace', $namespace, ...$options]
         );
 
         $this->assertSame(0, $status, $this->readStderr());
