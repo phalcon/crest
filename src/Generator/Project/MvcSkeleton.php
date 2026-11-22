@@ -27,6 +27,10 @@ use Crest\Project\Flavor;
  * A stub that depends on the view engine has the engine name after the
  * prefix: project-<engine>-<part>. A view file has the engine name as its
  * extension.
+ *
+ * With the engine none (#83), the project has no views: no view provider, no
+ * layout and no view. The front turns the implicit view off, and
+ * IndexController returns JSON (project-none-controller).
  */
 final class MvcSkeleton implements Skeleton
 {
@@ -46,7 +50,7 @@ final class MvcSkeleton implements Skeleton
 
     public function engines(): TemplateEngines
     {
-        return new TemplateEngines($this->flavor(), ['phtml']);
+        return new TemplateEngines($this->flavor(), ['phtml', TemplateEngines::NONE]);
     }
 
     public function entry(): string
@@ -56,17 +60,23 @@ final class MvcSkeleton implements Skeleton
 
     public function files(Answers $answers): array
     {
-        $engine   = $answers->engine ?? $this->engines()->names()[0];
-        $prefix   = Stub::PROJECT_PREFIX . $engine . '-';
+        $engine   = $this->engine($answers);
         $provider = $this->path('provider');
-        $views    = $this->path('views');
         $files    = [
             Stub::PROJECT_PREFIX . 'provider-dispatcher' => $provider . '/DispatcherProvider.php',
             Stub::PROJECT_PREFIX . 'provider-url'        => $provider . '/UrlProvider.php',
-            $prefix . 'provider'                         => $provider . '/ViewProvider.php',
-            $prefix . 'layout'                           => $views . '/index.' . $engine,
-            $prefix . 'index'                            => $views . '/index/index.' . $engine,
         ];
+
+        if (TemplateEngines::NONE !== $engine) {
+            $prefix = Stub::PROJECT_PREFIX . $engine . '-';
+            $views  = $this->path('views');
+            $files += [
+                $prefix . 'provider' => $provider . '/ViewProvider.php',
+                $prefix . 'layout'   => $views . '/index.' . $engine,
+                $prefix . 'index'    => $views . '/index/index.' . $engine,
+            ];
+        }
+
         $database = $answers->database->provider();
 
         if (null !== $database) {
@@ -99,7 +109,9 @@ final class MvcSkeleton implements Skeleton
             ),
             $this->entry() => $stub->render(
                 $this->flavor()->value,
-                'controller',
+                TemplateEngines::NONE === $this->engine($answers)
+                    ? Stub::PROJECT_PREFIX . TemplateEngines::NONE . '-controller'
+                    : 'controller',
                 [
                     'base'          => ControllerBase::NAME,
                     'baseNamespace' => $base,
@@ -110,9 +122,16 @@ final class MvcSkeleton implements Skeleton
         ];
     }
 
+    /**
+     * The values of the views are whole lines, as dbUse and dbProvider. A
+     * project with no views gets empty lines, and the front turns the
+     * implicit view off: Phalcon\Mvc\Application otherwise needs a view
+     * service. viewsPath stays for a published front from before #83.
+     */
     public function values(Answers $answers): array
     {
-        $none = DatabaseChoice::NONE === $answers->database;
+        $none  = DatabaseChoice::NONE === $answers->database;
+        $views = TemplateEngines::NONE !== $this->engine($answers);
 
         return [
             'baseFolder'          => ControllerBase::FOLDER,
@@ -122,11 +141,22 @@ final class MvcSkeleton implements Skeleton
             'dbUse'               => true === $none
                 ? ''
                 : 'use ' . $this->providerNamespace($answers) . "\\DbProvider;\n",
+            'implicitView'        => true === $views ? '' : '->useImplicitView(false)',
             'phql'                => true === $none || 'v6' !== $answers->phalcon ? '' : self::PHQL,
             'providerNamespace'   => $this->providerNamespace($answers),
             'providerPath'        => $this->path('provider'),
             'seed'                => self::SEED,
+            'viewProvider'        => true === $views
+                ? "            new ViewProvider(\$this->projectRoot . '/" . $this->path('views') . "'),\n"
+                : '',
+            'viewUse'             => true === $views
+                ? 'use ' . $this->providerNamespace($answers) . "\\ViewProvider;\n"
+                : '',
             'viewsPath'           => $this->path('views'),
+            'viewsRow'            => true === $views
+                ? '| `' . $this->path('views') . '/` | The views. `GET /` shows the view `index/index` in the layout '
+                    . "`index` |\n"
+                : '',
         ];
     }
 
@@ -149,6 +179,14 @@ final class MvcSkeleton implements Skeleton
         $root = DatabaseChoice::SQLITE === $database ? '$this->projectRoot' : '';
 
         return '            new DbProvider(' . $root . "),\n";
+    }
+
+    /**
+     * The engine of the answers, or the default engine.
+     */
+    private function engine(Answers $answers): string
+    {
+        return $answers->engine ?? $this->engines()->names()[0];
     }
 
     /**

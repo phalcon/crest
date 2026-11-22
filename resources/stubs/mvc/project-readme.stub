@@ -27,8 +27,7 @@ Then open http://localhost:{{ port }}/.
 | `{{ providerPath }}/` | The providers of the services |
 | `{{ controllerPath }}/` | The controllers. `GET /` is `{{ controllerPath }}/{{ seed }}.php` |
 | `{{ controllerPath }}/{{ baseFolder }}/` | The base of the controllers. crest writes it; do not edit it |
-| `{{ viewsPath }}/` | The views. `GET /` shows the view `index/index` in the layout `index` |
-| `crest.php` | The crest configuration |
+{{ viewsRow }}| `crest.php` | The crest configuration |
 
 ## Next steps
 

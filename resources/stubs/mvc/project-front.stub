@@ -6,8 +6,7 @@ namespace {{ namespace }};
 
 {{ dbUse }}use {{ providerNamespace }}\DispatcherProvider;
 use {{ providerNamespace }}\UrlProvider;
-use {{ providerNamespace }}\ViewProvider;
-use Phalcon\Di\DiInterface;
+{{ viewUse }}use Phalcon\Di\DiInterface;
 use Phalcon\Di\FactoryDefault;
 use Phalcon\Di\ServiceProviderInterface;
 use Phalcon\Http\ResponseInterface;
@@ -47,7 +46,7 @@ final class {{ front }}
     public function run(): int
     {
         $uri      = (string) ($_SERVER['REQUEST_URI'] ?? '/');
-        $response = (new Application($this->boot()))->handle($uri);
+        $response = (new Application($this->boot())){{ implicitView }}->handle($uri);
 
         if ($response instanceof ResponseInterface) {
             $response->send();
@@ -64,7 +63,6 @@ final class {{ front }}
         return [
 {{ dbProvider }}            new DispatcherProvider(),
             new UrlProvider(),
-            new ViewProvider($this->projectRoot . '/{{ viewsPath }}'),
-        ];
+{{ viewProvider }}        ];
     }
 }

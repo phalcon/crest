@@ -1,0 +1,33 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Phalcon\Di\DiInterface;
+use Phalcon\Mvc\Dispatcher;
+use Phalcon\Mvc\ModuleDefinitionInterface;
+
+/**
+ * The {{ module }} module. The application calls registerServices() when a
+ * route sends the request to this module. The project has no views, so each
+ * action returns its response.
+ *
+ * Add the services of this module in registerServices(). Composer loads the
+ * classes of the module, so registerAutoloaders() is empty.
+ */
+final class {{ class }} implements ModuleDefinitionInterface
+{
+    public function registerAutoloaders(?DiInterface $container = null): void
+    {
+    }
+
+    public function registerServices(DiInterface $container): void
+    {
+        // The providers of the project set the dispatcher. The module changes
+        // only where it looks.
+        /** @var Dispatcher $dispatcher */
+        $dispatcher = $container->getShared('dispatcher');
+        $dispatcher->setDefaultNamespace('{{ namespace }}\Controllers');
+    }
+}

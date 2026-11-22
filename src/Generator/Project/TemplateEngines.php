@@ -28,12 +28,22 @@ use function strtolower;
  * is the default. An empty list is a flavor with no views: then the option is
  * an error. There is no null engine: the empty list is that case.
  *
+ * NONE is the choice of an MVC project with no views (#83): a project that
+ * only returns JSON, for example. It is in the list of the flavor, so the
+ * question and the check of the option know it.
+ *
  * A flavor with more than one engine gets a question. When an engine needs
  * behavior of its own (Volt: a cache folder, a package for v6), the names can
  * become objects in this class, and the callers do not change.
  */
 final class TemplateEngines
 {
+    /**
+     * No views. Also the answer of the `views` question of init, and the
+     * `views` path false in crest.php.
+     */
+    public const NONE = 'none';
+
     /**
      * @param list<string> $names The engines of the flavor. The first is the
      *                            default.

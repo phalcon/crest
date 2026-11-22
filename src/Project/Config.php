@@ -15,6 +15,7 @@ namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
 
+use function array_filter;
 use function array_keys;
 use function dirname;
 use function explode;
@@ -231,7 +232,7 @@ final class Config implements ProjectContext
 
         $paths = self::defaultPaths($flavor);
         if (true === isset($declared['paths']) && true === is_array($declared['paths'])) {
-            /** @var array<string, string> $supplied */
+            /** @var array<string, false|string> $supplied */
             $supplied = $declared['paths'];
             $paths    = [...$paths, ...$supplied];
 
@@ -241,6 +242,10 @@ final class Config implements ProjectContext
                 $stated[] = 'paths.' . $name;
             }
         }
+
+        // `'views' => false`: an MVC project with no views (#83). The path is
+        // not there, as in an ADR project.
+        $paths = array_filter($paths, static fn (false | string $path): bool => false !== $path);
 
         $namespaces = [];
         if (true === isset($declared['namespaces']) && true === is_array($declared['namespaces'])) {
@@ -299,6 +304,15 @@ final class Config implements ProjectContext
     public function flavor(): Flavor
     {
         return $this->flavor;
+    }
+
+    /**
+     * True when the project has a `views` path. An ADR project has none, and
+     * an MVC project has none with `'views' => false` (#83).
+     */
+    public function hasViews(): bool
+    {
+        return true === isset($this->paths['views']);
     }
 
     /**

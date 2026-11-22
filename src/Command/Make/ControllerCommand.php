@@ -104,15 +104,23 @@ final class ControllerCommand extends NamedArtifactCommand
 
         $output->success(sprintf('Created %s', $placement->file));
 
+        // A project with no views (#83) gets the guidance with no view.
+        $views = $config->hasViews();
+
         if (null === $location) {
-            $this->guidance($config, $output, $values);
+            $this->guidance($config, $output, $values, true === $views ? '' : 'no-views');
 
             return 0;
         }
 
         // Module.php sets the namespace, so the guidance of a module has no
         // line for the dispatcher.
-        $this->guidance($config, $output, $values + ['module' => $location->key], 'module');
+        $this->guidance(
+            $config,
+            $output,
+            $values + ['module' => $location->key],
+            true === $views ? 'module' : 'module-no-views'
+        );
 
         return 0;
     }
