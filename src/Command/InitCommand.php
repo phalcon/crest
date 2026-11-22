@@ -116,6 +116,7 @@ final class InitCommand extends Command
 
         // Before the first write: thus a run that stops changes nothing.
         if (DatabaseChoice::NONE !== $database) {
+            $database->checkService($runtime);
             DatabaseSetup::guard($root . '/' . $paths['provider'], $force);
         }
 

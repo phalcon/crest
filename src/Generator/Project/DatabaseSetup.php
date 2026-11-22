@@ -20,10 +20,12 @@ use Crest\Generator\Stub;
 use Crest\Project\Bootstrap;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
+use Crest\Project\Survey;
 
 use function basename;
 use function explode;
 use function file_exists;
+use function in_array;
 use function is_file;
 use function sprintf;
 use function trim;
@@ -35,7 +37,7 @@ use function trim;
  *
  * Crest changes no file that exists. It writes DbProvider and the SQLite
  * files, and prints the lines to add to each file that exists: the front
- * controller, .gitignore and .env.
+ * controller, the compose file, the Dockerfile, .gitignore and .env.
  */
 final class DatabaseSetup
 {
@@ -90,6 +92,7 @@ final class DatabaseSetup
             ?? throw new Exception('no database to add; choose mariadb, mysql, pgsql or sqlite');
         $folder = $this->config->path('provider');
 
+        $database->checkService($this->config->runtime());
         self::guard($folder, $force);
 
         $flavor    = $this->config->flavor();
@@ -118,9 +121,18 @@ final class DatabaseSetup
             $output->success(sprintf('Created %s', $file));
         }
 
+        $compose = Survey::composeFile($root);
+
         $this->guidance($database, $output, $namespace);
-        $this->lines($output, '.gitignore', $values['databaseIgnore']);
-        $this->lines($output, '.env', $values['databaseEnv']);
+        $this->server($database, $output, $values, $compose);
+        $this->lines($output, 'Add to .gitignore', $values['databaseIgnore']);
+
+        // Without a compose file, nothing gives .env to the app, and DB_HOST
+        // would name a service that does not exist.
+        if (null !== $compose || false === $database->hasService()) {
+            $this->lines($output, 'Add to .env', $values['databaseEnv']);
+        }
+
         $output->line();
         $output->line(self::next($flavor));
     }
@@ -150,10 +162,10 @@ final class DatabaseSetup
     }
 
     /**
-     * The lines to add to a file that exists, each with an indent. Nothing
-     * when the database has no lines for the file.
+     * The lines to add to a file that exists, each with an indent, after
+     * their heading. Nothing when the database has no lines for the file.
      */
-    private function lines(Output $output, string $file, string $lines): void
+    private function lines(Output $output, string $heading, string $lines): void
     {
         $lines = trim($lines, "\n");
 
@@ -162,11 +174,63 @@ final class DatabaseSetup
         }
 
         $output->line();
-        $output->line(sprintf('Add to %s:', $file));
+        $output->line($heading . ':');
         $output->line();
 
         foreach (explode("\n", $lines) as $line) {
             $output->line('' === $line ? '' : '    ' . $line);
         }
+    }
+
+    /**
+     * The parts of a server database that `new` writes into the compose file
+     * and the Dockerfile (#96), from the same stubs. When the compose file
+     * has a database service, crest prints a note in place of the service.
+     * Without a compose file, the defaults of DbProvider apply: 127.0.0.1 and
+     * the default port, as for PHP on the host in `new`.
+     *
+     * @param array<string, string> $values
+     */
+    private function server(DatabaseChoice $database, Output $output, array $values, ?string $compose): void
+    {
+        if (false === $database->hasService()) {
+            return;
+        }
+
+        if (null === $compose) {
+            $output->line();
+            $output->line(
+                sprintf(
+                    'The project has no compose file. PHP needs %s, and the defaults of DbProvider connect to '
+                    . '127.0.0.1, port %s.',
+                    $database->extension(),
+                    $values['databasePort']
+                )
+            );
+
+            return;
+        }
+
+        $file = basename($compose);
+
+        if (true === in_array(DatabaseChoice::SERVICE, Survey::services($compose), true)) {
+            $output->line();
+            $output->line(
+                sprintf(
+                    "%s has a service '%s' already, so crest prints no service. DbProvider connects to it.",
+                    $file,
+                    DatabaseChoice::SERVICE
+                )
+            );
+        } else {
+            $this->lines($output, sprintf('Add the service and its volume to %s', $file), $values['databaseService']);
+        }
+
+        $this->lines($output, sprintf('Add to the app service of %s', $file), $values['dependsOn']);
+        $this->lines(
+            $output,
+            'Add to the Dockerfile of the app service, after apt-get update',
+            $values['databaseInstall']
+        );
     }
 }

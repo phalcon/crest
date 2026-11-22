@@ -62,6 +62,22 @@ final class Survey
     }
 
     /**
+     * The compose file of the root: the first of the names that docker
+     * compose looks for. Null when the root has none. make:database reads it
+     * too (#96).
+     */
+    public static function composeFile(string $root): ?string
+    {
+        foreach (self::COMPOSE_FILES as $name) {
+            if (true === is_file($root . '/' . $name)) {
+                return $root . '/' . $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * The flavor whose default folders the project has most of. A tie gives
      * the earlier flavor of the list. A folder that all flavors share adds
      * one to each flavor, so it changes no result.
@@ -172,6 +188,45 @@ final class Survey
     }
 
     /**
+     * The service names in the top-level `services:` block. A line scan, not
+     * a YAML parser: the first key under the block sets the indent, and each
+     * key with that indent is a service. A line that starts at the left edge
+     * ends the block. A comment can follow `services:`.
+     *
+     * @return list<string>
+     */
+    public static function services(string $file): array
+    {
+        $services = [];
+        $inside   = false;
+        $indent   = null;
+
+        foreach (explode("\n", (string) file_get_contents($file)) as $line) {
+            if (1 === preg_match('/^services:/', $line)) {
+                $inside = true;
+
+                continue;
+            }
+
+            if (1 === preg_match('/^[^\s#]/', $line)) {
+                $inside = false;
+
+                continue;
+            }
+
+            if (true === $inside && 1 === preg_match('/^( +)([\w.-]+):/', $line, $match)) {
+                $indent ??= $match[1];
+
+                if ($indent === $match[1]) {
+                    $services[] = $match[2];
+                }
+            }
+        }
+
+        return $services;
+    }
+
+    /**
      * @param non-empty-list<Flavor> $flavors The flavors to compare, in order
      */
     public static function settings(string $root, array $flavors): Settings
@@ -256,59 +311,18 @@ final class Survey
      */
     private static function runtime(string $root): Runtime
     {
-        foreach (self::COMPOSE_FILES as $name) {
-            if (false === is_file($root . '/' . $name)) {
-                continue;
-            }
+        $file = self::composeFile($root);
 
-            $services = self::services($root . '/' . $name);
-
-            if (true === in_array(Runtime::SERVICE, $services, true)) {
-                return Runtime::docker();
-            }
-
-            return Runtime::docker($services[0] ?? Runtime::SERVICE);
+        if (null === $file) {
+            return Runtime::host();
         }
 
-        return Runtime::host();
-    }
+        $services = self::services($file);
 
-    /**
-     * The service names in the top-level `services:` block. A line scan, not
-     * a YAML parser: the first key under the block sets the indent, and each
-     * key with that indent is a service. A line that starts at the left edge
-     * ends the block. A comment can follow `services:`.
-     *
-     * @return list<string>
-     */
-    private static function services(string $file): array
-    {
-        $services = [];
-        $inside   = false;
-        $indent   = null;
-
-        foreach (explode("\n", (string) file_get_contents($file)) as $line) {
-            if (1 === preg_match('/^services:/', $line)) {
-                $inside = true;
-
-                continue;
-            }
-
-            if (1 === preg_match('/^[^\s#]/', $line)) {
-                $inside = false;
-
-                continue;
-            }
-
-            if (true === $inside && 1 === preg_match('/^( +)([\w.-]+):/', $line, $match)) {
-                $indent ??= $match[1];
-
-                if ($indent === $match[1]) {
-                    $services[] = $match[2];
-                }
-            }
+        if (true === in_array(Runtime::SERVICE, $services, true)) {
+            return Runtime::docker();
         }
 
-        return $services;
+        return Runtime::docker($services[0] ?? Runtime::SERVICE);
     }
 }
