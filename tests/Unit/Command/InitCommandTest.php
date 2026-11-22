@@ -164,6 +164,22 @@ final class InitCommandTest extends TestCase
         $this->assertStringNotContainsString("'models'", (string) file_get_contents($this->root . '/crest.php'));
     }
 
+    public function testAnAppServiceNamedDatabaseStopsBeforeCrestPhp(): void
+    {
+        // #96: the first service is the proposal, and compose would have one
+        // service for two, as in `crest new`.
+        file_put_contents($this->root . '/docker-compose.yml', "services:\n  database:\n    image: mysql\n");
+
+        $this->assertSame(1, $this->init(['--flavor', 'mvc', '--database', 'mysql']));
+        $this->assertSame(
+            "crest: the service 'database' is the name of the database service; choose another service name"
+            . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertFileDoesNotExist($this->root . '/crest.php');
+        $this->assertFileDoesNotExist($this->root . '/src/Providers/DbProvider.php');
+    }
+
     public function testAnExistingCrestPhpComesBeforeTheFlavorCheck(): void
     {
         $this->writeCrestPhp("['namespace' => 'Kept']");

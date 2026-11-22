@@ -23,6 +23,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
 use function str_replace;
+use function substr;
 
 use const PHP_EOL;
 
@@ -52,6 +53,33 @@ final class DatabaseCommandTest extends TestCase
             ['sqlite'],
             "make:database does not support the 'cli' flavor of this project; it supports: adr, mvc"
         );
+    }
+
+    public function testAComposeFileWithADatabaseServiceGetsANote(): void
+    {
+        // #96: a text check of the services; compose.yaml is a name that
+        // docker compose looks for.
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+        file_put_contents(
+            $this->root . '/compose.yaml',
+            "services:\n  app:\n    build: .\n  database:\n    image: mariadb\n"
+        );
+
+        $this->assertSame(0, $this->runCommand(['mariadb']));
+
+        $stdout = $this->readStdout();
+
+        $this->assertStringContainsString(
+            '$di->register(new \App\Providers\DbProvider()).' . PHP_EOL
+            . PHP_EOL
+            . "compose.yaml has a service 'database' already, so crest prints no service. "
+            . 'DbProvider connects to it.' . PHP_EOL
+            . PHP_EOL
+            . 'Add to the app service of compose.yaml:' . PHP_EOL,
+            $stdout
+        );
+        $this->assertStringNotContainsString('Add the service', $stdout);
+        $this->assertStringContainsString('    docker-php-ext-install pdo_mysql' . PHP_EOL, $stdout);
     }
 
     public function testADeclaredProviderPathGivesTheFileAndTheNamespace(): void
@@ -87,6 +115,18 @@ final class DatabaseCommandTest extends TestCase
         );
     }
 
+    public function testAnAppServiceNamedDatabaseStops(): void
+    {
+        // Compose would have one service for two, as in `crest new`.
+        $this->writeCrestPhp("['flavor' => 'mvc', 'runtime' => ['type' => 'docker', 'service' => 'database']]");
+
+        $this->assertDatabaseStops(
+            ['mysql'],
+            "the service 'database' is the name of the database service; choose another service name"
+        );
+        $this->assertFileDoesNotExist($this->root . '/src/Providers/DbProvider.php');
+    }
+
     public function testAnExistingProviderStopsAndWritesNothing(): void
     {
         $this->writeCrestPhp("['flavor' => 'mvc']");
@@ -108,30 +148,106 @@ final class DatabaseCommandTest extends TestCase
         );
     }
 
-    public function testAServerDatabaseGetsItsProviderAndItsEnvLines(): void
+    public function testAServerDatabaseGetsTheLinesOfTheComposeFileTheDockerfileAndEnv(): void
     {
+        // #96: the text of each part comes from the stubs that `new` uses.
+        // The names come from the folder of the project.
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+        file_put_contents($this->root . '/docker-compose.yml', "services:\n  app:\n    build: .\n");
+
+        $project = basename($this->root);
+        $name    = str_replace('-', '_', $project);
+
+        $this->assertSame(0, $this->runCommand(['pgsql']));
+        $this->assertSame(
+            'Created ' . $this->root . '/src/Providers/DbProvider.php' . PHP_EOL
+            . 'Nothing registers it yet. Add it to providers() in your front controller:' . PHP_EOL
+            . PHP_EOL
+            . '    new \App\Providers\DbProvider(),' . PHP_EOL
+            . PHP_EOL
+            . 'In a project with another front controller, register it with' . PHP_EOL
+            . '$di->register(new \App\Providers\DbProvider()).' . PHP_EOL
+            . PHP_EOL
+            . 'Add the service and its volume to docker-compose.yml:' . PHP_EOL
+            . PHP_EOL
+            . '      database:' . PHP_EOL
+            . '        image: postgres:18' . PHP_EOL
+            . '        container_name: ${PROJECT_PREFIX:-' . $project . '}-database' . PHP_EOL
+            . '        environment:' . PHP_EOL
+            . '          POSTGRES_DB: ${DB_NAME}' . PHP_EOL
+            . '          POSTGRES_USER: ${DB_USERNAME}' . PHP_EOL
+            . '          POSTGRES_PASSWORD: ${DB_PASSWORD}' . PHP_EOL
+            . '        ports:' . PHP_EOL
+            . '          - "127.0.0.1:${DB_PUBLISHED_PORT:-5432}:5432"' . PHP_EOL
+            . '        volumes:' . PHP_EOL
+            . '          - database:/var/lib/postgresql' . PHP_EOL
+            . '        healthcheck:' . PHP_EOL
+            . '          test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]'
+            . PHP_EOL
+            . '          interval: 5s' . PHP_EOL
+            . '          timeout: 5s' . PHP_EOL
+            . '          retries: 30' . PHP_EOL
+            . PHP_EOL
+            . '    volumes:' . PHP_EOL
+            . '      database:' . PHP_EOL
+            . PHP_EOL
+            . 'Add to the app service of docker-compose.yml:' . PHP_EOL
+            . PHP_EOL
+            . '        depends_on:' . PHP_EOL
+            . '          database:' . PHP_EOL
+            . '            condition: service_healthy' . PHP_EOL
+            . PHP_EOL
+            . 'Add to the Dockerfile of the app service, after apt-get update:' . PHP_EOL
+            . PHP_EOL
+            . '    apt-get install -yq --no-install-recommends libpq-dev' . PHP_EOL
+            . '    docker-php-ext-install pdo_pgsql' . PHP_EOL
+            . PHP_EOL
+            . 'Add to .env:' . PHP_EOL
+            . PHP_EOL
+            . '    # The database. docker compose creates it from these values, and gives them to the' . PHP_EOL
+            . '    # app container. PHP on the host does not read this file: there, the defaults in' . PHP_EOL
+            . '    # DbProvider apply.' . PHP_EOL
+            . '    DB_HOST=database' . PHP_EOL
+            . '    DB_PORT=5432' . PHP_EOL
+            . '    DB_NAME=' . $name . PHP_EOL
+            . '    DB_USERNAME=' . substr($name, 0, 32) . PHP_EOL
+            . '    DB_PASSWORD=secret' . PHP_EOL
+            . '    # The port of the database on the host, for PHP on the host or a database client.' . PHP_EOL
+            . '    DB_PUBLISHED_PORT=5432' . PHP_EOL
+            . PHP_EOL
+            . 'Then crest make:model <table> reads it.' . PHP_EOL,
+            $this->readStdout()
+        );
+        $this->assertStringContainsString(
+            "use Phalcon\\Db\\Adapter\\Pdo\\Postgresql;\n",
+            (string) file_get_contents($this->root . '/src/Providers/DbProvider.php')
+        );
+        $this->assertFileDoesNotExist($this->root . '/storage/database.sqlite');
+    }
+
+    public function testAServerDatabaseWithNoComposeFileGetsANote(): void
+    {
+        // Without a compose file, nothing gives .env to the app: crest prints
+        // no .env lines, and the defaults of DbProvider apply.
         $this->writeCrestPhp("['flavor' => 'mvc']");
 
-        // The name of the database comes from the folder of the project.
         $name = str_replace('-', '_', basename($this->root));
 
         $this->assertSame(0, $this->runCommand(['mysql']));
 
         $provider = (string) file_get_contents($this->root . '/src/Providers/DbProvider.php');
-        $stdout   = $this->readStdout();
 
         $this->assertStringContainsString("use Phalcon\\Db\\Adapter\\Pdo\\Mysql;\n", $provider);
         $this->assertStringContainsString("'dbname'   => self::env('DB_NAME', '" . $name . "'),\n", $provider);
-        $this->assertStringContainsString('    new \App\Providers\DbProvider(),' . PHP_EOL, $stdout);
-        $this->assertStringContainsString(
-            PHP_EOL . 'Add to .env:' . PHP_EOL . PHP_EOL,
-            $stdout
+        $this->assertStringEndsWith(
+            '$di->register(new \App\Providers\DbProvider()).' . PHP_EOL
+            . PHP_EOL
+            . 'The project has no compose file. PHP needs pdo_mysql, and the defaults of DbProvider connect to '
+            . '127.0.0.1, port 3306.' . PHP_EOL
+            . PHP_EOL
+            . 'Then crest make:model <table> reads it.' . PHP_EOL,
+            $this->readStdout()
         );
-        $this->assertStringContainsString('    DB_HOST=database' . PHP_EOL, $stdout);
-        $this->assertStringContainsString('    DB_NAME=' . $name . PHP_EOL, $stdout);
-        $this->assertStringNotContainsString('.gitignore', $stdout);
-        $this->assertStringEndsWith(PHP_EOL . PHP_EOL . 'Then crest make:model <table> reads it.' . PHP_EOL, $stdout);
-        $this->assertFileDoesNotExist($this->root . '/storage/database.sqlite');
     }
 
     public function testForceWritesTheProviderAgainAndKeepsTheDatabase(): void
