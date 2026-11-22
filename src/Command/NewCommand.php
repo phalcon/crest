@@ -153,7 +153,8 @@ final class NewCommand extends Command
      * The placeholders of #54, and the project stub of each. A copy of a stub
      * that a team published before #54 does not have them (spec 3.5). From
      * #83, implicitView: a project with no views needs it. The other values
-     * of the views are lines that a copy from before #83 has as text.
+     * of the views are lines that a copy from before #83 has as text. From
+     * #85, templateEngine and volt: a Volt project needs them.
      */
     private const PLACEHOLDERS = [
         'databaseEnv'       => 'env',
@@ -167,6 +168,8 @@ final class NewCommand extends Command
         'models'            => 'config',
         'phql'              => 'composer',
         'registerProviders' => 'front',
+        'templateEngine'    => 'config',
+        'volt'              => 'composer',
     ];
 
     private readonly Runner $runner;
@@ -208,7 +211,7 @@ final class NewCommand extends Command
             ->option('flavor=s', 'Flavor: mvc or adr', 'mvc')
             ->option(
                 'template-engine=s',
-                'The view engine of an MVC project: phtml, or none for no views. Default: phtml'
+                'The view engine of an MVC project: phtml, volt, or none for no views. Default: phtml'
             )
             ->option('namespace=s', 'Root namespace for the generated code', 'App')
             ->option('php=s', 'PHP version the project targets, major.minor', '8.4')
@@ -311,7 +314,9 @@ final class NewCommand extends Command
             $paths,
             $runtime,
             $camelCase,
-            $getSet
+            $getSet,
+            // No key is phtml (#85).
+            TemplateEngines::VOLT === $engine ? $engine : null
         );
 
         $replacements = [
@@ -355,7 +360,9 @@ final class NewCommand extends Command
             $files[$path] = $stub->render(
                 $flavor->value,
                 $stubName,
-                Stub::PROJECT_PREFIX . 'config' === $stubName ? $settings->replacements() : $replacements
+                Stub::PROJECT_PREFIX . 'config' === $stubName ? $settings->replacements() : $replacements,
+                // A Volt view has [[ name ]] (#85).
+                ...TemplateEngines::delimiters($path)
             );
         }
 

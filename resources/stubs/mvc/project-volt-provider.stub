@@ -1,0 +1,47 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ providerNamespace }};
+
+use Phalcon\Di\DiInterface;
+use Phalcon\Di\ServiceProviderInterface;
+use Phalcon\Mvc\View;
+use Phalcon\Mvc\View\Engine\Volt;
+
+/**
+ * The view, with the Volt engine. The views are in {{ viewsPath }}/, and Volt
+ * writes the compiled views into {{ voltCache }}/.
+ */
+final class ViewProvider implements ServiceProviderInterface
+{
+    public function __construct(
+        private readonly string $viewsDir,
+        private readonly string $cacheDir,
+    ) {
+    }
+
+    public function register(DiInterface $di): void
+    {
+        $viewsDir = $this->viewsDir;
+        $cacheDir = $this->cacheDir;
+
+        // Not a static closure: the container binds each closure to itself,
+        // and a static closure gives a warning there. Thus $this in the
+        // closures is the container, and the folders come in with use.
+        $di->setShared('view', function () use ($viewsDir, $cacheDir): View {
+            $view = new View();
+            $view->setViewsDir($viewsDir . '/');
+            $view->registerEngines([
+                '.volt' => function (View $view) use ($cacheDir): Volt {
+                    $volt = new Volt($view, $this);
+                    $volt->setOptions(['path' => $cacheDir . '/', 'separator' => '_']);
+
+                    return $volt;
+                },
+            ]);
+
+            return $view;
+        });
+    }
+}

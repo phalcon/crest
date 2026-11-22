@@ -1,0 +1,55 @@
+{{ content() }}
+<h1>[[ model ]]</h1>
+
+<p><a href="{{ url('[[ url ]]/new') }}">New</a></p>
+
+<form method="get" action="{{ url('[[ url ]]/search') }}">
+{% for element in form %}
+    <p>{{ element.label() }} {{ element.render() }}</p>
+{% endfor %}
+    <button type="submit">Search</button>
+</form>
+
+{% if page.getItems()|length == 0 %}
+<p>No rows.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>[[ keyLabel ]]</th>
+{% for element in form %}
+{% if element.getName() != '[[ key ]]' %}
+            <th>{{ element.getLabel()|e }}</th>
+{% endif %}
+{% endfor %}
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+{% for row in page.getItems() %}
+{% set values = row.toArray() %}
+        <tr>
+            <td>{{ row.[[ key ]]|e }}</td>
+{% for element in form %}
+{% if element.getName() != '[[ key ]]' %}
+            <td>{{ values[element.getName()]|e }}</td>
+{% endif %}
+{% endfor %}
+            <td>
+                <a href="{{ url('[[ url ]]/edit/' ~ row.[[ key ]]|url_encode) }}">Edit</a>
+                <form method="post" action="{{ url('[[ url ]]/delete/' ~ row.[[ key ]]|url_encode) }}">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+{% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if page.getCurrent() > 1 %}
+<a href="{{ url('[[ url ]]/search', search + ['page': page.getPrevious()]) }}">Previous</a>
+{% endif %}
+{% if page.getCurrent() < page.getLast() %}
+<a href="{{ url('[[ url ]]/search', search + ['page': page.getNext()]) }}">Next</a>
+{% endif %}
