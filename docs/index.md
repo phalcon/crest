@@ -392,14 +392,15 @@ controller and files, and `src/Action/Get.php`, which answers `GET /`.
 
 `new` takes the options in the table below. The view engine (the `--template-engine` row)
 renders the views of an MVC project: with `phtml`, the views are PHP templates in `.phtml`
-files. `--camel-case` and `--get-set` change the models that `make:model` writes from the
+files, and with `volt`, they are Volt templates in `.volt` files (see
+[Volt](#volt)). `--camel-case` and `--get-set` change the models that `make:model` writes from the
 database tables (see [Generating models](#generating-models)). They set the `models` key
 of `crest.php` (see [Configuration](#configuration)).
 
 | Option | Purpose |
 |---|---|
 | `--flavor=mvc\|adr` | the flavor of the project; defaults to `mvc` |
-| `--template-engine=phtml\|none` | the view engine of an MVC project: `phtml`, the default, or `none` for a project with no views (see [The MVC project](#the-mvc-project)). An ADR project has no views, so `new` stops when you give it |
+| `--template-engine=phtml\|volt\|none` | the view engine of an MVC project: `phtml`, the default, `volt` (see [Volt](#volt)), or `none` for a project with no views (see [The MVC project](#the-mvc-project)). An ADR project has no views, so `new` stops when you give it |
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
 | `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
@@ -454,7 +455,7 @@ the files that `new` writes, see [Project stubs](#project-stubs).
 |---|---|
 | `public/index.php` | the web entry point, as in an ADR project |
 | `src/AppFront.php` | the front controller: `FactoryDefault`, the providers and `Phalcon\Mvc\Application` |
-| `src/Providers/` | `DispatcherProvider` (the default namespace of the controllers), `UrlProvider` (the base URI of the links and the redirects) and `ViewProvider` (the views folder and the phtml engine) |
+| `src/Providers/` | `DispatcherProvider` (the default namespace of the controllers), `UrlProvider` (the base URI of the links and the redirects) and `ViewProvider` (the views folder and the phtml engine, or Volt: see [Volt](#volt)) |
 | `src/Controllers/` | `IndexController`, which answers `GET /` |
 | `src/Controllers/Base/` | `CrestControllerBase`, the base that Crest owns (see [Generated bases](#generated-bases)) |
 | `themes/default/` | the layout `index.phtml` and the view `index/index.phtml` |
@@ -479,6 +480,26 @@ With `display_errors` off, PHP answers 500. With `display_errors` on, PHP shows 
 in the page, with status 200. Add a not-found page if your project needs one. For
 example, use a dispatcher listener (a class that gets the events of the dispatcher), such
 as the `NotFoundPlugin` of [invo][invo].
+
+### Volt
+
+With `--template-engine=volt`, the views are Volt templates:
+
+```bash
+crest new my-app --template-engine=volt
+```
+
+The project then changes in these files:
+
+| Path | Contents |
+|---|---|
+| `src/Providers/ViewProvider.php` | the views folder, and the Volt engine for `.volt` files. Volt writes the compiled views into `var/cache/volt/` |
+| `themes/default/` | the layout `index.volt` and the view `index/index.volt` |
+| `var/cache/volt/.gitignore` | keeps the compiled views out of git, and keeps the folder |
+| `crest.php` | `'templateEngine' => 'volt'` (see [Configuration](#configuration)) |
+| `composer.json` | for `--phalcon=v6`, `phalcon/volt`: the `phalcon/phalcon` package has no Volt parser. The extension (`v5`) has it |
+
+`make:scaffold` then writes Volt views (see [Generating scaffolds](#generating-scaffolds)).
 
 ### The database
 
@@ -748,6 +769,10 @@ For an MVC project, `init` also writes the `models` key of `crest.php` (see
 project keep their property names. It also writes `'getSet' => false`, so the properties
 of the models stay public. See [Names](#names) and
 [Getters and setters](#getters-and-setters).
+
+`init` asks no question for the view engine. When the views folder, or a folder in it,
+has a `.volt` file, `init` writes `'templateEngine' => 'volt'` (see [Volt](#volt)).
+Else it writes no key, which is `phtml`.
 
 ## Running a project
 
@@ -2078,6 +2103,11 @@ two bases. `make:model --force` replaces the model.
 With `models.schema`, the pages read the table of that schema (see
 [The schema](#the-schema)).
 
+In a Volt project (`'templateEngine' => 'volt'`, see [Volt](#volt)), the views are
+`index.volt`, `new.volt` and `edit.volt`. The Volt `url_encode` filter encodes a text key
+in the links, so the controller decodes it with `urldecode()`. With phtml, the views use
+`rawurlencode()` and the controller `rawurldecode()`.
+
 ### The names of the pages
 
 All the names come from the class of the model. Thus one line of
@@ -2137,6 +2167,7 @@ nothing. It stops when:
 
 - the project is not an MVC project;
 - the project has no views (`'views' => false`);
+- `templateEngine` is not `phtml` or `volt`;
 - `--module` names a module that does not exist;
 - the table name gives no class name, and `models.classes` gives it no class;
 - the dispatcher cannot find a controller of that class from a URL (see
@@ -2374,6 +2405,11 @@ does not set the key, or sets it to `null`, and Crest uses its default value. Ea
 In an MVC project, `'views' => false` is a project with no views (see
 [The MVC project](#the-mvc-project)). `config:show` then shows `none` for `views`.
 
+In an MVC project, `templateEngine` is the view engine: `'templateEngine' => 'volt'` for
+Volt views (see [Volt](#volt)). No key is `phtml`. `crest new --template-engine=volt`
+writes the key, and `config:show` shows it. `make:scaffold` writes the views of this
+engine.
+
 The `runtime` key says where the project commands run (see [The runtime](#the-runtime)).
 
 The `paths` key gives a folder for each kind of file that Crest writes. Crest gets the
@@ -2498,7 +2534,14 @@ no value, `new` stops before it writes a file.
 In an MVC project, `{{ controllerNamespace }}`, `{{ controllerPath }}`,
 `{{ providerNamespace }}`, `{{ providerPath }}` and `{{ viewsPath }}` come from the
 default paths of the flavor. A stub that depends on the view engine has the engine name
-in its name: `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`.
+in its name: `project-phtml-provider`, `project-phtml-layout` and `project-phtml-index`,
+and `project-volt-provider`, `project-volt-layout` and `project-volt-index`.
+
+Volt uses `{{ }}` itself. Thus the placeholders of a Volt view stub are `[[ name ]]`, for
+example `[[ project ]]` in `project-volt-layout`, and `[[ url ]]` in the views of
+`make:scaffold` (`scaffold-volt-view-index`, `scaffold-volt-view-new` and
+`scaffold-volt-view-edit`). Crest replaces only `[[ name ]]` in a `.volt` file, and keeps
+each `{{ }}` for Volt. The other stubs, also `project-volt-provider`, use `{{ name }}`.
 
 The service of the database and the database lines of `.env` (see
 [The database](#the-database)) come from the project stubs `project-compose-mysql`,
@@ -2536,6 +2579,12 @@ The MVC `project-front` also has `{{ viewUse }}`, `{{ viewProvider }}` and
 views. A copy from before them works for a project with views. For
 `--template-engine=none`, `new` stops on a copy of `project-front` with no
 `{{ implicitView }}`.
+
+`project-config` has `{{ templateEngine }}`, and `project-composer` has `{{ volt }}`, for
+a Volt project. A copy from before them works for phtml. For
+`--template-engine=volt`, `new` stops on a copy of `project-config` with no
+`{{ templateEngine }}`, and on a copy of `project-composer` with no `{{ volt }}` for
+`--phalcon=v6`.
 
 ## Adding commands from a package
 
