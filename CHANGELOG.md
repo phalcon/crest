@@ -89,6 +89,8 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `models.schema` key to `crest.php`: `make:model` and `make:scaffold` read the tables of that schema, and the base calls `setSchema()`. One schema applies to all the tables. `config:show` shows it in a `schema` row. [#69](https://github.com/phalcon/crest/issues/69)
 - Added `ModelNames::schemaOf()`, `schema()` and `checkSchema()`, `ForeignKeys::elsewhere()` and the MVC stub `fragment-model-schema`. [#69](https://github.com/phalcon/crest/issues/69)
 - Added the `models.getSet` key and `crest new --get-set`: protected model properties with a getter and a setter. [#70](https://github.com/phalcon/crest/issues/70)
+- Added `crest new --template-engine=none`: an MVC project with no views. It gets no `ViewProvider`, layout or view, `'views' => false` in `crest.php`, a front controller that calls `useImplicitView(false)`, and an `IndexController` that returns JSON. `init` takes `none` for the `views` folder, and `config:show` shows `none`. [#83](https://github.com/phalcon/crest/issues/83)
+- Added `Crest\Project\Config::hasViews()`, `Crest\Generator\Project\TemplateEngines::NONE`, and the MVC stubs `project-none-controller`, `module-no-views`, `fragment-guidance-module-no-views`, `fragment-guidance-controller-no-views` and `fragment-guidance-controller-module-no-views`. [#83](https://github.com/phalcon/crest/issues/83)
 
 ### Changed
 
@@ -150,6 +152,9 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `ModelProperties::of()` and `ForeignKeys::read()`: each one takes the schema as an optional last parameter. [#69](https://github.com/phalcon/crest/issues/69)
 - Changed the default flavor to `mvc`: `new` with no `--flavor`, the flavor that `init` proposes for a tie, a `crest.php` with no `flavor` key, and `stub:publish --flavor`. An ADR project whose `crest.php` has no `flavor` key must add `'flavor' => 'adr'`.
 - Changed `make:provider` in an ADR project: when the front controller of the `bootstrap` key declares `registerProviders()`, it prints only the `provide()` line, from the new stub `fragment-guidance-provider-override`. A second override was a "cannot redeclare" error. [#81](https://github.com/phalcon/crest/issues/81)
+- Changed `new`: in a terminal, for an MVC project, it asks for the template engine (`phtml` or `none`) after the flavor, so a script that sends answers to `new` needs one more line. [#83](https://github.com/phalcon/crest/issues/83)
+- Changed the MVC stubs `project-front` and `project-readme`: they have the new placeholders `{{ viewUse }}`, `{{ viewProvider }}`, `{{ implicitView }}` and `{{ viewsRow }}`. A copy published before #83 works for a project with views. For `--template-engine=none`, publish `project-front` again. [#83](https://github.com/phalcon/crest/issues/83)
+- Changed `make:scaffold`: it stops in a project with no views. In that project, `make:module` writes no `views` folder, and `make:controller` and `make:module` print their guidance with no view. `Crest\Project\Settings` takes `false` for the `views` path, and `Crest\Command\Questions::path()` gives `false` for the answer `none`. [#83](https://github.com/phalcon/crest/issues/83)
 
 ### Fixed
 
