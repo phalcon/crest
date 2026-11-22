@@ -335,6 +335,23 @@ final class ModelCommandAllTest extends AbstractDatabaseTestCase
         );
     }
 
+    public function testWithViewsAViewGetsAModel(): void
+    {
+        // On each driver: SQLite does not list a view as a table, and its
+        // tableExists() does not find one (cphalcon #17768).
+        $this->createTables(CustomersMigration::class, CustomerNamesViewMigration::class);
+
+        $status = $this->runCommand(['--all', '--views']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('Table customer_names' . PHP_EOL, $this->readStdout());
+        $this->assertStringEndsWith('2 tables: 2 models created, 0 kept, 0 failed.' . PHP_EOL, $this->readStdout());
+        $this->assertStringContainsString(
+            "        \$this->setSource('customer_names');\n",
+            (string) file_get_contents($this->model('Base/CustomerNamesBase.php'))
+        );
+    }
+
     /**
      * A file in the `model` path of the scratch project.
      */

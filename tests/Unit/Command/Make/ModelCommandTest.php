@@ -257,4 +257,17 @@ final class ModelCommandTest extends TestCase
             $option->description
         );
     }
+
+    public function testTheViewsOptionHasItsHelp(): void
+    {
+        $option = (new ModelCommand())->define()->findOption('views');
+
+        $this->assertNotNull($option);
+        $this->assertSame('With --all: also create a model for each view', $option->description);
+    }
+
+    public function testViewsWithoutAllStops(): void
+    {
+        $this->assertStops(['users', '--views'], '--views is only for --all');
+    }
 }

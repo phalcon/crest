@@ -175,6 +175,25 @@ final class ForeignKeysTest extends TestCase
         $this->assertSame(['2024', 'users'], (new ForeignKeys(['2024' => [], 'users' => []]))->tables());
     }
 
+    public function testTablesHasTheViewsOnEachDriver(): void
+    {
+        // SQLite does not list a view as a table, the servers do (#88). A
+        // name in both lists is in the map one time.
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('getType')->willReturn('sqlite');
+        $adapter->method('listTables')->willReturn(['customers']);
+        $adapter->method('listViews')->willReturn(['customer_names']);
+
+        $this->assertSame(['customers', 'customer_names'], ForeignKeys::read($adapter)->tables());
+
+        $server = $this->createStub(AdapterInterface::class);
+        $server->method('getType')->willReturn('mysql');
+        $server->method('listTables')->willReturn(['customers', 'customer_names']);
+        $server->method('listViews')->willReturn(['customer_names']);
+
+        $this->assertSame(['customers', 'customer_names'], ForeignKeys::read($server)->tables());
+    }
+
     public function testTablesKeepsTheOrderOfTheMap(): void
     {
         $this->assertSame(['users', 'customers'], (new ForeignKeys(['users' => [], 'customers' => []]))->tables());

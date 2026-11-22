@@ -33,6 +33,20 @@ final class ModelTablesTest extends TestCase
      */
     private const UNKNOWN = "SQLSTATE[42000]: Syntax error or access violation: 1049 Unknown database 'billing'";
 
+    /**
+     * MySQL and PostgreSQL list the views as tables. SQLite does not.
+     *
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function viewListings(): iterable
+    {
+        yield 'a server lists the views as tables' => [
+            'mysql',
+            ['customers', 'customer_names', 'invoices', 'invoice_totals'],
+        ];
+        yield 'SQLite does not list the views' => ['sqlite', ['customers', 'invoices']];
+    }
+
     public function testAMapClassCanFailTheSameClassCheck(): void
     {
         $tables = ModelTables::of(
@@ -303,6 +317,45 @@ final class ModelTablesTest extends TestCase
         $this->expectExceptionMessageMatches('/\A--exclude: the database has no table sqlite_nope\z/');
 
         ModelTables::of($this->adapter('sqlite', ['customers']), ['sqlite_nope'], ModelNames::of([]));
+    }
+
+    public function testWithViewsAnExcludedViewGivesNoNote(): void
+    {
+        $tables = ModelTables::of(
+            $this->adapter('mysql', ['customers', 'customer_names'], ['customer_names']),
+            ['customer_names'],
+            ModelNames::of([]),
+            true
+        );
+
+        $this->assertSame(['customers'], $tables->names());
+        $this->assertSame([], $tables->notes);
+    }
+
+    /**
+     * @dataProvider viewListings
+     *
+     * @param list<string> $listed
+     */
+    public function testWithViewsAViewIsATable(string $type, array $listed): void
+    {
+        $tables = ModelTables::of(
+            $this->adapter($type, $listed, ['customer_names', 'invoice_totals']),
+            [],
+            ModelNames::of([]),
+            true
+        );
+
+        $this->assertSame(['customer_names', 'customers', 'invoice_totals', 'invoices'], $tables->names());
+        $this->assertSame(
+            [
+                'customer_names' => 'CustomerNames',
+                'customers'      => 'Customers',
+                'invoice_totals' => 'InvoiceTotals',
+                'invoices'       => 'Invoices',
+            ],
+            $tables->classes
+        );
     }
 
     /**

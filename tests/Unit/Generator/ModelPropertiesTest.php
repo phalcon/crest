@@ -72,6 +72,21 @@ final class ModelPropertiesTest extends TestCase
         ModelProperties::of($adapter, 'users', 'billing');
     }
 
+    public function testAViewIsReadAsATable(): void
+    {
+        // SQLite: tableExists() does not find a view (cphalcon #17768), so
+        // crest also asks viewExists() (#88). The schema goes to both.
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('tableExists')->willReturn(false);
+        $adapter->method('viewExists')->willReturnCallback(
+            static fn (string $view, ?string $schema = null): bool => 'customer_names' === $view
+                && 'billing' === $schema
+        );
+        $adapter->method('describeColumns')->willReturn([new Column('name', ['type' => Column::TYPE_VARCHAR])]);
+
+        $this->assertSame(['name' => 'string'], ModelProperties::of($adapter, 'customer_names', 'billing'));
+    }
+
     public function testOfReadsTheTableOfTheSchema(): void
     {
         $adapter = $this->createStub(AdapterInterface::class);

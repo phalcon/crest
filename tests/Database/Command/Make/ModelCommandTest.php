@@ -22,6 +22,7 @@ use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\AuthorsMigration;
 use Crest\Tests\Support\Migrations\BooksMigration;
 use Crest\Tests\Support\Migrations\BoxesMigration;
+use Crest\Tests\Support\Migrations\CustomerNamesViewMigration;
 use Crest\Tests\Support\Migrations\CustomersMigration;
 use Crest\Tests\Support\Migrations\InvoicesMigration;
 use Crest\Tests\Support\Migrations\InvoicesWithBuyerMigration;
@@ -360,6 +361,19 @@ final class ModelCommandTest extends AbstractDatabaseTestCase
 
         $this->assertStringContainsString("abstract class UserProfilesBase extends Model\n", $base);
         $this->assertStringContainsString("        \$this->setSource('user_profiles');\n", $base);
+    }
+
+    public function testAViewGetsAModelWithNoRelations(): void
+    {
+        // On each driver, SQLite too: its tableExists() does not find a view
+        // (cphalcon #17768), so crest also asks viewExists() (#88).
+        $this->createTables(CustomersMigration::class, CustomerNamesViewMigration::class);
+
+        $this->assertSame(0, $this->runCommand(['customer_names']));
+        $this->assertStringContainsString(
+            "        \$this->setSource('customer_names');\n",
+            (string) file_get_contents($this->root . '/src/Models/Base/CustomerNamesBase.php')
+        );
     }
 
     public function testForceReplacesTheModel(): void
