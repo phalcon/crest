@@ -825,7 +825,17 @@ Then crest make:model <table> reads it.
 | `DbProvider.php` in the `provider` path | writes it, from the stub that `new` uses: for MVC a `Phalcon\Db` adapter, for ADR a DataMapper `Connection` with the alias `db` |
 | `storage/database.sqlite` and `storage/.gitkeep` (SQLite) | writes each file that does not exist. A database file that exists stays, also with `--force` |
 | the front controller | prints the line that registers `DbProvider`. In an ADR project, it prints the `registerProviders()` override, or only the line to add when the front has the override (as `make:provider` does) |
-| `.gitignore` (SQLite) and `.env` | prints the lines to add |
+| the compose file (server database) | prints the service `database` with its volume, and `depends_on` for the app service. When the compose file has a `database` service, Crest prints a note in place of the service |
+| the Dockerfile (server database) | prints the lines that install the PDO extension |
+| `.gitignore` (SQLite) | prints the line to add |
+| `.env` | prints the lines to add. For a server database, only when the project has a compose file |
+
+The compose file is the first of `compose.yaml`, `compose.yml`, `docker-compose.yaml` and
+`docker-compose.yml` in the project. Without one, Crest prints no compose, Dockerfile or
+`.env` lines for a server database: nothing gives `.env` to the app, and `DB_HOST` names a
+compose service. Crest prints that PHP needs the PDO extension, and that the defaults of
+`DbProvider` connect to `127.0.0.1` and the default port. When the app service of
+`crest.php` is named `database`, `make:database` stops, as `new` does.
 
 The `DB_NAME` and `DB_USERNAME` defaults of a server database come from the folder name
 of the project, as `new` uses the name of the project. When `DbProvider.php` exists,
