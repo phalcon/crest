@@ -20,10 +20,13 @@ use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
 use Crest\Generator\ArtifactWriter;
+use Crest\Generator\Project\DatabaseChoice;
+use Crest\Generator\Project\DatabaseSetup;
 use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Project\TemplateEngines;
 use Crest\Generator\Stub;
 use Crest\Paths;
+use Crest\Project\Config;
 use Crest\Project\Flavor;
 use Crest\Project\Locator;
 use Crest\Project\Manifest;
@@ -67,7 +70,8 @@ final class InitCommand extends Command
     {
         return Definition::for('init', 'Write crest.php for an existing project')
             ->option('flavor=s', 'The flavor of the project: mvc or adr. Default: what init finds')
-            ->option('force', 'Overwrite an existing crest.php');
+            ->option('database=s', 'Add a database: none, mariadb, mysql, pgsql or sqlite. Default: none')
+            ->option('force', 'Overwrite an existing crest.php, and DbProvider with --database');
     }
 
     public function handle(Input $input, Output $output): int
@@ -80,9 +84,11 @@ final class InitCommand extends Command
             throw new Exception(sprintf('%s exists; pass --force to overwrite', $file));
         }
 
-        // Before the questions: a refused flavor asks nothing.
-        $given  = $input->optionStringOrNull('flavor');
-        $chosen = null === $given ? null : Skeletons::for($given)->flavor();
+        // Before the questions: a refused flavor or database asks nothing.
+        $given    = $input->optionStringOrNull('flavor');
+        $chosen   = null === $given ? null : Skeletons::for($given)->flavor();
+        $driver   = $input->optionStringOrNull('database');
+        $selected = null === $driver ? null : DatabaseChoice::select($driver);
 
         $flavors   = array_map(Flavor::from(...), Skeletons::flavors());
         $proposal  = Survey::settings($root, $flavors);
@@ -102,12 +108,23 @@ final class InitCommand extends Command
             $paths[$key] = Questions::path($output, $root, $key, $path);
         }
 
+        $runtime = Questions::runtime($output, $proposal->runtime);
+        // The database comes last, as in `crest new` (#95).
+        $database = $selected ?? DatabaseChoice::select(
+            $output->choice('Database', DatabaseChoice::names(), DatabaseChoice::NONE->value)
+        );
+
+        // Before the first write: thus a run that stops changes nothing.
+        if (DatabaseChoice::NONE !== $database) {
+            DatabaseSetup::guard($root . '/' . $paths['provider'], $force);
+        }
+
         $settings = new Settings(
             $flavor,
             $namespace,
             $bootstrap,
             $paths,
-            Questions::runtime($output, $proposal->runtime),
+            $runtime,
             // An existing MVC project has models: false keeps their property
             // names. ADR and CLI get no models key. With no getSet answer,
             // Settings writes getSet false, which keeps the public properties
@@ -118,19 +135,22 @@ final class InitCommand extends Command
 
         // The lookup uses the flavor: a copy in the mvc/ folder of the
         // project wins for an MVC project, as for `crest new`.
+        $stub = new Stub(Paths::stubs(), $root);
+
         ArtifactWriter::write(
             $file,
-            (new Stub(Paths::stubs(), $root))->render(
-                $flavor->value,
-                Stub::PROJECT_PREFIX . 'config',
-                $settings->replacements()
-            )
+            $stub->render($flavor->value, Stub::PROJECT_PREFIX . 'config', $settings->replacements())
         );
 
         $output->success(sprintf('Created %s', $file));
 
         if (false === Manifest::requires($root, Commands::PACKAGE)) {
             $output->line(sprintf('Next: composer require --dev %s', Commands::PACKAGE));
+        }
+
+        // make:database does the same from crest.php (#95).
+        if (DatabaseChoice::NONE !== $database) {
+            (new DatabaseSetup(Config::discover($root), $stub))->add($database, $output, $force);
         }
 
         return 0;

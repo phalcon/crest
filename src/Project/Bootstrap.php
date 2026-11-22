@@ -14,6 +14,8 @@ declare(strict_types=1);
 namespace Crest\Project;
 
 use Crest\Console\Exceptions\Exception;
+use Error;
+use ReflectionClass;
 use Throwable;
 
 use function class_exists;
@@ -93,5 +95,37 @@ final class Bootstrap
         }
 
         return $container;
+    }
+
+    /**
+     * The class name of an ADR front controller that declares
+     * registerProviders() itself, for example the front of `crest new
+     * --database`. A second override is a fatal error, so the guidance of
+     * make:provider and make:database prints only the line to add (#81, #95).
+     *
+     * Null when the front inherits the method or has none, or when crest
+     * cannot load the front: for example `crest init`, which runs before the
+     * project has its autoloader.
+     */
+    public static function overriding(string $front): ?string
+    {
+        try {
+            if (false === class_exists($front)) {
+                return null;
+            }
+        } catch (Error) {
+            // The file of the front loads, but its parent class is not there.
+            return null;
+        }
+
+        $class = new ReflectionClass($front);
+
+        if (false === $class->hasMethod('registerProviders')) {
+            return null;
+        }
+
+        return $class->getName() === $class->getMethod('registerProviders')->getDeclaringClass()->getName()
+            ? $class->getName()
+            : null;
     }
 }

@@ -23,6 +23,7 @@ use Crest\Generator\ArtifactWriter;
 use Crest\Generator\ClassName;
 use Crest\Generator\Project\Answers;
 use Crest\Generator\Project\DatabaseChoice;
+use Crest\Generator\Project\DatabaseSetup;
 use Crest\Generator\Project\Skeleton;
 use Crest\Generator\Project\Skeletons;
 use Crest\Generator\Project\TemplateEngines;
@@ -682,12 +683,7 @@ final class NewCommand extends Command
             $output->line(sprintf('The database: sqlite, in %s.', DatabaseChoice::SQLITE_FILE));
         }
 
-        // make:model is MVC only, make:repository ADR only (#84).
-        $output->line(
-            Flavor::MVC === $skeleton->flavor()
-                ? 'Then crest make:model <table> reads it.'
-                : 'Then crest make:repository <table> reads it.'
-        );
+        $output->line(DatabaseSetup::next($skeleton->flavor()));
     }
 
     /**

@@ -24,6 +24,7 @@ use Crest\Command\ListCommand;
 use Crest\Command\Make\ActionCommand;
 use Crest\Command\Make\CommandCommand;
 use Crest\Command\Make\ControllerCommand;
+use Crest\Command\Make\DatabaseCommand;
 use Crest\Command\Make\MiddlewareCommand;
 use Crest\Command\Make\ModelCommand;
 use Crest\Command\Make\ModuleCommand;
@@ -112,6 +113,7 @@ final class Commands
             ->add('make:action', ActionCommand::class)
             ->add('make:command', CommandCommand::class)
             ->add('make:controller', ControllerCommand::class)
+            ->add('make:database', DatabaseCommand::class)
             ->add('make:middleware', MiddlewareCommand::class)
             ->add('make:model', ModelCommand::class)
             ->add('make:module', ModuleCommand::class)

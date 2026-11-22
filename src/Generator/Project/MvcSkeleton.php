@@ -198,9 +198,7 @@ final class MvcSkeleton implements Skeleton
             return '';
         }
 
-        $root = DatabaseChoice::SQLITE === $database ? '$this->projectRoot' : '';
-
-        return '            new DbProvider(' . $root . "),\n";
+        return '            new DbProvider(' . $database->arguments() . "),\n";
     }
 
     /**
