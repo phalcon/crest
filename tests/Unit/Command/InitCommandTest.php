@@ -338,10 +338,10 @@ final class InitCommandTest extends TestCase
 
     public function testInteractiveAnswersAreWritten(): void
     {
-        // The questions: namespace, flavor, front controller, the five paths,
+        // The questions: namespace, flavor, front controller, the six paths,
         // runtime, and the service for docker. The namespace is in the psr-4
         // map.
-        $this->answers("App\\Shop\nadr\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\ndocker\nweb\n");
+        $this->answers("App\\Shop\nadr\nApp\\Shop\\Front\n\nsrc/Shop/Commands\n\n\n\n\ndocker\nweb\n");
 
         $status = $this->init([], true);
         $config = Config::discover($this->root);
@@ -365,7 +365,7 @@ final class InitCommandTest extends TestCase
     public function testNoneWritesNoFrontController(): void
     {
         file_put_contents($this->root . '/src/AppFront.php', "<?php\n");
-        $this->answers("\n\nnone\n\n\n\n\n\n\n");
+        $this->answers("\n\nnone\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->init([], true));
         $this->assertNull(Config::discover($this->root)->bootstrap());
@@ -394,7 +394,7 @@ final class InitCommandTest extends TestCase
 
     public function testTheQuestionsComeInOrder(): void
     {
-        $this->answers("\n\n\n\n\n\n\n\n\n");
+        $this->answers("\n\n\n\n\n\n\n\n\n\n");
 
         $this->init([], true);
 
@@ -406,6 +406,7 @@ final class InitCommandTest extends TestCase
             . 'command folder (does not exist yet) [src/Command]: '
             . 'middleware folder (does not exist yet) [src/Middleware]: '
             . 'provider folder (does not exist yet) [src/Provider]: '
+            . 'repository folder (does not exist yet) [src/Repository]: '
             . 'responder folder (does not exist yet) [src/Responder]: '
             . 'Runtime (host, docker) [host]: ',
             $this->readStderr()

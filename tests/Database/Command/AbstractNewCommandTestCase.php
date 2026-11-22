@@ -22,6 +22,7 @@ use Crest\Project\Database;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\GeneratesInAScratchProject;
 use Phalcon\Container\Container;
+use Phalcon\DataMapper\Pdo\Connection;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Di\Di;
 use Phalcon\Talon\Talon;
@@ -77,10 +78,11 @@ abstract class AbstractNewCommandTestCase extends AbstractDatabaseTestCase
     }
 
     /**
-     * The db service of an ADR project, from the container of its front: the
-     * front registers DbProvider in registerProviders().
+     * The db service of an ADR project, from the container of its front: a
+     * DataMapper connection (#84). The front registers DbProvider in
+     * registerProviders().
      */
-    protected function adrDatabase(string $project): AdapterInterface
+    protected function adrDatabase(string $project): Connection
     {
         $container = Bootstrap::container(Config::discover($project));
 
@@ -88,16 +90,16 @@ abstract class AbstractNewCommandTestCase extends AbstractDatabaseTestCase
             $this->fail('the ADR front did not give a Phalcon container');
         }
 
-        $adapter = $container->get('db');
+        $connection = $container->get('db');
 
-        if (false === $adapter instanceof AdapterInterface) {
-            $this->fail('the db service is not a Phalcon database adapter');
+        if (false === $connection instanceof Connection) {
+            $this->fail('the db service is not a DataMapper connection');
         }
 
-        // The container keeps the adapter: one connection for a request.
-        $this->assertSame($adapter, $container->get('db'));
+        // The container keeps the connection: one connection for a request.
+        $this->assertSame($connection, $container->get('db'));
 
-        return $adapter;
+        return $connection;
     }
 
     /**

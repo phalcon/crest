@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Support;
 
+use Phalcon\DataMapper\Pdo\Connection;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Adapter\Pdo\Mysql;
 use Phalcon\Db\Adapter\Pdo\Postgresql;
@@ -20,6 +21,7 @@ use Phalcon\Db\Adapter\Pdo\Sqlite;
 use Phalcon\Talon\Talon;
 
 use function getenv;
+use function is_string;
 
 /**
  * The database of a database suite, for Phalcon. The phpunit file of the
@@ -34,8 +36,7 @@ final class TestDatabase
      */
     public static function adapter(): AdapterInterface
     {
-        $driver     = getenv('driver');
-        $driver     = false === $driver ? 'sqlite' : $driver;
+        $driver     = self::driver();
         $descriptor = Talon::settings()->getDatabaseOptions($driver);
 
         return match ($driver) {
@@ -43,5 +44,31 @@ final class TestDatabase
             'pgsql'            => new Postgresql($descriptor),
             default            => new Sqlite($descriptor),
         };
+    }
+
+    /**
+     * A new DataMapper connection to the database of the suite, as the `db`
+     * service of an ADR project has (#84).
+     */
+    public static function connection(): Connection
+    {
+        $driver   = self::driver();
+        $settings = Talon::settings();
+        $options  = $settings->getDatabaseOptions($driver);
+        $username = $options['username'] ?? null;
+        $password = $options['password'] ?? null;
+
+        return new Connection(
+            $settings->getDatabaseDsn($driver),
+            true === is_string($username) ? $username : null,
+            true === is_string($password) ? $password : null
+        );
+    }
+
+    private static function driver(): string
+    {
+        $driver = getenv('driver');
+
+        return false === $driver ? 'sqlite' : $driver;
     }
 }

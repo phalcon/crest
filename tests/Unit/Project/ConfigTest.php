@@ -70,6 +70,7 @@ final class ConfigTest extends TestCase
                 'command'    => $this->root . '/src/Command',
                 'middleware' => $this->root . '/src/Middleware',
                 'provider'   => $this->root . '/src/Provider',
+                'repository' => $this->root . '/src/Repository',
                 'responder'  => $this->root . '/src/Responder',
             ],
             Config::discover($this->root)->paths()
@@ -552,6 +553,7 @@ final class ConfigTest extends TestCase
                 'command'    => 'src/Command',
                 'middleware' => 'src/Middleware',
                 'provider'   => 'src/Provider',
+                'repository' => 'src/Repository',
                 'responder'  => 'src/Responder',
             ],
             Config::defaultPaths(Flavor::ADR)

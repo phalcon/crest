@@ -466,6 +466,7 @@ final class SurveyTest extends TestCase
                 'command'    => 'app/Command',
                 'middleware' => 'app/Middleware',
                 'provider'   => 'app/Provider',
+                'repository' => 'app/Repository',
                 'responder'  => 'app/Responder',
             ],
             Survey::settings($this->root, self::FLAVORS)->paths

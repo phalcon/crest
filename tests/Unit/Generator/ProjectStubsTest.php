@@ -76,6 +76,8 @@ final class ProjectStubsTest extends TestCase
         'dbUse'               => '',
         'dependsOn'           => '',
         'documentRoot'        => 'public',
+        'dsnCharset'          => ';charset=utf8mb4',
+        'dsnDriver'           => 'mysql',
         'extensionConstraint' => '^5.18',
         'flavor'              => 'adr',
         'front'               => 'AppFront',

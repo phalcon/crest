@@ -29,6 +29,7 @@ use Phalcon\ADR\Front\AbstractHttpFront;
 use Phalcon\Container\Container;
 use Phalcon\Contracts\ADR\Application;
 use Phalcon\Contracts\Http\AttributeRequest;
+use Phalcon\DataMapper\Pdo\Connection;
 use Phalcon\Http\ResponseInterface;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -135,6 +136,8 @@ final class GeneratedProjectTest extends TestCase
 
         $this->assertTrue($container->has('db'));
         $this->assertFalse($container->hasInstance('db'));
+        // A DataMapper connection (#84): it connects at its first query.
+        $this->assertInstanceOf(Connection::class, $container->get('db'));
     }
 
     public function testCrestBootsTheGeneratedFrontController(): void

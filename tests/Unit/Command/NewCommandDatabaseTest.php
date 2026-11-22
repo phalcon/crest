@@ -253,10 +253,11 @@ final class NewCommandDatabaseTest extends TestCase
             . "\n"
             . "use Phalcon\\Contracts\\Container\\Service\\Collection;\n"
             . "use Phalcon\\Contracts\\Container\\Service\\Provider as ProviderContract;\n"
-            . "use Phalcon\\Db\\Adapter\\Pdo\\Mysql;\n"
+            . "use Phalcon\\DataMapper\\Pdo\\Connection;\n"
             . "\n"
             . "/**\n"
-            . " * The database. docker compose gives the values of .env to the app container.\n"
+            . " * The database, through the data mapper: a Phalcon\\DataMapper connection,\n"
+            . " * also named db. docker compose gives the values of .env to the app container.\n"
             . " * PHP on the host does not read .env: there, the defaults apply, and they point\n"
             . " * to the published port of the database container.\n"
             . " */\n"
@@ -264,20 +265,24 @@ final class NewCommandDatabaseTest extends TestCase
             . "{\n"
             . "    public function provide(Collection \$services): void\n"
             . "    {\n"
-            . "        \$config = [\n"
-            . "            'host'     => self::env('DB_HOST', '127.0.0.1'),\n"
-            . "            'port'     => self::env('DB_PORT', '3306'),\n"
-            . "            'dbname'   => self::env('DB_NAME', 'my_app'),\n"
-            . "            'username' => self::env('DB_USERNAME', 'my_app'),\n"
-            . "            'password' => self::env('DB_PASSWORD', 'secret'),\n"
-            . "            'charset'  => 'utf8mb4',\n"
-            . "        ];\n"
+            . "        \$dsn      = sprintf(\n"
+            . "            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',\n"
+            . "            self::env('DB_HOST', '127.0.0.1'),\n"
+            . "            self::env('DB_PORT', '3306'),\n"
+            . "            self::env('DB_NAME', 'my_app')\n"
+            . "        );\n"
+            . "        \$username = self::env('DB_USERNAME', 'my_app');\n"
+            . "        \$password = self::env('DB_PASSWORD', 'secret');\n"
             . "\n"
-            . "        // The container calls the closure at the first get('db'), and keeps\n"
-            . "        // the adapter.\n"
-            . "        \$services->set('db', static function () use (\$config): Mysql {\n"
-            . "            return new Mysql(\$config);\n"
-            . "        });\n"
+            . "        // The container calls the closure at the first get(), and keeps the\n"
+            . "        // connection. The connection connects at its first query.\n"
+            . "        \$services->set(\n"
+            . "            Connection::class,\n"
+            . "            static function () use (\$dsn, \$username, \$password): Connection {\n"
+            . "                return new Connection(\$dsn, \$username, \$password);\n"
+            . "            }\n"
+            . "        );\n"
+            . "        \$services->setAlias(Connection::class, 'db');\n"
             . "    }\n"
             . "\n"
             . "    /**\n"
@@ -310,15 +315,17 @@ final class NewCommandDatabaseTest extends TestCase
 
         $provider = $this->read('src/Provider/DbProvider.php');
 
-        $this->assertStringContainsString("use Phalcon\\Db\\Adapter\\Pdo\\Sqlite;\n", $provider);
+        $this->assertStringContainsString("use Phalcon\\DataMapper\\Pdo\\Connection;\n", $provider);
         $this->assertStringContainsString(
             "    public function __construct(private readonly string \$projectRoot)\n",
             $provider
         );
         $this->assertStringContainsString(
-            "            'dbname' => \$this->projectRoot . '/' . self::env('DB_NAME', 'storage/database.sqlite'),\n",
+            "        \$dsn = 'sqlite:' . \$this->projectRoot . '/' . self::env('DB_NAME', "
+            . "'storage/database.sqlite');\n",
             $provider
         );
+        $this->assertStringContainsString("        \$services->setAlias(Connection::class, 'db');\n", $provider);
     }
 
     public function testAnAdrV6ProjectWithADatabaseDoesNotRequirePhql(): void
@@ -775,7 +782,8 @@ final class NewCommandDatabaseTest extends TestCase
             . PHP_EOL
             . "The database: mysql, in the docker service 'database'. The values are in .env." . PHP_EOL
             . 'On the host, start it with: docker compose up -d database' . PHP_EOL
-            . 'PHP on the host also needs pdo_mysql.' . PHP_EOL,
+            . 'PHP on the host also needs pdo_mysql.' . PHP_EOL
+            . 'Then crest make:repository <table> reads it.' . PHP_EOL,
             $this->readStdout()
         );
     }
