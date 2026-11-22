@@ -91,6 +91,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the `models.getSet` key and `crest new --get-set`: protected model properties with a getter and a setter. [#70](https://github.com/phalcon/crest/issues/70)
 - Added `crest new --template-engine=none`: an MVC project with no views. It gets no `ViewProvider`, layout or view, `'views' => false` in `crest.php`, a front controller that calls `useImplicitView(false)`, and an `IndexController` that returns JSON. `init` takes `none` for the `views` folder, and `config:show` shows `none`. [#83](https://github.com/phalcon/crest/issues/83)
 - Added `Crest\Project\Config::hasViews()`, `Crest\Generator\Project\TemplateEngines::NONE`, and the MVC stubs `project-none-controller`, `module-no-views`, `fragment-guidance-module-no-views`, `fragment-guidance-controller-no-views` and `fragment-guidance-controller-module-no-views`. [#83](https://github.com/phalcon/crest/issues/83)
+- Added `make:model --all --views`: a model for each view too. `ModelTables::of()` has a new last parameter `withViews`. [#88](https://github.com/phalcon/crest/issues/88)
 
 ### Changed
 
@@ -168,6 +169,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - The error `no answer; input ended` starts on its own line. [#42](https://github.com/phalcon/crest/issues/42)
 - The `Run make:model ... too` line of `make:model` no longer names a table that gets no class. [#71](https://github.com/phalcon/crest/issues/71)
 - Fixed `make:model`: a foreign key to a table of another schema no longer gives a relation to a model of the wrong table. It gives a `Skipped` line. [#69](https://github.com/phalcon/crest/issues/69)
+- Fixed `make:model <view>` on SQLite: it writes a model, as on the other databases. Phalcon `tableExists()` does not find a view on SQLite, so crest also calls `viewExists()`. `ForeignKeys::read()` also reads the views of `listViews()`. [#88](https://github.com/phalcon/crest/issues/88)
 
 ### Removed
 

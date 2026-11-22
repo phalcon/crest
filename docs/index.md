@@ -1317,9 +1317,18 @@ crest: the schema 'billing' cannot be read: SQLSTATE[42000]: Syntax error or acc
 ```
 
 `--all` writes no models for views, and no models for the internal tables of
-SQLite (for example, `sqlite_sequence`). For a view, run `make:model <view>`.
-This works on MySQL, MariaDB and PostgreSQL. On SQLite, `make:model <view>`
-stops with the "not found" error, because Phalcon finds only tables there.
+SQLite (for example, `sqlite_sequence`). For the views too, add `--views`:
+
+```bash
+crest make:model --all --views
+```
+
+For one view, run `make:model <view>`. This works on each database. A view has
+no keys, so its model has no relations.
+
+On MariaDB, `--all` also writes a model for each sequence. On PostgreSQL, it
+writes a model for each partition of a partitioned table, and one for the table.
+Phalcon lists them as tables. The fix is planned in Phalcon.
 
 To skip tables, give their names to one `--exclude`, separated by commas:
 
@@ -1338,8 +1347,8 @@ differs from a table only in case, the error gives the name of the table:
 crest: --exclude: the database has no table Users; did you mean users?
 ```
 
-For the name of a view or an internal SQLite table, Crest prints a note, and
-continues. A skipped table still gives its relations: with
+For the name of a view (with no `--views`) or an internal SQLite table, Crest
+prints a note, and continues. A skipped table still gives its relations: with
 `--exclude=invoices`, the base of `customers` has its `hasMany()` to
 `Invoices`.
 
