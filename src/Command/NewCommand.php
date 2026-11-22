@@ -290,7 +290,7 @@ final class NewCommand extends Command
         $getSet    = $this->getSet($input, $output, $flavor, $database);
 
         // After the questions, and before the first write.
-        $this->checkService($runtime, $database);
+        $database->checkService($runtime);
 
         $answers = new Answers($name, $flavor, $namespace, $php, $variant, $runtime, $engine, $database);
 
@@ -492,25 +492,6 @@ final class NewCommand extends Command
                 )
             );
         }
-    }
-
-    /**
-     * The app service cannot have the name of the database service: compose
-     * would have one service for two. The host runtime always has app, so
-     * only a docker answer can fail.
-     */
-    private function checkService(Runtime $runtime, DatabaseChoice $database): void
-    {
-        if (false === $database->hasService() || DatabaseChoice::SERVICE !== $runtime->service) {
-            return;
-        }
-
-        throw new Exception(
-            sprintf(
-                "the service '%s' is the name of the database service; choose another service name",
-                DatabaseChoice::SERVICE
-            )
-        );
     }
 
     /**

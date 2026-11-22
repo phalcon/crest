@@ -15,6 +15,7 @@ namespace Crest\Generator\Project;
 
 use Crest\Console\Exceptions\Exception;
 use Crest\Generator\Stub;
+use Crest\Project\Runtime;
 
 use function array_column;
 use function array_diff;
@@ -105,6 +106,26 @@ enum DatabaseChoice: string
     public function arguments(): string
     {
         return self::SQLITE === $this ? '$this->projectRoot' : '';
+    }
+
+    /**
+     * The app service cannot have the name of the database service: compose
+     * would have one service for two. The host runtime always has app, so
+     * only a docker answer can fail. `new`, `init` and make:database check it
+     * before the first write.
+     */
+    public function checkService(Runtime $runtime): void
+    {
+        if (false === $this->hasService() || self::SERVICE !== $runtime->service) {
+            return;
+        }
+
+        throw new Exception(
+            sprintf(
+                "the service '%s' is the name of the database service; choose another service name",
+                self::SERVICE
+            )
+        );
     }
 
     /**
