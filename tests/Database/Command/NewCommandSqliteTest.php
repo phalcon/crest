@@ -50,7 +50,7 @@ final class NewCommandSqliteTest extends AbstractNewCommandTestCase
 
         $this->createCustomers($project . '/storage/database.sqlite');
 
-        $this->assertTrue($this->adrDatabase($project)->tableExists('customers'));
+        $this->assertEquals(0, $this->adrDatabase($project)->fetchValue('SELECT COUNT(*) FROM customers'));
     }
 
     public function testAValueOnlyInEnvConnects(): void

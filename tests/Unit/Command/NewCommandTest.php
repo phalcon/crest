@@ -1118,6 +1118,7 @@ final class NewCommandTest extends TestCase
             . "        'command'    => 'src/Command',\n"
             . "        'middleware' => 'src/Middleware',\n"
             . "        'provider'   => 'src/Provider',\n"
+            . "        'repository' => 'src/Repository',\n"
             . "        'responder'  => 'src/Responder',\n"
             . "    ],\n"
             . "    'runtime'   => ['type' => 'docker', 'service' => 'app'],\n"

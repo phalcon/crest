@@ -169,6 +169,8 @@ final class DatabaseChoiceTest extends TestCase
             [
                 'adapter'         => '',
                 'charset'         => '',
+                'dsnCharset'      => '',
+                'dsnDriver'       => '',
                 'databaseFile'    => '',
                 'databaseIgnore'  => '',
                 'databaseInstall' => '',
@@ -183,6 +185,17 @@ final class DatabaseChoiceTest extends TestCase
         );
     }
 
+    public function testTheDsnOfEachServerHasItsPdoDriver(): void
+    {
+        // The DataMapper connection of an ADR project (#84). MariaDB uses the
+        // MySQL driver, and only MySQL takes the charset in the DSN.
+        $mariadb = $this->values(DatabaseChoice::MARIADB, 'shop');
+        $pgsql   = $this->values(DatabaseChoice::PGSQL, 'shop');
+
+        $this->assertSame(['mysql', ';charset=utf8mb4'], [$mariadb['dsnDriver'], $mariadb['dsnCharset']]);
+        $this->assertSame(['pgsql', ''], [$pgsql['dsnDriver'], $pgsql['dsnCharset']]);
+    }
+
     public function testTheMysqlValues(): void
     {
         // Asserted whole: these lines go into each MySQL project.
@@ -190,6 +203,8 @@ final class DatabaseChoiceTest extends TestCase
             [
                 'adapter'         => 'Mysql',
                 'charset'         => "            'charset'  => 'utf8mb4',\n",
+                'dsnCharset'      => ';charset=utf8mb4',
+                'dsnDriver'       => 'mysql',
                 'databaseFile'    => '',
                 'databaseIgnore'  => '',
                 'databaseInstall' => "docker-php-ext-install pdo_mysql\n",
@@ -277,6 +292,8 @@ final class DatabaseChoiceTest extends TestCase
             [
                 'adapter'         => 'Sqlite',
                 'charset'         => '',
+                'dsnCharset'      => '',
+                'dsnDriver'       => 'sqlite',
                 'databaseFile'    => 'storage/database.sqlite',
                 'databaseIgnore'  => "/storage/database.sqlite\n",
                 'databaseInstall' => '',

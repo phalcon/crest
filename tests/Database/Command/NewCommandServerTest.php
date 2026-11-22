@@ -53,7 +53,7 @@ final class NewCommandServerTest extends AbstractNewCommandTestCase
         $this->databaseValues(true, false);
         $this->createTables(CustomersMigration::class);
 
-        $this->assertTrue($this->adrDatabase($project)->tableExists('customers'));
+        $this->assertEquals(0, $this->adrDatabase($project)->fetchValue('SELECT COUNT(*) FROM customers'));
     }
 
     public function testAValueOnlyInEnvConnects(): void
