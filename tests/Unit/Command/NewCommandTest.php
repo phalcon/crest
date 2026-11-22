@@ -300,6 +300,32 @@ final class NewCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
     }
 
+    public function testAnOldPublishedFrontStillWorksForAProjectWithViews(): void
+    {
+        $this->publishFrontWithoutImplicitView();
+
+        $this->assertSame(0, $this->runCommand(['my-app']));
+        $this->assertStringContainsString(
+            '(new Application($this->boot()))->handle($uri);',
+            $this->read('src/AppFront.php')
+        );
+    }
+
+    public function testAnOldPublishedFrontStopsAProjectWithNoViews(): void
+    {
+        // A copy from before #83 has no {{ implicitView }}: the project would
+        // need a view service that it does not have.
+        $copy = $this->publishFrontWithoutImplicitView();
+
+        $this->assertSame(1, $this->runCommand(['my-app', '--template-engine', 'none']));
+        $this->assertSame(
+            'crest: the published stub ' . $copy . ' has no {{ implicitView }}; publish it again with '
+            . 'crest stub:publish project-front --flavor=mvc --force, and make your changes in it again' . PHP_EOL,
+            $this->readStderr()
+        );
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app');
+    }
+
     public function testANonEmptyDirectoryIsRefused(): void
     {
         mkdir($this->root . '/my-app');
@@ -371,7 +397,7 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            "unknown template engine 'volt'; expected phtml",
+            "unknown template engine 'volt'; expected phtml or none",
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
@@ -379,7 +405,7 @@ final class NewCommandTest extends TestCase
 
     public function testAnUnusableAnswerIsAskedAgain(): void
     {
-        $this->answers("\n1bad\nShop\n\n\n\n\n\n");
+        $this->answers("\n\n1bad\nShop\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
         $this->assertStringContainsString("'1bad' is not a usable namespace", $this->readStderr());
@@ -831,6 +857,27 @@ final class NewCommandTest extends TestCase
         $this->assertNoPlaceholderIn($this->root . '/my-app');
     }
 
+    public function testNoViewsGivesAnMvcProjectWithNoViews(): void
+    {
+        $this->assertSame(0, $this->runCommand(['my-app', '--template-engine', 'NONE']));
+
+        $front = $this->read('src/AppFront.php');
+
+        $this->assertFileDoesNotExist($this->root . '/my-app/src/Providers/ViewProvider.php');
+        $this->assertDirectoryDoesNotExist($this->root . '/my-app/themes');
+        $this->assertStringContainsString("        'views'      => false,\n", $this->read('crest.php'));
+        $this->assertStringContainsString(
+            '(new Application($this->boot()))->useImplicitView(false)->handle($uri);',
+            $front
+        );
+        $this->assertStringNotContainsString('ViewProvider', $front);
+        $this->assertStringNotContainsString('themes/default', $this->read('README.md'));
+        $this->assertStringContainsString(
+            "return \$this->response->setJsonContent(['status' => 'ok']);",
+            $this->read('src/Controllers/IndexController.php')
+        );
+    }
+
     public function testOneCommandIsCountedInTheSingular(): void
     {
         $this->publishSteps([['composer', 'install']]);
@@ -996,13 +1043,16 @@ final class NewCommandTest extends TestCase
 
     public function testTheFlavorIsTheFirstQuestion(): void
     {
-        // Flavor, namespace, PHP version, Phalcon version, runtime, service,
-        // database. MVC has one engine, so there is no engine question.
-        $this->answers("mvc\n\n\n\n\n\n\n");
+        // Flavor, template engine, namespace, PHP version, Phalcon version,
+        // runtime, service, database. MVC has two engines: phtml, and none
+        // for no views (#83).
+        $this->answers("mvc\n\n\n\n\n\n\n\n");
 
         $this->assertSame(0, $this->runCommand(['my-app'], true));
-        $this->assertStringStartsWith('Flavor (mvc, adr) [mvc]: Root namespace [App]: ', $this->readStderr());
-        $this->assertStringNotContainsString('Template engine', $this->readStderr());
+        $this->assertStringStartsWith(
+            'Flavor (mvc, adr) [mvc]: Template engine (phtml, none) [phtml]: Root namespace [App]: ',
+            $this->readStderr()
+        );
         $this->assertStringContainsString("'flavor'    => 'mvc',", $this->read('crest.php'));
     }
 
@@ -1525,6 +1575,27 @@ final class NewCommandTest extends TestCase
         );
 
         return $override;
+    }
+
+    /**
+     * Publishes the MVC front without {{ implicitView }}, as a copy from
+     * before #83, where new reads the copies. Gives the path of the copy.
+     */
+    private function publishFrontWithoutImplicitView(): string
+    {
+        $copy = Stub::overridePath($this->root, 'mvc', 'project-front');
+
+        mkdir(dirname($copy), 0o775, true);
+        file_put_contents(
+            $copy,
+            str_replace(
+                '{{ implicitView }}',
+                '',
+                (string) file_get_contents(Stub::packagedPath(Paths::stubs(), 'mvc', 'project-front'))
+            )
+        );
+
+        return $copy;
     }
 
     /**

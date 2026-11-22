@@ -55,9 +55,12 @@ final class ProjectStubsTest extends TestCase
         'actionPath'          => 'src/Action',
         'adapter'             => 'Mysql',
         'autoloader'          => 'vendor/autoload.php',
+        'base'                => 'CrestControllerBase',
         'baseFolder'          => 'Base',
+        'baseNamespace'       => 'App\\Controllers\\Base',
         'bootstrap'           => "    'bootstrap' => App\\AppFront::class,\n",
         'charset'             => "            'charset'  => 'utf8mb4',\n",
+        'class'               => 'IndexController',
         'controllerNamespace' => 'App\\Controllers',
         'controllerPath'      => 'src/Controllers',
         'crestConstraint'     => '^1.0',
@@ -76,6 +79,7 @@ final class ProjectStubsTest extends TestCase
         'extensionConstraint' => '^5.18',
         'flavor'              => 'adr',
         'front'               => 'AppFront',
+        'implicitView'        => '',
         'jsonNamespace'       => 'App',
         'models'              => '',
         'namespace'           => 'App',
@@ -97,7 +101,10 @@ final class ProjectStubsTest extends TestCase
         'service'             => 'app',
         'source'              => 'src',
         'v5'                  => '',
+        'viewProvider'        => "            new ViewProvider(\$this->projectRoot . '/themes/default'),\n",
+        'viewUse'             => "use App\\Providers\\ViewProvider;\n",
         'viewsPath'           => 'themes/default',
+        'viewsRow'            => "| `themes/default/` | The views |\n",
     ];
 
     /**
@@ -111,6 +118,7 @@ final class ProjectStubsTest extends TestCase
         yield 'adr/project-provider-db' => ['adr', 'project-provider-db'];
         yield 'adr/project-provider-db-sqlite' => ['adr', 'project-provider-db-sqlite'];
         yield 'mvc/project-front' => ['mvc', 'project-front'];
+        yield 'mvc/project-none-controller' => ['mvc', 'project-none-controller'];
         yield 'mvc/project-phtml-provider' => ['mvc', 'project-phtml-provider'];
         yield 'mvc/project-provider-db' => ['mvc', 'project-provider-db'];
         yield 'mvc/project-provider-db-sqlite' => ['mvc', 'project-provider-db-sqlite'];
@@ -127,6 +135,7 @@ final class ProjectStubsTest extends TestCase
         yield 'adr/project-provider-db' => ['adr', 'project-provider-db'];
         yield 'adr/project-provider-db-sqlite' => ['adr', 'project-provider-db-sqlite'];
         yield 'mvc/project-front' => ['mvc', 'project-front'];
+        yield 'mvc/project-none-controller' => ['mvc', 'project-none-controller'];
         yield 'mvc/project-phtml-index' => ['mvc', 'project-phtml-index'];
         yield 'mvc/project-phtml-layout' => ['mvc', 'project-phtml-layout'];
         yield 'mvc/project-phtml-provider' => ['mvc', 'project-phtml-provider'];
@@ -347,6 +356,7 @@ final class ProjectStubsTest extends TestCase
                 'shared/project-index',
                 'shared/project-launcher',
                 'mvc/project-front',
+                'mvc/project-none-controller',
                 'mvc/project-phtml-index',
                 'mvc/project-phtml-layout',
                 'mvc/project-phtml-provider',

@@ -154,6 +154,40 @@ final class ControllerCommandTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/src/Controllers');
     }
 
+    public function testAControllerInAModuleOfAProjectWithNoViewsGetsNoView(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['views' => false]]");
+        $this->writeModule('Admin');
+
+        $this->runCommand(['Users', '--module=admin']);
+
+        $this->assertStringEndsWith(
+            'With the routes from make:module, GET /admin/users/index runs' . PHP_EOL
+            . 'indexAction(). The project has no views, so the action returns its response.' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
+    public function testAControllerOfAProjectWithNoViewsGetsNoView(): void
+    {
+        // Asserted whole, as the guidance of a project with views.
+        $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['views' => false]]");
+
+        $status = $this->runCommand(['Users']);
+
+        $expected = 'Created ' . $this->root . self::BASE . PHP_EOL
+            . 'Created ' . $this->root . self::USERS . PHP_EOL
+            . 'The dispatcher finds it only when its default namespace is this namespace:' . PHP_EOL
+            . PHP_EOL
+            . "    \$dispatcher->setDefaultNamespace('App\\Controllers');" . PHP_EOL
+            . PHP_EOL
+            . 'With the default routes, GET /users runs indexAction(). The project has no views, so the action'
+            . ' returns its response.' . PHP_EOL;
+
+        $this->assertSame(0, $status);
+        $this->assertSame($expected, $this->readStdout());
+    }
+
     public function testADeclaredControllerPathIsUsed(): void
     {
         // A project that keeps its classes in app/.

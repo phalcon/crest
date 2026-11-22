@@ -199,6 +199,18 @@ final class ShowCommandTest extends TestCase
         $this->assertStringContainsString($this->root, $output);
     }
 
+    public function testAnMvcProjectWithNoViewsShowsNoneForTheViews(): void
+    {
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['flavor' => 'mvc', 'paths' => ['views' => false]];\n"
+        );
+
+        $this->runCommand();
+
+        $this->assertStringEndsWith('views none declared' . PHP_EOL, $this->normalized());
+    }
+
     public function testANullCamelCaseIsTheDefault(): void
     {
         $this->writeModels("['camelCase' => null]");

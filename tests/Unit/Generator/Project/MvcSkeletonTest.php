@@ -72,14 +72,55 @@ final class MvcSkeletonTest extends TestCase
         );
     }
 
-    public function testItHasThePhtmlEngine(): void
+    public function testItHasThePhtmlEngineAndNoViews(): void
     {
-        $this->assertSame(['phtml'], (new MvcSkeleton())->engines()->names());
+        $this->assertSame(['phtml', 'none'], (new MvcSkeleton())->engines()->names());
     }
 
     public function testItIsTheMvcFlavor(): void
     {
         $this->assertSame(Flavor::MVC, (new MvcSkeleton())->flavor());
+    }
+
+    public function testNoViewsGivesNoViewFiles(): void
+    {
+        $this->assertSame(
+            [
+                'project-provider-dispatcher' => 'src/Providers/DispatcherProvider.php',
+                'project-provider-url'        => 'src/Providers/UrlProvider.php',
+                'project-provider-db'         => 'src/Providers/DbProvider.php',
+            ],
+            (new MvcSkeleton())->files($this->answers('none', DatabaseChoice::MYSQL))
+        );
+    }
+
+    public function testNoViewsGivesNoViewLinesAndTurnsTheImplicitViewOff(): void
+    {
+        $values = (new MvcSkeleton())->values($this->answers('none'));
+
+        $this->assertSame('->useImplicitView(false)', $values['implicitView']);
+        $this->assertSame('', $values['viewProvider']);
+        $this->assertSame('', $values['viewUse']);
+        $this->assertSame('', $values['viewsRow']);
+    }
+
+    public function testNoViewsGivesTheIndexControllerThatReturnsJson(): void
+    {
+        $stub = new Stub(Paths::stubs());
+
+        $this->assertSame(
+            $stub->render(
+                'mvc',
+                'project-none-controller',
+                [
+                    'base'          => 'CrestControllerBase',
+                    'baseNamespace' => 'Acme\\Shop\\Controllers\\Base',
+                    'class'         => 'IndexController',
+                    'namespace'     => 'Acme\\Shop\\Controllers',
+                ]
+            ),
+            (new MvcSkeleton())->seed($stub, $this->answers('none'))['src/Controllers/IndexController.php']
+        );
     }
 
     public function testPhqlIsOnlyForV6WithADatabase(): void
@@ -158,11 +199,16 @@ final class MvcSkeletonTest extends TestCase
                 'controllerPath'      => 'src/Controllers',
                 'dbProvider'          => '',
                 'dbUse'               => '',
+                'implicitView'        => '',
                 'phql'                => '',
                 'providerNamespace'   => 'Acme\\Shop\\Providers',
                 'providerPath'        => 'src/Providers',
                 'seed'                => 'IndexController',
+                'viewProvider'        => "            new ViewProvider(\$this->projectRoot . '/themes/default'),\n",
+                'viewUse'             => "use Acme\\Shop\\Providers\\ViewProvider;\n",
                 'viewsPath'           => 'themes/default',
+                'viewsRow'            => '| `themes/default/` | The views. `GET /` shows the view `index/index` in the '
+                    . "layout `index` |\n",
             ],
             (new MvcSkeleton())->values($this->answers('phtml'))
         );

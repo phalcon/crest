@@ -42,6 +42,15 @@ final class ConfigTest extends TestCase
         $this->removeScratchDirectory();
     }
 
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function viewsByFlavor(): iterable
+    {
+        yield 'an MVC project' => ['mvc', true];
+        yield 'an ADR project' => ['adr', false];
+    }
+
     public function testADirectoryThatDoesNotExistIsReported(): void
     {
         $this->expectException(Exception::class);
@@ -125,6 +134,22 @@ final class ConfigTest extends TestCase
         $this->expectExceptionMessage("'runtime' must be an array, e.g. ['type' => 'docker', 'service' => 'app']");
 
         Config::discover($this->root);
+    }
+
+    public function testAViewsPathOfFalseIsAProjectWithNoViews(): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents(
+            $this->root . '/crest.php',
+            "<?php\n\nreturn ['flavor' => 'mvc', 'paths' => ['views' => false]];\n"
+        );
+
+        $config = Config::discover($this->root);
+
+        $this->assertFalse($config->hasViews());
+        $this->assertArrayNotHasKey('views', $config->paths());
+        $this->assertTrue($config->isDeclared('paths.views'));
+        $this->assertSame($this->root . '/src/Controllers', $config->path('controller'));
     }
 
     public function testCrestPhpMayDeclareTheNamespaceExplicitly(): void
@@ -307,6 +332,17 @@ final class ConfigTest extends TestCase
         file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => 'cli'];\n");
         $config = Config::discover($this->root);
         $this->assertSame(['command' => $this->root . '/src/Command'], $config->paths());
+    }
+
+    /**
+     * @dataProvider viewsByFlavor
+     */
+    public function testHasViewsFollowsTheDefaultPathsOfTheFlavor(string $flavor, bool $views): void
+    {
+        $this->writeComposerJson(['App\\' => 'src/']);
+        file_put_contents($this->root . '/crest.php', "<?php\n\nreturn ['flavor' => '" . $flavor . "'];\n");
+
+        $this->assertSame($views, Config::discover($this->root)->hasViews());
     }
 
     public function testModelsGivesTheKeyAsTheFileHasIt(): void
