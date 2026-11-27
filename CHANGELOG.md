@@ -169,6 +169,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `init`: for an ADR project, it also asks for the `repository` folder, so a script that sends answers to `init` needs one more line. `new` writes the `repository` path into the `crest.php` of an ADR project. [#84](https://github.com/phalcon/crest/issues/84)
 - Changed `make:scaffold`: it stops in a project with no views. In that project, `make:module` writes no `views` folder, and `make:controller` and `make:module` print their guidance with no view. `Crest\Project\Settings` takes `false` for the `views` path, and `Crest\Command\Questions::path()` gives `false` for the answer `none`. [#83](https://github.com/phalcon/crest/issues/83)
 - Changed `make:model` on SQLite: from cphalcon 5.24.0 and `phalcon/phalcon` 6.0.0, a composite key gives one relation with all its columns, and a key with no referenced columns (`REFERENCES customers`) gives a relation to the primary key of the referenced table. The fixes are in Phalcon (phalcon/cphalcon#17814, phalcon/cphalcon#17815); crest needs no code change. The docs give the versions. [#87](https://github.com/phalcon/crest/issues/87)
+- Changed `make:model --all`: from cphalcon 5.24.0 and `phalcon/phalcon` 6.0.0, it writes no model for a MariaDB sequence, and one model for a PostgreSQL partitioned table, with none for its partitions. The fix is in Phalcon (phalcon/cphalcon#17769); crest needs no code change. The docs give the versions. [#101](https://github.com/phalcon/crest/issues/101)
 
 ### Fixed
 

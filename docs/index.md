@@ -1423,9 +1423,11 @@ crest make:model --all --views
 For one view, run `make:model <view>`. This works on each database. A view has
 no keys, so its model has no relations.
 
-On MariaDB, `--all` also writes a model for each sequence. On PostgreSQL, it
-writes a model for each partition of a partitioned table, and one for the table.
-Phalcon lists them as tables. The fix is planned in Phalcon.
+Before cphalcon 5.24.0 and before the tag of `phalcon/phalcon` after
+`v6.0.0RC4`, `--all` also writes a model for each sequence on MariaDB. On
+PostgreSQL, it writes a model for each partition of a partitioned table, and one
+for the table. Phalcon lists them as tables. From these versions, a partitioned
+table gives one model, and a sequence or a partition gives none.
 
 To skip tables, give their names to one `--exclude`, separated by commas:
 
