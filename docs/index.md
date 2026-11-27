@@ -765,7 +765,9 @@ finds in the project:
    `--database` answers the question. For another answer, `init` adds the database after
    it writes `crest.php`, as `make:database` does (see
    [Adding a database](#adding-a-database)). When the `provider` folder already has
-   `DbProvider.php`, `init` stops before it writes a file, unless `--force`.
+   `DbProvider.php`, `init` stops before it writes a file, unless `--force`. `init` does
+   not start the front controller to look for a `db` service: it runs before the project
+   has its autoloader.
 
 Press Enter to accept a proposal. `--no-interaction` accepts all the proposals (see
 [Global options](#global-options)). `--force` overwrites an existing `crest.php`. If the
@@ -824,7 +826,7 @@ Then crest make:model <table> reads it.
 |---|---|
 | `DbProvider.php` in the `provider` path | writes it, from the stub that `new` uses: for MVC a `Phalcon\Db` adapter, for ADR a DataMapper `Connection` with the alias `db` |
 | `storage/database.sqlite` and `storage/.gitkeep` (SQLite) | writes each file that does not exist. A database file that exists stays, also with `--force` |
-| the front controller | prints the line that registers `DbProvider`. In an ADR project, it prints the `registerProviders()` override, or only the line to add when the front has the override (as `make:provider` does) |
+| the front controller | prints the line that registers `DbProvider`. In an ADR project, it prints the `registerProviders()` override, or only the line to add when the front has the override (as `make:provider` does). With no front controller (no `bootstrap` key), it prints the line for the container of the project |
 | the compose file (server database) | prints the service `database` with its volume, and `depends_on` for the app service. When the compose file has a `database` service, Crest prints a note in place of the service |
 | the Dockerfile (server database) | prints the lines that install the PDO extension |
 | `.gitignore` (SQLite) | prints the line to add |
@@ -841,6 +843,32 @@ The `DB_NAME` and `DB_USERNAME` defaults of a server database come from the fold
 of the project, as `new` uses the name of the project. When `DbProvider.php` exists,
 `make:database` stops, and writes nothing. `--force` writes `DbProvider` again.
 `make:database none` stops: there is no database to add.
+
+When the `provider` folder has no `DbProvider.php`, `make:database` also starts the front
+controller of the `bootstrap` key, if it can, and stops when its container has a `db`
+service:
+
+```text
+crest: the project container has a 'db' service already; make:database adds no DbProvider
+```
+
+A front controller that does not start, for example in a project with no `vendor/`
+folder, does not stop `make:database`. With `DbProvider.php`, the check of the file
+decides: `DbProvider` gives the `db` service itself.
+
+With no front controller, Crest prints the line for the container of the project, and
+no line for a front controller. For SQLite, `$projectRoot` is the root folder of the
+project:
+
+```text
+Nothing registers it yet. crest.php names no front controller, so register it
+in the DI of the project:
+
+    $di->register(new \App\Providers\DbProvider($projectRoot));
+```
+
+In an ADR project, the line is
+`(new \App\Provider\DbProvider($projectRoot))->provide($container);`.
 
 ## Running a project
 
@@ -981,7 +1009,9 @@ from a new instance that it made itself.
 
 All the other commands, for example the other generators, `about`, `config:show` and
 `route:list`, do not start your front controller. Thus they also work on a project that
-does not run.
+does not run. `make:database` starts it when it can, to look
+for a `db` service, and also works on a project that does not run (see
+[Adding a database](#adding-a-database)).
 
 ## Generating controllers
 
