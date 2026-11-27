@@ -32,6 +32,7 @@ use function sprintf;
 use function str_pad;
 use function stream_isatty;
 use function strtolower;
+use function strtr;
 use function trim;
 
 use const PHP_EOL;
@@ -243,7 +244,7 @@ final class Output
 
     public function error(string $text): void
     {
-        fwrite($this->stderr, $this->decorate($this->aliased($text), self::COLOR_RED) . PHP_EOL);
+        fwrite($this->stderr, $this->lineEnds($this->decorate($this->aliased($text), self::COLOR_RED)) . PHP_EOL);
     }
 
     public function line(string $text = ''): void
@@ -253,7 +254,7 @@ final class Output
 
     public function success(string $text): void
     {
-        fwrite($this->stdout, $this->decorate($this->aliased($text), self::COLOR_GREEN) . PHP_EOL);
+        fwrite($this->stdout, $this->lineEnds($this->decorate($this->aliased($text), self::COLOR_GREEN)) . PHP_EOL);
     }
 
     /**
@@ -352,7 +353,7 @@ final class Output
 
     public function write(string $text): void
     {
-        fwrite($this->stdout, $this->aliased($text));
+        fwrite($this->stdout, $this->lineEnds($this->aliased($text)));
     }
 
     /**
@@ -412,10 +413,19 @@ final class Output
     }
 
     /**
-     * One line on stdout, as it is.
+     * The text with each line end as PHP_EOL, so that one output has one kind
+     * of line end on each OS.
+     */
+    private function lineEnds(string $text): string
+    {
+        return strtr($text, ["\r\n" => PHP_EOL, "\n" => PHP_EOL]);
+    }
+
+    /**
+     * One line on stdout. Only the line ends change.
      */
     private function raw(string $text): void
     {
-        fwrite($this->stdout, $text . PHP_EOL);
+        fwrite($this->stdout, $this->lineEnds($text) . PHP_EOL);
     }
 }
