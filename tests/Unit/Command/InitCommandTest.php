@@ -113,6 +113,7 @@ final class InitCommandTest extends TestCase
     public function testADatabaseIsAddedAfterCrestPhp(): void
     {
         // #95: the work of make:database, from the crest.php that init writes.
+        // The scratch project has no front controller, so no front line (#97).
         $this->assertSame(0, $this->init(['--flavor', 'mvc', '--database', 'sqlite']));
 
         $stdout = $this->readStdout();
@@ -124,7 +125,10 @@ final class InitCommandTest extends TestCase
             . 'Created ' . $this->root . '/storage/database.sqlite' . PHP_EOL,
             $stdout
         );
-        $this->assertStringContainsString('    new \App\Providers\DbProvider($this->projectRoot),' . PHP_EOL, $stdout);
+        $this->assertStringContainsString(
+            '    $di->register(new \App\Providers\DbProvider($projectRoot));' . PHP_EOL,
+            $stdout
+        );
         $this->assertStringEndsWith('Then crest make:model <table> reads it.' . PHP_EOL, $stdout);
         $this->assertSame(Flavor::MVC, Config::discover($this->root)->flavor());
     }

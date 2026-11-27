@@ -15,7 +15,13 @@ namespace Crest\Tests\Unit\Command\Make;
 
 use Crest\Command\Make\DatabaseCommand;
 use Crest\Tests\Support\GeneratesInAScratchProject;
+use Crest\Tests\Support\Project\EmptyFront;
+use Crest\Tests\Support\Project\FailingDatabaseFront;
+use Crest\Tests\Support\Project\FailingFront;
+use Crest\Tests\Support\Project\NotAConnectionFront;
 use Crest\Tests\Support\Project\ProvidersFront;
+use Crest\Tests\Support\Project\WrongContainerFront;
+use Phalcon\Di\Di;
 use PHPUnit\Framework\TestCase;
 
 use function basename;
@@ -42,6 +48,8 @@ final class DatabaseCommandTest extends TestCase
 
     protected function tearDown(): void
     {
+        // A boot makes a DI, and the first DI of the process is the default.
+        Di::reset();
         $this->endScratchProject();
     }
 
@@ -59,7 +67,7 @@ final class DatabaseCommandTest extends TestCase
     {
         // #96: a text check of the services; compose.yaml is a name that
         // docker compose looks for.
-        $this->writeCrestPhp("['flavor' => 'mvc']");
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => 'App\\AppFront']");
         file_put_contents(
             $this->root . '/compose.yaml',
             "services:\n  app:\n    build: .\n  database:\n    image: mariadb\n"
@@ -85,7 +93,9 @@ final class DatabaseCommandTest extends TestCase
     public function testADeclaredProviderPathGivesTheFileAndTheNamespace(): void
     {
         $this->writeComposerJson(['Shop\\' => 'app/']);
-        $this->writeCrestPhp("['flavor' => 'mvc', 'paths' => ['provider' => 'app/Services']]");
+        $this->writeCrestPhp(
+            "['flavor' => 'mvc', 'bootstrap' => 'App\\AppFront', 'paths' => ['provider' => 'app/Services']]"
+        );
 
         $this->assertSame(0, $this->runCommand(['sqlite']));
         $this->assertStringContainsString(
@@ -96,6 +106,36 @@ final class DatabaseCommandTest extends TestCase
             '    new \Shop\Services\DbProvider($this->projectRoot),' . PHP_EOL,
             $this->readStdout()
         );
+    }
+
+    public function testAFrontThatDoesNotBootGoesOn(): void
+    {
+        // #97: for example a project with no vendor/. The file check stays.
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\" . FailingFront::class . '::class]');
+
+        $this->assertSame(0, $this->runCommand(['sqlite']));
+        $this->assertFileExists($this->root . '/src/Provider/DbProvider.php');
+    }
+
+    public function testAFrontWithADbServiceStops(): void
+    {
+        // #97: the DI of the front has a db service, and the provider folder
+        // has no DbProvider. The DI does not connect for has().
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => \\" . FailingDatabaseFront::class . '::class]');
+
+        $this->assertDatabaseStops(
+            ['sqlite'],
+            "the project container has a 'db' service already; make:database adds no DbProvider"
+        );
+        $this->assertFileDoesNotExist($this->root . '/src/Providers/DbProvider.php');
+    }
+
+    public function testAFrontWithAnotherContainerGoesOn(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\" . WrongContainerFront::class . '::class]');
+
+        $this->assertSame(0, $this->runCommand(['sqlite']));
+        $this->assertFileExists($this->root . '/src/Provider/DbProvider.php');
     }
 
     public function testAFrontWithItsOwnOverrideGetsOnlyTheProvideLine(): void
@@ -113,6 +153,25 @@ final class DatabaseCommandTest extends TestCase
             . 'Add to .gitignore:',
             $this->readStdout()
         );
+    }
+
+    public function testAFrontWithNoDbServiceGoesOn(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\" . EmptyFront::class . '::class]');
+
+        $this->assertSame(0, $this->runCommand(['sqlite']));
+        $this->assertFileExists($this->root . '/src/Provider/DbProvider.php');
+    }
+
+    public function testAnAdrFrontWithADbServiceStops(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => \\" . NotAConnectionFront::class . '::class]');
+
+        $this->assertDatabaseStops(
+            ['sqlite'],
+            "the project container has a 'db' service already; make:database adds no DbProvider"
+        );
+        $this->assertFileDoesNotExist($this->root . '/src/Provider/DbProvider.php');
     }
 
     public function testAnAppServiceNamedDatabaseStops(): void
@@ -152,7 +211,7 @@ final class DatabaseCommandTest extends TestCase
     {
         // #96: the text of each part comes from the stubs that `new` uses.
         // The names come from the folder of the project.
-        $this->writeCrestPhp("['flavor' => 'mvc']");
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => 'App\\AppFront']");
         file_put_contents($this->root . '/docker-compose.yml', "services:\n  app:\n    build: .\n");
 
         $project = basename($this->root);
@@ -229,7 +288,7 @@ final class DatabaseCommandTest extends TestCase
     {
         // Without a compose file, nothing gives .env to the app: crest prints
         // no .env lines, and the defaults of DbProvider apply.
-        $this->writeCrestPhp("['flavor' => 'mvc']");
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => 'App\\AppFront']");
 
         $name = str_replace('-', '_', basename($this->root));
 
@@ -272,6 +331,67 @@ final class DatabaseCommandTest extends TestCase
         );
     }
 
+    public function testForceWritesTheProviderAgainWithADbService(): void
+    {
+        // #97: DbProvider gives the db service itself, so the file check
+        // decides, and --force writes it again.
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => \\" . FailingDatabaseFront::class . '::class]');
+        mkdir($this->root . '/src/Providers', 0o775, true);
+        file_put_contents($this->root . '/src/Providers/DbProvider.php', 'stale');
+
+        $this->assertSame(0, $this->runCommand(['sqlite', '--force']));
+        $this->assertStringContainsString(
+            'final class DbProvider',
+            (string) file_get_contents($this->root . '/src/Providers/DbProvider.php')
+        );
+    }
+
+    public function testNoFrontInAnAdrProjectGetsTheProvideLine(): void
+    {
+        // #97: crest.php has no bootstrap key, so crest prints no front line.
+        $this->writeCrestPhp("['flavor' => 'adr']");
+
+        $this->assertSame(0, $this->runCommand(['sqlite']));
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/storage/.gitkeep' . PHP_EOL
+            . 'Nothing registers it yet. crest.php names no front controller, so call it with' . PHP_EOL
+            . 'the container of the project:' . PHP_EOL
+            . PHP_EOL
+            . '    (new \App\Provider\DbProvider($projectRoot))->provide($container);' . PHP_EOL
+            . PHP_EOL
+            . 'Add to .gitignore:',
+            $this->readStdout()
+        );
+    }
+
+    public function testNoFrontInAnMvcProjectGetsTheLineForTheDi(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->assertSame(0, $this->runCommand(['sqlite']));
+        $this->assertStringContainsString(
+            'Created ' . $this->root . '/storage/.gitkeep' . PHP_EOL
+            . 'Nothing registers it yet. crest.php names no front controller, so register it' . PHP_EOL
+            . 'in the DI of the project:' . PHP_EOL
+            . PHP_EOL
+            . '    $di->register(new \App\Providers\DbProvider($projectRoot));' . PHP_EOL
+            . PHP_EOL
+            . 'Add to .gitignore:',
+            $this->readStdout()
+        );
+    }
+
+    public function testNoFrontWithAServerDatabaseGivesNoArguments(): void
+    {
+        $this->writeCrestPhp("['flavor' => 'mvc']");
+
+        $this->assertSame(0, $this->runCommand(['mysql']));
+        $this->assertStringContainsString(
+            '    $di->register(new \App\Providers\DbProvider());' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
     public function testNoneStops(): void
     {
         $this->assertDatabaseStops(['none'], 'no database to add; choose mariadb, mysql, pgsql or sqlite');
@@ -279,7 +399,7 @@ final class DatabaseCommandTest extends TestCase
 
     public function testSqliteInAnAdrProject(): void
     {
-        $this->writeCrestPhp("['flavor' => 'adr']");
+        $this->writeCrestPhp("['flavor' => 'adr', 'bootstrap' => 'App\\AppFront']");
 
         $this->assertSame(0, $this->runCommand(['sqlite']));
         $this->assertSame(
@@ -319,7 +439,7 @@ final class DatabaseCommandTest extends TestCase
 
     public function testSqliteInAnMvcProject(): void
     {
-        $this->writeCrestPhp("['flavor' => 'mvc']");
+        $this->writeCrestPhp("['flavor' => 'mvc', 'bootstrap' => 'App\\AppFront']");
 
         $this->assertSame(0, $this->runCommand(['sqlite']));
         $this->assertSame(
