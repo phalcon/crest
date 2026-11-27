@@ -194,11 +194,12 @@ jobs:
           fetch-depth: 1
           token: ${{ github.token }}
 
+      # PHP for Windows does not turn on fileinfo, and phalcon/phalcon needs it.
       - name: "Setup PHP"
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.4'
-          extensions: ${{ env.EXTENSIONS }}
+          extensions: ${{ env.EXTENSIONS }}, fileinfo
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
