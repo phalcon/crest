@@ -43,9 +43,11 @@ use function strlen;
 use function substr;
 use function var_export;
 
+use const DIRECTORY_SEPARATOR;
 use const JSON_THROW_ON_ERROR;
 use const PHP_BINARY;
 use const PHP_EOL;
+use const PHP_OS_FAMILY;
 
 final class NewCommandTest extends TestCase
 {
@@ -262,7 +264,8 @@ final class NewCommandTest extends TestCase
                 new RecursiveDirectoryIterator($prefix, FilesystemIterator::SKIP_DOTS)
             ) as $file
         ) {
-            $files[] = substr($file->getPathname(), strlen($prefix));
+            // The names with '/' on each OS.
+            $files[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($prefix)));
         }
 
         sort($files);
@@ -560,6 +563,10 @@ final class NewCommandTest extends TestCase
 
     public function testAPublishedLauncherIsExecutable(): void
     {
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('Windows has no executable mode');
+        }
+
         $override = Stub::overridePath($this->root, 'adr', 'project-launcher');
 
         mkdir(dirname($override), 0o775, true);
@@ -1167,6 +1174,10 @@ final class NewCommandTest extends TestCase
 
     public function testTheLauncherIsExecutable(): void
     {
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('Windows has no executable mode');
+        }
+
         $this->runCommand(['my-app']);
 
         $this->assertSame(0o755, fileperms($this->root . '/my-app/crest') & 0o777);

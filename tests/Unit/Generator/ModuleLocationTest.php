@@ -21,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 
 use function chmod;
 use function file_put_contents;
+use function is_dir;
 use function is_readable;
 use function mkdir;
 use function setlocale;
@@ -217,6 +218,13 @@ final class ModuleLocationTest extends TestCase
     public function testTwoFoldersWithOneKeyStop(): void
     {
         mkdir($this->root . '/src/Modules/Admin', 0o775, true);
+
+        // A file system that ignores case (Windows, macOS) has one folder for
+        // the two names.
+        if (true === is_dir($this->root . '/src/Modules/ADMIN')) {
+            $this->markTestSkipped('the file system ignores the case of a name');
+        }
+
         mkdir($this->root . '/src/Modules/ADMIN', 0o775, true);
 
         $this->expectException(Exception::class);

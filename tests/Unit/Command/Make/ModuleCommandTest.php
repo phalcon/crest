@@ -20,6 +20,7 @@ use ReflectionMethod;
 
 use function file_get_contents;
 use function file_put_contents;
+use function is_dir;
 use function mkdir;
 
 use const PHP_EOL;
@@ -310,6 +311,13 @@ final class ModuleCommandTest extends TestCase
     public function testTwoFoldersWithOneKeyStop(): void
     {
         mkdir($this->root . '/src/Modules/Admin', 0o775, true);
+
+        // A file system that ignores case (Windows, macOS) has one folder for
+        // the two names.
+        if (true === is_dir($this->root . '/src/Modules/ADMIN')) {
+            $this->markTestSkipped('the file system ignores the case of a name');
+        }
+
         mkdir($this->root . '/src/Modules/ADMIN', 0o775, true);
 
         $status = $this->runCommand(['admin']);

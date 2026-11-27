@@ -38,6 +38,7 @@ use function strtr;
 use const FILE_IGNORE_NEW_LINES;
 use const PHP_BINARY;
 use const PHP_EOL;
+use const PHP_OS_FAMILY;
 
 /**
  * Runs resources/setup.sh as `curl | sh` does: the script on stdin of sh -s,
@@ -160,6 +161,10 @@ final class SetupScriptTest extends TestCase
                 ) . "\n"
             );
             chmod($this->root . '/bin/' . $name, 0o755);
+        }
+
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('the setup script is a POSIX shell script');
         }
     }
 

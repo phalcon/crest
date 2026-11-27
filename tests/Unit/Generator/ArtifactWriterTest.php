@@ -190,6 +190,9 @@ final class ArtifactWriterTest extends TestCase
 
         // root can read a file with mode 000, so the test proves nothing then.
         if (true === is_readable($file)) {
+            // Windows keeps the file readable, but read-only. The scratch
+            // folder can be removed only with its mode back.
+            chmod($file, 0o644);
             $this->markTestSkipped('this user can read a file with mode 000');
         }
 

@@ -303,6 +303,26 @@ final class OutputTest extends TestCase
         $this->assertSame('', $this->readStderr());
     }
 
+    public function testEachLineEndIsTheLineEndOfTheOs(): void
+    {
+        // A text can have either line end, for example a stub from a checkout
+        // on Windows. The output has one kind: PHP_EOL.
+        $output = new Output($this->stdout, $this->stderr, false);
+
+        $output->line("a\nb\r\nc");
+        $output->success("d\ne\r\nf");
+        $output->write("g\nh\r\ni");
+        $output->error("j\nk\r\nl");
+
+        $this->assertSame(
+            'a' . PHP_EOL . 'b' . PHP_EOL . 'c' . PHP_EOL
+            . 'd' . PHP_EOL . 'e' . PHP_EOL . 'f' . PHP_EOL
+            . 'g' . PHP_EOL . 'h' . PHP_EOL . 'i',
+            $this->readStdout()
+        );
+        $this->assertSame('j' . PHP_EOL . 'k' . PHP_EOL . 'l' . PHP_EOL, $this->readStderr());
+    }
+
     public function testErrorGoesToStderrNotStdout(): void
     {
         $output = new Output($this->stdout, $this->stderr, false);

@@ -31,6 +31,7 @@ use function json_decode;
 use function mkdir;
 use function preg_match;
 use function putenv;
+use function realpath;
 use function unlink;
 
 use const JSON_THROW_ON_ERROR;
@@ -154,7 +155,7 @@ final class ServeCommandTest extends TestCase
         file_put_contents($this->root . '/src/' . Layout::ROUTER, "<?php\n");
 
         $this->assertSame(
-            $this->root . '/src/vendor/autoload.php was not found; run composer install first',
+            realpath($this->root . '/src') . '/vendor/autoload.php was not found; run composer install first',
             $this->refusal(['--directory', $this->root . '/src'])
         );
     }
@@ -165,7 +166,8 @@ final class ServeCommandTest extends TestCase
         file_put_contents($this->root . '/src/crest.php', "<?php\n\nreturn [];\n");
 
         $this->assertSame(
-            $this->root . '/src/.htrouter.php was not found; serve uses the router script that crest new writes',
+            realpath($this->root . '/src')
+            . '/.htrouter.php was not found; serve uses the router script that crest new writes',
             $this->refusal(['--directory', $this->root . '/src'])
         );
     }
@@ -268,7 +270,7 @@ final class ServeCommandTest extends TestCase
         // the reason in setUp().
         $this->handleDirectly(new NewCommand(), ['app', '--directory', $this->root]);
 
-        $project = $this->root . '/app';
+        $project = (string) realpath($this->root . '/app');
 
         mkdir($project . '/vendor');
         file_put_contents($project . '/vendor/autoload.php', "<?php\n");
@@ -341,7 +343,7 @@ final class ServeCommandTest extends TestCase
 
         $this->handleDirectly(new ServeCommand($runner), ['--directory', $this->root . '/src']);
 
-        $this->assertSame([[$this->argv('127.0.0.1:8080'), $this->root . '/src']], $runner->calls);
+        $this->assertSame([[$this->argv('127.0.0.1:8080'), (string) realpath($this->root . '/src')]], $runner->calls);
     }
 
     public function testTheDirectoryOptionWalksUpToCrestPhp(): void

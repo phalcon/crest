@@ -21,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 
 use function chmod;
 use function file_put_contents;
+use function is_readable;
 use function mkdir;
 
 final class SurveyTest extends TestCase
@@ -171,6 +172,12 @@ final class SurveyTest extends TestCase
         chmod($this->root . '/themes', 0o000);
 
         try {
+            // root can read a folder with mode 000, and Windows does not
+            // use the mode of a folder: the test proves nothing then.
+            if (true === is_readable($this->root . '/themes')) {
+                $this->markTestSkipped('this user can read a folder with mode 000');
+            }
+
             $views = Survey::paths($this->root, 'src', Flavor::MVC)['views'];
         } finally {
             // The scratch folder can be removed only with its mode back.

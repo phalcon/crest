@@ -35,6 +35,7 @@ use function str_replace;
 use function strlen;
 use function substr;
 
+use const DIRECTORY_SEPARATOR;
 use const JSON_THROW_ON_ERROR;
 use const PHP_EOL;
 
@@ -436,7 +437,8 @@ final class NewCommandDatabaseTest extends TestCase
                 new RecursiveDirectoryIterator($prefix, FilesystemIterator::SKIP_DOTS)
             ) as $file
         ) {
-            $files[] = substr($file->getPathname(), strlen($prefix));
+            // The names with '/' on each OS.
+            $files[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($prefix)));
         }
 
         sort($files);
