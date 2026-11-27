@@ -17,8 +17,7 @@ use Phalcon\Talon\Database\Schema\AbstractSchema;
 
 /**
  * The table lines. Its primary key has two columns, and shipments has a key
- * to them. The SQLite table has no primary key, as the composite key test
- * with CompositeKeySqlite had.
+ * to them.
  */
 final class LinesMigration extends AbstractSchema
 {
@@ -36,6 +35,6 @@ final class LinesMigration extends AbstractSchema
 
     protected function getStatementsSqlite(): array
     {
-        return ['CREATE TABLE lines (order_id INTEGER, number INTEGER)'];
+        return ['CREATE TABLE lines (order_id INTEGER, number INTEGER, PRIMARY KEY (order_id, number))'];
     }
 }

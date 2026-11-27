@@ -23,11 +23,11 @@ use Phalcon\Di\Di;
 use function file_get_contents;
 
 /**
- * make:model with a composite key on MySQL, MariaDB and PostgreSQL (spec
- * 4.4). ModelCommandSqliteTest has the SQLite form.
+ * make:model with a composite key on each database (spec 4.4, #87).
  *
  * @group mysql
  * @group pgsql
+ * @group sqlite
  */
 final class ModelCommandCompositeKeyTest extends AbstractDatabaseTestCase
 {

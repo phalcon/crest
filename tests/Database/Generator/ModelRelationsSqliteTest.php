@@ -18,84 +18,43 @@ use Crest\Tests\Support\Migrations\CustomersMigration;
 use Crest\Tests\Support\Migrations\InvoicesOneKeyNoColumnsMigration;
 use Crest\Tests\Support\Migrations\InvoicesTwoKeysNoColumnsMigration;
 use Crest\Tests\Support\Migrations\InvoicesWithBillingMigration;
-use Crest\Tests\Support\Migrations\LinesMigration;
-use Crest\Tests\Support\Migrations\ShipmentsMigration;
-use Crest\Tests\Support\Project\CompositeKeySqlite;
+use Crest\Tests\Support\Project\ListedReferencesSqlite;
 use Phalcon\Db\Reference;
 
 /**
- * The relations that only SQLite gives (spec 4.3): a key that does not name
- * the referenced columns (MySQL rejects it, and PostgreSQL uses the primary
- * key), and a composite key that CompositeKeySqlite gives as one reference.
+ * The relations of a SQLite key that does not name the referenced columns
+ * (spec 4.3): MySQL rejects it, and PostgreSQL uses the primary key. From
+ * cphalcon 5.24.0 and phalcon/phalcon 6.0.0, Phalcon gives the primary key
+ * (#87). Before these versions, Phalcon gives null for the column, and crest
+ * skips the relation: ListedReferencesSqlite gives that form on each version.
  *
  * @group sqlite
  */
 final class ModelRelationsSqliteTest extends AbstractModelRelationsTestCase
 {
-    public function testACompositeKeyGivesArraysAndTheClassAsTheAlias(): void
-    {
-        // SQLite splits a composite key. CompositeKeySqlite gives one
-        // reference with two columns, as MySQL does. The first column ends in
-        // _id, so an alias from the column would be Order.
-        $this->createTables(LinesMigration::class, ShipmentsMigration::class);
-
-        $adapter = new CompositeKeySqlite(
-            $this->getSettings()->getDatabaseOptions('sqlite'),
-            [
-                'shipments' => [
-                    new Reference(
-                        'fk_shipments_lines',
-                        [
-                            'columns'           => ['order_id', 'line_no'],
-                            'referencedTable'   => 'lines',
-                            'referencedColumns' => ['order_id', 'number'],
-                        ]
-                    ),
-                ],
-            ]
-        );
-
-        $this->assertSame(
-            [
-                $this->relation(
-                    'belongs-to',
-                    ['order_id', 'line_no'],
-                    '\\App\\Models\\Lines',
-                    ['order_id', 'number'],
-                    'Lines',
-                    'belongsTo shipments(order_id, line_no) -> lines(order_id, number)'
-                ),
-            ],
-            $this->relationsOf($adapter, 'shipments', ['id', 'order_id', 'line_no'])->relations
-        );
-        $this->assertSame(
-            [
-                $this->relation(
-                    'has-many',
-                    ['order_id', 'number'],
-                    '\\App\\Models\\Shipments',
-                    ['order_id', 'line_no'],
-                    'Shipments',
-                    'hasMany shipments(order_id, line_no) -> lines(order_id, number)'
-                ),
-            ],
-            $this->relationsOf($adapter, 'lines', ['order_id', 'number'])->relations
-        );
-    }
-
     public function testADuplicateAliasSkipsAllItsRelations(): void
     {
         // The belongsTo() alias Customer and the hasMany() alias CUSTOMER are
-        // one alias for Phalcon, so crest skips both. billing_id comes after
-        // customer_id, so SQLite gives it first: a skipped relation comes
-        // before the others, and the count of the aliases must go on.
+        // one alias for Phalcon, so crest skips both. SQLite gives the last
+        // key first, so the key of billing_id comes first: a skipped relation
+        // comes before the others, and the count of the aliases must go on.
         $this->createTables(
             CustomersMigration::class,
             InvoicesWithBillingMigration::class,
             CustomerInCapitalsMigration::class
         );
 
-        $relations = $this->relationsOf($this->adapter(), 'invoices', ['id', 'customer_id', 'billing_id']);
+        $adapter = $this->oldAdapter(
+            [
+                'invoices' => [
+                    $this->key('foreign_key_0', 'billing_id', 'customers', null),
+                    $this->key('foreign_key_1', 'customer_id', 'customers', 'id'),
+                ],
+                'CUSTOMER' => [$this->key('foreign_key_0', 'invoice_id', 'invoices', 'id')],
+            ]
+        );
+
+        $relations = $this->relationsOf($adapter, 'invoices', ['id', 'customer_id', 'billing_id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
@@ -110,14 +69,57 @@ final class ModelRelationsSqliteTest extends AbstractModelRelationsTestCase
         );
     }
 
-    public function testAKeyWithNoReferencedColumnsIsSkipped(): void
+    public function testAKeyWithNoReferencedColumnsGivesThePrimaryKey(): void
     {
-        // SQLite accepts a key with no column, and gives NULL for the column.
-        // billing_id comes first, so SQLite gives customer_id first, and the
-        // sort of the lines must change the order.
+        $this->skipKeyWithNoColumnsOnOldCphalcon();
+
+        // SQLite accepts a key with no column: it points to the primary key
+        // of the table (#87).
         $this->createTables(CustomersMigration::class, InvoicesTwoKeysNoColumnsMigration::class);
 
         $relations = $this->relationsOf($this->adapter(), 'invoices', ['id', 'billing_id', 'customer_id']);
+
+        $this->assertSame(
+            [
+                $this->relation(
+                    'belongs-to',
+                    ['billing_id'],
+                    '\\App\\Models\\Customers',
+                    ['id'],
+                    'Billing',
+                    'belongsTo invoices(billing_id) -> customers(id)'
+                ),
+                $this->relation(
+                    'belongs-to',
+                    ['customer_id'],
+                    '\\App\\Models\\Customers',
+                    ['id'],
+                    'Customer',
+                    self::INVOICE_KEY
+                ),
+            ],
+            $relations->relations
+        );
+        $this->assertSame([], $relations->skipped);
+    }
+
+    public function testAKeyWithNoReferencedColumnsIsSkipped(): void
+    {
+        // Before cphalcon 5.24.0, Phalcon gives null for the column. SQLite
+        // gives the last key first, so the key of customer_id comes first, and
+        // the sort of the lines must change the order.
+        $this->createTables(CustomersMigration::class, InvoicesTwoKeysNoColumnsMigration::class);
+
+        $adapter = $this->oldAdapter(
+            [
+                'invoices' => [
+                    $this->key('foreign_key_0', 'customer_id', 'customers', null),
+                    $this->key('foreign_key_1', 'billing_id', 'customers', null),
+                ],
+            ]
+        );
+
+        $relations = $this->relationsOf($adapter, 'invoices', ['id', 'billing_id', 'customer_id']);
 
         $this->assertSame([], $relations->relations);
         $this->assertSame(
@@ -138,7 +140,7 @@ final class ModelRelationsSqliteTest extends AbstractModelRelationsTestCase
         $this->createTables(CustomersMigration::class, InvoicesOneKeyNoColumnsMigration::class);
 
         $relations = $this->relationsOf(
-            $this->adapter(),
+            $this->oldAdapter(['invoices' => [$this->key('foreign_key_0', 'customer_id', 'customers', null)]]),
             'invoices',
             ['id', 'customer_id'],
             ['belongsTo invoices(customer_id) -> customers()' => ['alias' => 'Client', 'line' => 16]]
@@ -159,5 +161,31 @@ final class ModelRelationsSqliteTest extends AbstractModelRelationsTestCase
             ],
             $relations->dropped
         );
+    }
+
+    /**
+     * A key with one column. A null referenced column is a key with no
+     * referenced columns, as Phalcon gave it before cphalcon 5.24.0.
+     */
+    private function key(string $name, string $column, string $referencedTable, ?string $referenced): Reference
+    {
+        return new Reference(
+            $name,
+            [
+                'columns'           => [$column],
+                'referencedTable'   => $referencedTable,
+                'referencedColumns' => [$referenced],
+            ]
+        );
+    }
+
+    /**
+     * The SQLite adapter of the suite, with the keys of the list.
+     *
+     * @param array<string, list<Reference>> $references The table name, and its keys
+     */
+    private function oldAdapter(array $references): ListedReferencesSqlite
+    {
+        return new ListedReferencesSqlite($this->getSettings()->getDatabaseOptions('sqlite'), $references);
     }
 }

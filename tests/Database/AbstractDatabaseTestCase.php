@@ -145,21 +145,39 @@ abstract class AbstractDatabaseTestCase extends TestCase
     }
 
     /**
-     * Skips a composite key test on PostgreSQL with cphalcon before 5.24.0.
-     * Its describeReferences() gives each column of the key with each
-     * referenced column. The v6 package has the fix. The test runs again when
+     * Skips a composite key test on PostgreSQL and SQLite with cphalcon
+     * before 5.24.0. On PostgreSQL, its describeReferences() gives each column
+     * of the key with each referenced column. On SQLite, it gives one key for
+     * each column (#87). The v6 package has the fix. The test runs again when
      * the CI gets the release with the fix.
      */
     protected function skipCompositeKeyOnOldCphalcon(): void
     {
         if (
-            Dialect::Pgsql === $this->getDialect()
+            Dialect::Mysql !== $this->getDialect()
             && extension_loaded('phalcon')
             && version_compare((string) phpversion('phalcon'), '5.24.0', '<')
         ) {
             $this->markTestSkipped(
-                'cphalcon before 5.24.0 gives the wrong columns for a composite key on PostgreSQL.'
+                'cphalcon before 5.24.0 gives the wrong columns for a composite key on PostgreSQL and SQLite.'
             );
+        }
+    }
+
+    /**
+     * Skips a test of a SQLite key with no referenced columns (`REFERENCES
+     * customers`) with cphalcon before 5.24.0. Its describeReferences() gives
+     * null for the column (#87). The v6 package has the fix. The test runs
+     * again when the CI gets the release with the fix.
+     */
+    protected function skipKeyWithNoColumnsOnOldCphalcon(): void
+    {
+        if (
+            Dialect::Sqlite === $this->getDialect()
+            && extension_loaded('phalcon')
+            && version_compare((string) phpversion('phalcon'), '5.24.0', '<')
+        ) {
+            $this->markTestSkipped('cphalcon before 5.24.0 gives null for a key with no referenced columns on SQLite.');
         }
     }
 
