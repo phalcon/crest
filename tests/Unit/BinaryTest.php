@@ -26,12 +26,14 @@ use function json_encode;
 use function mkdir;
 use function proc_close;
 use function proc_open;
+use function rmdir;
 use function stream_get_contents;
 use function symlink;
 use function unlink;
 
 use const PHP_BINARY;
 use const PHP_EOL;
+use const PHP_OS_FAMILY;
 
 /**
  * Runs bin/crest as a child process, as a user does. The scratch root is a
@@ -63,7 +65,12 @@ final class BinaryTest extends TestCase
         // links first.
         foreach (['global/vendor/phalcon/crest', 'vendor/phalcon/crest'] as $link) {
             if (true === is_link($this->root . '/' . $link)) {
-                unlink($this->root . '/' . $link);
+                // Windows removes a link to a folder with rmdir() only.
+                if ('Windows' === PHP_OS_FAMILY) {
+                    rmdir($this->root . '/' . $link);
+                } else {
+                    unlink($this->root . '/' . $link);
+                }
             }
         }
 

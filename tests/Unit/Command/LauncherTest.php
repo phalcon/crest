@@ -42,6 +42,7 @@ use function str_replace;
 use function stream_get_contents;
 
 use const PHP_EOL;
+use const PHP_OS_FAMILY;
 
 /**
  * Runs the launcher that `crest new` writes (./crest), as a user does. A fake
@@ -63,6 +64,10 @@ final class LauncherTest extends TestCase
             "#!/bin/sh\n\npwd\nprintf '%s\\n' \"\$@\"\n\nexit 3\n"
         );
         chmod($this->root . '/bin/docker', 0o755);
+
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('the launcher is a POSIX shell script');
+        }
     }
 
     protected function tearDown(): void

@@ -19,6 +19,7 @@ use function dirname;
 use function file_put_contents;
 use function json_encode;
 use function mkdir;
+use function realpath;
 use function uniqid;
 
 use const JSON_PRETTY_PRINT;
@@ -40,9 +41,13 @@ trait ScratchDirectory
 
     protected function makeScratchDirectory(string $prefix, string ...$subdirectories): void
     {
-        $this->root = dirname(__DIR__) . '/_output/' . $prefix . '-' . uniqid('', false);
+        $root = dirname(__DIR__) . '/_output/' . $prefix . '-' . uniqid('', false);
 
-        mkdir($this->root, 0o775, true);
+        mkdir($root, 0o775, true);
+
+        // The form that crest gets from realpath() and getcwd(). On Windows it
+        // has backslashes.
+        $this->root = (string) realpath($root);
 
         foreach ($subdirectories as $subdirectory) {
             mkdir($this->root . '/' . $subdirectory, 0o775, true);

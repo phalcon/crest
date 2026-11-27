@@ -54,12 +54,14 @@ use function get_parent_class;
 use function interface_exists;
 use function method_exists;
 use function preg_match_all;
+use function rtrim;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
 use function token_get_all;
 use function trait_exists;
 
+use const DIRECTORY_SEPARATOR;
 use const TOKEN_PARSE;
 
 /**
@@ -612,7 +614,11 @@ final class StubContractsTest extends TestCase
             $module->registerServices($container);
 
             $this->assertSame($namespace . '\\Controllers', $dispatcher->getDefaultNamespace());
-            $this->assertSame($this->root . '/views/', $view->getViewsDir());
+            // Phalcon ends the folder with DIRECTORY_SEPARATOR.
+            $this->assertSame(
+                rtrim($this->root . '/views/', DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR,
+                $view->getViewsDir()
+            );
         } finally {
             // The first DI of the process is the default DI.
             Di::reset();

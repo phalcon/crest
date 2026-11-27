@@ -21,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
+use function realpath;
 
 final class LocatorTest extends TestCase
 {
@@ -80,14 +81,14 @@ final class LocatorTest extends TestCase
     {
         chdir($this->root . '/src');
 
-        $this->assertSame($this->root . '/src', Locator::start(''));
+        $this->assertSame((string) realpath($this->root . '/src'), Locator::start(''));
     }
 
     public function testStartIsTheWorkingDirectoryWhenNull(): void
     {
         chdir($this->root . '/src');
 
-        $this->assertSame($this->root . '/src', Locator::start(null));
+        $this->assertSame((string) realpath($this->root . '/src'), Locator::start(null));
     }
 
     public function testStartRefusesAFile(): void
@@ -113,7 +114,7 @@ final class LocatorTest extends TestCase
         // A walk from `..` as a string reaches `.`, the working directory.
         chdir($this->root . '/src/Action');
 
-        $this->assertSame($this->root . '/src', Locator::start('..'));
+        $this->assertSame((string) realpath($this->root . '/src'), Locator::start('..'));
     }
 
     public function testWalksUpUntilItFindsTheFile(): void

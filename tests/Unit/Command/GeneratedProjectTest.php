@@ -40,6 +40,7 @@ use function file_get_contents;
 use function interface_exists;
 use function is_file;
 use function preg_match_all;
+use function realpath;
 use function spl_autoload_register;
 use function spl_autoload_unregister;
 use function sprintf;
@@ -265,7 +266,8 @@ final class GeneratedProjectTest extends TestCase
 
         $this->autoloaders[] = $autoloader;
 
-        return $this->root . '/' . $name;
+        // The form that crest gets from realpath().
+        return (string) realpath($this->root . '/' . $name);
     }
 
     /**

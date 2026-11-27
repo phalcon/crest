@@ -24,6 +24,7 @@ use function getenv;
 use function putenv;
 
 use const PHP_BINARY;
+use const PHP_OS_FAMILY;
 
 final class ShellRunnerTest extends TestCase
 {
@@ -50,6 +51,10 @@ final class ShellRunnerTest extends TestCase
 
     public function testABareNameIsFoundOnThePath(): void
     {
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('the test runs a POSIX shell script');
+        }
+
         $this->executable('bin/hello', "#!/bin/sh\nexit 4\n");
         putenv('PATH=' . $this->root . '/bin');
 
@@ -91,6 +96,10 @@ final class ShellRunnerTest extends TestCase
 
     public function testAnEmptyPathEntryIsSkipped(): void
     {
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('the test runs a POSIX shell script');
+        }
+
         // An empty entry does not name the filesystem root, and it does not
         // stop the search.
         $this->executable('bin/hello', "#!/bin/sh\nexit 4\n");

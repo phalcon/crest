@@ -46,6 +46,7 @@ use function method_exists;
 use function mkdir;
 use function preg_match_all;
 use function putenv;
+use function realpath;
 use function spl_autoload_register;
 use function spl_autoload_unregister;
 use function sprintf;
@@ -468,7 +469,8 @@ final class GeneratedMvcProjectTest extends TestCase
 
         $this->autoloaders[] = $autoloader;
 
-        return $this->root . '/' . $name;
+        // The form that crest gets from realpath().
+        return (string) realpath($this->root . '/' . $name);
     }
 
     /**
