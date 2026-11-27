@@ -166,6 +166,92 @@ jobs:
       - name: "Unit tests"
         run: composer test
 
+  # Windows (#103): the code for Windows runs here, not only in the unit tests
+  # that fake it. The unit suite, a real hand-off and a real PATHEXT lookup, on
+  # the v6 variant (phalcon/phalcon, no extension). The runner cannot run Linux
+  # containers, so `new`, `up` and `down` with docker do not run here.
+  windows:
+    name: "Windows (PHP 8.4, Phalcon v6)"
+
+    permissions:
+      contents: read
+
+    runs-on: windows-latest
+
+    needs:
+      - quality
+
+    steps:
+      # git on the runner turns LF into CRLF. The stubs and the expected
+      # outputs of the suite have LF.
+      - name: "Keep the line endings"
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.4'
+          extensions: ${{ env.EXTENSIONS }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      - name: "Unit tests"
+        run: composer test
+
+      # The crest of the checkout is the global crest. In a project with its
+      # own crest, it runs php.exe vendor\bin\crest and gives back the exit
+      # status. The project has no Phalcon, so only the crest of the project
+      # shows "not installed" for Phalcon in `about`.
+      - name: "Hand-off"
+        shell: pwsh
+        run: |
+          $project = Join-Path $env:RUNNER_TEMP 'handoff'
+          $crest = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          New-Item -ItemType Directory -Path $project | Out-Null
+          $composer = [ordered]@{
+              'name' = 'phalcon/crest-handoff'
+              'repositories' = @(@{ 'type' = 'path'; 'url' = $crest })
+              'require-dev' = @{ 'phalcon/crest' = '*' }
+              'minimum-stability' = 'dev'
+          }
+          $composer | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $project 'composer.json')
+          "<?php return ['flavor' => 'mvc'];" | Set-Content -Path (Join-Path $project 'crest.php')
+          composer install --working-dir=$project --no-interaction --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "composer install gave $LASTEXITCODE" }
+          Set-Location $project
+          $about = php (Join-Path $env:GITHUB_WORKSPACE 'bin/crest') about | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "about gave $LASTEXITCODE" }
+          Write-Output $about
+          if ($about -notmatch 'Phalcon\s+not installed') { throw 'the crest of the project did not run' }
+          php (Join-Path $env:GITHUB_WORKSPACE 'bin/crest') no-such-command
+          if ($LASTEXITCODE -ne 1) { throw "an unknown command gave $LASTEXITCODE, not 1" }
+          exit 0
+
+      # ShellRunner finds a program through PATHEXT, as `docker` finds
+      # docker.exe. git.exe is on the PATH of each runner, and docker.exe when
+      # the runner image has it.
+      - name: "Command lookup"
+        shell: pwsh
+        run: |
+          $programs = @('git')
+          if (Get-Command docker -ErrorAction SilentlyContinue) { $programs += 'docker' }
+          foreach ($program in $programs) {
+              php -r "require 'vendor/autoload.php'; exit((new Crest\Process\ShellRunner())->run(['$program', '--version']));"
+              if ($LASTEXITCODE -ne 0) { throw "ShellRunner gave $LASTEXITCODE for $program" }
+          }
+
   # The database tests: one job for each driver, as in phalcon. Each job runs
   # tests/Database on its driver (talon.php). PHP 8.1 only: the unit-tests job
   # covers the PHP versions. The tests remove each table of the database.
