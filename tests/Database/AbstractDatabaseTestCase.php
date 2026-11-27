@@ -182,10 +182,27 @@ abstract class AbstractDatabaseTestCase extends TestCase
     }
 
     /**
+     * Skips a test of the tables of --all with cphalcon before 5.24.0. Its
+     * listTables() gives the MariaDB sequences and the PostgreSQL partitions
+     * (#101). The v6 package has the fix. The test runs again when the CI gets
+     * the release with the fix.
+     */
+    protected function skipListTablesOnOldCphalcon(): void
+    {
+        if (extension_loaded('phalcon') && version_compare((string) phpversion('phalcon'), '5.24.0', '<')) {
+            $this->markTestSkipped(
+                'cphalcon before 5.24.0 lists the MariaDB sequences and the PostgreSQL partitions as tables.'
+            );
+        }
+    }
+
+    /**
      * Removes each view, then each table of the database. A view uses a
      * table, so the views go first (#52). MySQL and MariaDB do not check the
      * keys for it, and PostgreSQL removes the keys of the other tables
-     * (CASCADE). SQLite does not check the keys.
+     * (CASCADE). SQLite does not check the keys. On MariaDB, DROP TABLE also
+     * removes a sequence. On PostgreSQL, a partitioned table removes its
+     * partitions, so a partition can be gone before its turn (#101).
      */
     private function dropAllTables(): void
     {
@@ -205,7 +222,7 @@ abstract class AbstractDatabaseTestCase extends TestCase
 
         $tables = $this->names($pdo, match ($dialect) {
             Dialect::Mysql  => 'SELECT table_name FROM information_schema.tables '
-                . "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name",
+                . "WHERE table_schema = DATABASE() AND table_type IN ('BASE TABLE', 'SEQUENCE') ORDER BY table_name",
             Dialect::Pgsql  => 'SELECT tablename FROM pg_tables WHERE schemaname = current_schema() '
                 . 'ORDER BY tablename',
             Dialect::Sqlite => "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -218,7 +235,8 @@ abstract class AbstractDatabaseTestCase extends TestCase
 
         foreach ($tables as $table) {
             $pdo->exec(
-                'DROP TABLE ' . $dialect->quoteIdentifier($table) . (Dialect::Pgsql === $dialect ? ' CASCADE' : '')
+                'DROP TABLE IF EXISTS ' . $dialect->quoteIdentifier($table)
+                . (Dialect::Pgsql === $dialect ? ' CASCADE' : '')
             );
         }
 
