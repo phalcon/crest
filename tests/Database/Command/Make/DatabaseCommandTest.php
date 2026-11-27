@@ -103,16 +103,29 @@ final class DatabaseCommandTest extends AbstractNewCommandTestCase
 
     /**
      * Adds the printed line to providers() of the MVC front, before the
-     * provider of the dispatcher.
+     * provider of the dispatcher. make:database boots the front to look for
+     * a db service (#97), so the process cannot load a changed AppFront. The
+     * line goes into a copy of the front with another name, as for ADR.
      */
     private function addProvider(string $project): void
     {
-        $this->replace(
-            $project . '/src/AppFront.php',
-            "            new DispatcherProvider(),\n",
-            '            ' . $this->printed('/^    (new \\\\.*DbProvider\(.*\),)$/m', 1) . "\n"
-            . "            new DispatcherProvider(),\n"
+        $front = (string) file_get_contents($project . '/src/AppFront.php');
+
+        $this->assertStringContainsString("            new DispatcherProvider(),\n", $front);
+
+        file_put_contents(
+            $project . '/src/DatabaseFront.php',
+            str_replace(
+                ['final class AppFront', "            new DispatcherProvider(),\n"],
+                [
+                    'final class DatabaseFront',
+                    '            ' . $this->printed('/^    (new \\\\.*DbProvider\(.*\),)$/m', 1) . "\n"
+                    . "            new DispatcherProvider(),\n",
+                ],
+                $front
+            )
         );
+        $this->replace($project . '/crest.php', 'AppFront::class', 'DatabaseFront::class');
     }
 
     /**
