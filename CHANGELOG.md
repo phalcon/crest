@@ -173,6 +173,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `make:model` on SQLite: from cphalcon 5.24.0 and `phalcon/phalcon` 6.0.0, a composite key gives one relation with all its columns, and a key with no referenced columns (`REFERENCES customers`) gives a relation to the primary key of the referenced table. The fixes are in Phalcon (phalcon/cphalcon#17814, phalcon/cphalcon#17815); crest needs no code change. The docs give the versions. [#87](https://github.com/phalcon/crest/issues/87)
 - Changed `make:model --all`: from cphalcon 5.24.0 and `phalcon/phalcon` 6.0.0, it writes no model for a MariaDB sequence, and one model for a PostgreSQL partitioned table, with none for its partitions. The fix is in Phalcon (phalcon/cphalcon#17769); crest needs no code change. The docs give the versions. [#101](https://github.com/phalcon/crest/issues/101)
 - Changed the database servers of the crest tests (`docker-compose.yml` and CI) to MySQL 8.4 and MariaDB 11.4, the versions that `crest new --database` writes. They were MySQL 8.0 and MariaDB 10.6, both past their end of life. The MariaDB service of CI checks its health with `healthcheck.sh`: the 11.4 image has no `mysqladmin`. [#102](https://github.com/phalcon/crest/issues/102)
+- Changed the line ends of the output to `PHP_EOL`, also the line ends inside a text, for example a stub with `\r\n` or `\n`. Before, on Windows, the guidance of a stub had `\n` in a line that ended with `\r\n`. [#103](https://github.com/phalcon/crest/issues/103)
 
 ### Fixed
 
