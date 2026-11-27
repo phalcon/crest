@@ -18,7 +18,7 @@ services:
   # The servers of the database suites (composer test-db). The suites remove
   # each table of these databases.
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: ${PROJECT_PREFIX:-crest}-mysql
     environment:
       - MYSQL_ROOT_PASSWORD=secret
@@ -27,7 +27,7 @@ services:
       - MYSQL_PASSWORD=secret
 
   mariadb:
-    image: mariadb:10.6
+    image: mariadb:11.4
     container_name: ${PROJECT_PREFIX:-crest}-mariadb
     environment:
       - MYSQL_ROOT_PASSWORD=secret
