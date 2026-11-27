@@ -161,7 +161,7 @@ of the C extension.
 ### Database tests
 
 `make:model` reads the database of the project. Its tests are in `tests/Database`, and they run on
-SQLite, MySQL 8.0, MariaDB 10.6 and PostgreSQL 18. `docker compose up -d` starts the servers as the
+SQLite, MySQL 8.4, MariaDB 11.4 and PostgreSQL 18. `docker compose up -d` starts the servers as the
 services `mysql`, `mariadb` and `postgres`. The `DATA_*` lines of `resources/.env.example` tell the
 tests where the servers are: copy them into `.env`, then run
 `docker compose up -d --build --force-recreate`, so that `crest-app` gets the new values.
