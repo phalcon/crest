@@ -61,6 +61,19 @@ final class ShellRunnerTest extends TestCase
         $this->assertSame(4, (new ShellRunner())->run(['hello']));
     }
 
+    public function testAFileWithAnEndingOfPathextIsAProgramOnThePath(): void
+    {
+        // Windows runs a file by its ending, for example `composer.bat`, and
+        // is_executable() is true only for a binary.
+        file_put_contents($this->root . '/bin/hello.cmd', "@exit 0\n");
+        putenv('PATH=' . $this->root . '/bin');
+        putenv('PATHEXT=.BAT;.cmd');
+
+        $this->expectFoundProgram();
+
+        (new ShellRunner())->run(['hello'], $this->root . '/missing');
+    }
+
     public function testAMissingDirectoryIsReportedNotIgnored(): void
     {
         // proc_open() ignores a working directory that does not exist, and
@@ -137,6 +150,18 @@ final class ShellRunnerTest extends TestCase
         $this->expectExceptionMessage("'sh' was not found");
 
         (new ShellRunner())->run(['sh']);
+    }
+
+    public function testAPathWithAnEndingOfPathextIsAProgram(): void
+    {
+        // The case of the ending does not matter, in the name or in PATHEXT.
+        // Windows writes `.CMD`.
+        file_put_contents($this->root . '/bin/hello.Cmd', "@exit 0\n");
+        putenv('PATHEXT=.CMD');
+
+        $this->expectFoundProgram();
+
+        (new ShellRunner())->run([$this->root . '/bin/hello.Cmd'], $this->root . '/missing');
     }
 
     public function testPathextGivesTheEndingsToTry(): void

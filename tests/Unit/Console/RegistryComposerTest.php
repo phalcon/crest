@@ -31,6 +31,8 @@ use function proc_open;
 use function stream_get_contents;
 use function trim;
 
+use const PHP_OS_FAMILY;
+
 /**
  * The command discovery reads what a real `composer install` writes: the
  * `extra` block of an installed package, and the one of the root project.
@@ -70,6 +72,10 @@ final class RegistryComposerTest extends TestCase
      */
     public function testDiscoveryReadsWhatComposerInstalls(?string $vendorDir): void
     {
+        if ('Windows' === PHP_OS_FAMILY) {
+            $this->markTestSkipped('proc_open() does not find composer.bat by its name');
+        }
+
         $project = [
             'require'      => ['crest-test/package' => '1.0.0'],
             'repositories' => [

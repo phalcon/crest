@@ -120,9 +120,10 @@ final class ProjectCommandTest extends TestCase
         $stdout = $this->readStdout();
 
         $this->assertSame(0, $status);
-        $this->assertMatchesRegularExpression('/^flavor +mvc +declared$/m', $stdout);
-        $this->assertMatchesRegularExpression('#^command +\S*/src/Command +default$#m', $stdout);
-        $this->assertMatchesRegularExpression('#^controller +\S*/src/Controllers +default$#m', $stdout);
+        // \r?: the line end of the output is PHP_EOL.
+        $this->assertMatchesRegularExpression('/^flavor +mvc +declared\r?$/m', $stdout);
+        $this->assertMatchesRegularExpression('#^command +\S*/src/Command +default\r?$#m', $stdout);
+        $this->assertMatchesRegularExpression('#^controller +\S*/src/Controllers +default\r?$#m', $stdout);
         $this->assertSame('', $this->readStderr());
     }
 

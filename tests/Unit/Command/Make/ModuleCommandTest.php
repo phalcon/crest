@@ -22,6 +22,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
+use function scandir;
 
 use const PHP_EOL;
 
@@ -139,7 +140,9 @@ final class ModuleCommandTest extends TestCase
             . 'Created ' . $this->root . '/src/Modules/AdminPanel/views' . PHP_EOL,
             $this->readStdout()
         );
-        $this->assertDirectoryDoesNotExist($this->root . '/src/Modules/Adminpanel');
+        // One folder, with its own name. A file system that ignores case
+        // also has one folder for Adminpanel.
+        $this->assertSame(['.', '..', 'AdminPanel'], scandir($this->root . '/src/Modules'));
     }
 
     public function testAnExistingModuleStops(): void
