@@ -38,9 +38,9 @@ use function strtolower;
  * did not write its model yet. The keys come from the schema of the run
  * (models.schema, #69), or from the default schema of the connection. A key
  * to a table of another schema gives a skipped line, and no hasMany() on the
- * other side (spec 3.6). SQLite gives one reference for each column of a
- * composite key, so there each column gives one relation. Identical keys give
- * one relation.
+ * other side (spec 3.6). Before cphalcon 5.24.0 and phalcon/phalcon 6.0.0,
+ * SQLite gives one reference for each column of a composite key, so there
+ * each column gives one relation (#87). Identical keys give one relation.
  *
  * The class and the property names come from ModelNames (#53): fields has the
  * property names of the table, referenced the property names of the related
@@ -311,8 +311,9 @@ final class ModelRelations
             return self::skip($relation, $skip);
         }
 
-        // SQLite accepts `REFERENCES customers` with no column. crest does not
-        // find the primary key of the table itself.
+        // SQLite accepts `REFERENCES customers` with no column. Before cphalcon
+        // 5.24.0 and phalcon/phalcon 6.0.0, Phalcon gives null for the column
+        // (#87). crest does not find the primary key of the table itself.
         if (true === in_array(null, $referenced, true)) {
             return self::skip($relation, 'the key does not name the referenced columns');
         }
