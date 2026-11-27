@@ -1630,7 +1630,9 @@ Skipped the relation belongsTo invoices(customer_id) -> customers(id): the alias
 Crest skips a relation when:
 
 - the key does not name the referenced columns (SQLite accepts
-  `REFERENCES customers`);
+  `REFERENCES customers`), before cphalcon 5.24.0 and before
+  the tag of `phalcon/phalcon` after `v6.0.0RC4`. From these versions, Phalcon gives the
+  primary key of the referenced table, and Crest writes the relation;
 - the related table gives no class name, or a name that PHP reserves;
 - Crest cannot read the base of the related table, for example because an
   attribute in it does not have two plain strings. The line gives the error;
@@ -1673,12 +1675,12 @@ You can also add a skipped relation in your model, in `initialize()` after
 `parent::initialize()`.
 
 Composite keys work on MySQL and MariaDB: the fields are arrays, for example
-`['order_id', 'line_no']`. On PostgreSQL, composite keys work from the C extension
-cphalcon 5.24.0 and from the tag of `phalcon/phalcon` after `v6.0.0RC4`. Before these
+`['order_id', 'line_no']`. On PostgreSQL and SQLite, composite keys work from the
+C extension cphalcon 5.24.0 and from the tag of `phalcon/phalcon` after `v6.0.0RC4`. Before these
 versions, Phalcon gives the wrong columns for a composite key on PostgreSQL. On
 SQLite, Phalcon gives one key for each column of a composite key. Thus Crest
 writes one relation for each column, and each relation uses only a part of the
-key. Crest does not support SQLite composite keys.
+key.
 
 An alias with the name of a `get` method of `Phalcon\Mvc\Model`, for example
 `Messages` (`getMessages()`) or `Source` (`getSource()`), works as a property
