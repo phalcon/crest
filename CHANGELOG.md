@@ -188,6 +188,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - The `Run make:model ... too` line of `make:model` no longer names a table that gets no class. [#71](https://github.com/phalcon/crest/issues/71)
 - Fixed `make:model`: a foreign key to a table of another schema no longer gives a relation to a model of the wrong table. It gives a `Skipped` line. [#69](https://github.com/phalcon/crest/issues/69)
 - Fixed `make:model <view>` on SQLite: it writes a model, as on the other databases. Phalcon `tableExists()` does not find a view on SQLite, so crest also calls `viewExists()`. `ForeignKeys::read()` also reads the views of `listViews()`. [#88](https://github.com/phalcon/crest/issues/88)
+- Fixed the program search of `ShellRunner` on Windows: a file with an ending of `PATHEXT`, for example `composer.bat`, is a program. Before, `is_executable()` was true there only for a binary, so the commands of the `new` key in `crest.php`, for example `composer install`, did not find `composer.bat`. [#103](https://github.com/phalcon/crest/issues/103)
 
 ### Removed
 
