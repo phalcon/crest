@@ -18,11 +18,11 @@ use Phalcon\Db\ReferenceInterface;
 
 /**
  * An SQLite adapter that gives the references of each table from a list.
- * SQLite gives one reference for each column of a composite key. MySQL and
- * PostgreSQL give one reference with all its columns, and a test gets that
- * form from this adapter.
+ * Before cphalcon 5.24.0 and phalcon/phalcon 6.0.0, a key with no referenced
+ * columns (`REFERENCES customers`) gave null for the column. A test gets that
+ * form from this adapter on each version.
  */
-final class CompositeKeySqlite extends Sqlite
+final class ListedReferencesSqlite extends Sqlite
 {
     /**
      * @param array<string, mixed>                    $descriptor

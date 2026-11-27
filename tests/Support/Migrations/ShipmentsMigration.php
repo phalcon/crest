@@ -16,9 +16,7 @@ namespace Crest\Tests\Support\Migrations;
 use Phalcon\Talon\Database\Schema\AbstractSchema;
 
 /**
- * The table shipments, with one key with two columns to lines. SQLite gives
- * one reference for each column of a composite key, so the SQLite table has
- * no key: CompositeKeySqlite gives it (spec 4.3).
+ * The table shipments, with one key with two columns to lines.
  */
 final class ShipmentsMigration extends AbstractSchema
 {
@@ -42,6 +40,9 @@ final class ShipmentsMigration extends AbstractSchema
 
     protected function getStatementsSqlite(): array
     {
-        return ['CREATE TABLE shipments (id INTEGER PRIMARY KEY, order_id INTEGER, line_no INTEGER)'];
+        return [
+            'CREATE TABLE shipments (id INTEGER PRIMARY KEY, order_id INTEGER, line_no INTEGER, '
+            . 'FOREIGN KEY (order_id, line_no) REFERENCES lines(order_id, number))',
+        ];
     }
 }

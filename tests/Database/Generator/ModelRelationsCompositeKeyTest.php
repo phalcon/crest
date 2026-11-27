@@ -17,13 +17,12 @@ use Crest\Tests\Support\Migrations\LinesMigration;
 use Crest\Tests\Support\Migrations\ShipmentsMigration;
 
 /**
- * A composite key on MySQL, MariaDB and PostgreSQL (spec 4.4). These
- * databases give one reference with each column of the key. SQLite gives one
- * reference for each column, so ModelRelationsSqliteTest gives the key with
- * CompositeKeySqlite.
+ * A composite key on each database (spec 4.4, #87). Each database gives one
+ * reference with each column of the key.
  *
  * @group mysql
  * @group pgsql
+ * @group sqlite
  */
 final class ModelRelationsCompositeKeyTest extends AbstractModelRelationsTestCase
 {

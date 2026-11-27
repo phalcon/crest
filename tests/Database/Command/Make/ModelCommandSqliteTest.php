@@ -15,11 +15,8 @@ namespace Crest\Tests\Database\Command\Make;
 
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\InvoicesMigration;
-use Crest\Tests\Support\Migrations\LinesMigration;
 use Crest\Tests\Support\Migrations\OddMigration;
-use Crest\Tests\Support\Migrations\ShipmentsMigration;
 use Crest\Tests\Support\Migrations\UsersMigration;
-use Crest\Tests\Support\Project\CompositeKeyFront;
 use Crest\Tests\Support\Project\DatabaseFront;
 use Crest\Tests\Support\Project\NoKeyReadFront;
 use Crest\Tests\Support\RunsMakeModel;
@@ -28,10 +25,9 @@ use Phalcon\Di\Di;
 use function file_get_contents;
 
 /**
- * make:model on SQLite with a test adapter. SQLite gives one reference for
- * each column of a composite key, so CompositeKeyFront gives the key as one
- * reference, as MySQL does (spec 4.3). NoKeyReadFront stops when crest reads
- * the keys, so it shows that make:model <table> checks the table first (#52).
+ * make:model on SQLite. NoKeyReadFront stops when crest reads the keys, so it
+ * shows that make:model <table> checks the table first (#52).
+ * ModelCommandCompositeKeyTest has the composite key (#87).
  *
  * @group sqlite
  */
@@ -66,27 +62,6 @@ final class ModelCommandSqliteTest extends AbstractDatabaseTestCase
             ['odd'],
             "column 'first name' of table 'odd' is not a usable property name; "
             . 'give it one with --property="first name=<name>"'
-        );
-    }
-
-    public function testACompositeKeyGivesArrays(): void
-    {
-        // CompositeKeyFront gives the key of shipments as one reference with
-        // two columns, as MySQL does.
-        $this->front(CompositeKeyFront::class);
-        $this->createTables(LinesMigration::class, ShipmentsMigration::class);
-
-        $status = $this->runCommand(['shipments']);
-
-        $this->assertSame(0, $status);
-        $this->assertStringContainsString(
-            "        \$this->belongsTo(\n"
-            . "            ['order_id', 'line_no'],\n"
-            . "            \\App\\Models\\Lines::class,\n"
-            . "            ['order_id', 'number'],\n"
-            . "            ['alias' => 'Lines']\n"
-            . "        );\n",
-            (string) file_get_contents($this->root . '/src/Models/Base/ShipmentsBase.php')
         );
     }
 
