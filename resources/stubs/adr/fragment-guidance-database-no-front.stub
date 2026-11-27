@@ -1,0 +1,4 @@
+Nothing registers it yet. crest.php names no front controller, so call it with
+the container of the project:
+
+    (new \{{ namespace }}\{{ class }}({{ arguments }}))->provide($container);

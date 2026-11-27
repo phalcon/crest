@@ -99,13 +99,13 @@ enum DatabaseChoice: string
     }
 
     /**
-     * The arguments of `new DbProvider(...)` in the front controller. The
-     * SQLite provider gets the project root, because DB_NAME is relative to
-     * it.
+     * The arguments of `new DbProvider(...)`. The SQLite provider gets the
+     * project root, because DB_NAME is relative to it: in the front controller
+     * $this->projectRoot, and with no front a variable of the project (#97).
      */
-    public function arguments(): string
+    public function arguments(string $root = '$this->projectRoot'): string
     {
-        return self::SQLITE === $this ? '$this->projectRoot' : '';
+        return self::SQLITE === $this ? $root : '';
     }
 
     /**

@@ -21,6 +21,9 @@ use Crest\Project\Bootstrap;
 use Crest\Project\Config;
 use Crest\Project\Flavor;
 use Crest\Project\Survey;
+use Phalcon\Contracts\Container\Service\Collection;
+use Phalcon\Di\DiInterface;
+use Throwable;
 
 use function basename;
 use function explode;
@@ -46,6 +49,11 @@ final class DatabaseSetup
      * it.
      */
     public const PROVIDER = 'DbProvider';
+
+    /**
+     * The service of the database in the container of the project.
+     */
+    private const SERVICE = 'db';
 
     public function __construct(private readonly Config $config, private readonly Stub $stub)
     {
@@ -138,21 +146,70 @@ final class DatabaseSetup
     }
 
     /**
+     * Stops when the container of the project has a db service, and the
+     * provider folder has no DbProvider (#97). With a DbProvider, the file
+     * check of add() decides: DbProvider gives the db service itself. Only
+     * make:database calls it: init runs before the project has its
+     * autoloader. A front that does not boot, for example with no vendor/, or
+     * no front, does not stop the command.
+     */
+    public function checkContainer(): void
+    {
+        if (true === is_file(self::file($this->config->path('provider')))) {
+            return;
+        }
+
+        try {
+            $container = Bootstrap::container($this->config);
+        } catch (Throwable) {
+            return;
+        }
+
+        if (
+            ($container instanceof DiInterface || $container instanceof Collection)
+            && true === $container->has(self::SERVICE)
+        ) {
+            throw new Exception(
+                sprintf(
+                    "the project container has a '%s' service already; make:database adds no %s",
+                    self::SERVICE,
+                    self::PROVIDER
+                )
+            );
+        }
+    }
+
+    /**
      * The registration of DbProvider in the front controller, from the stub
      * fragment-guidance-database. An ADR front that declares
-     * registerProviders() gets only the line to add (#81).
+     * registerProviders() gets only the line to add (#81). With no front
+     * controller, the line for the container of the project, and no line for
+     * a front (#97).
      */
     private function guidance(DatabaseChoice $database, Output $output, string $namespace): void
     {
         $flavor    = $this->config->flavor();
         $bootstrap = $this->config->bootstrap();
-        $front     = Flavor::ADR === $flavor && null !== $bootstrap ? Bootstrap::overriding($bootstrap) : null;
         $name      = Stub::FRAGMENT_PREFIX . 'guidance-database';
         $values    = [
-            'arguments' => $database->arguments(),
             'class'     => self::PROVIDER,
             'namespace' => $namespace,
         ];
+
+        if (null === $bootstrap) {
+            $output->write(
+                $this->stub->render(
+                    $flavor->value,
+                    $name . '-no-front',
+                    $values + ['arguments' => $database->arguments('$projectRoot')]
+                )
+            );
+
+            return;
+        }
+
+        $front   = Flavor::ADR === $flavor ? Bootstrap::overriding($bootstrap) : null;
+        $values += ['arguments' => $database->arguments()];
 
         $output->write(
             null === $front

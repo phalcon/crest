@@ -40,8 +40,12 @@ final class DatabaseCommand extends ProjectCommand
     {
         $database = DatabaseChoice::select($input->argumentString('driver'));
         $config   = $this->config($input);
+        $setup    = new DatabaseSetup($config, $this->stub($config));
 
-        (new DatabaseSetup($config, $this->stub($config)))->add($database, $output, true === $input->option('force'));
+        // The boot check is for the project command only (#97): init runs
+        // before the project has its autoloader.
+        $setup->checkContainer();
+        $setup->add($database, $output, true === $input->option('force'));
 
         return 0;
     }
