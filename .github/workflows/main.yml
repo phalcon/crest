@@ -211,11 +211,15 @@ jobs:
       - name: "Unit tests"
         run: composer test
 
+      # Each check of Windows reports on its own: the steps below also run
+      # when the unit suite fails.
+      #
       # The crest of the checkout is the global crest. In a project with its
       # own crest, it runs php.exe vendor\bin\crest and gives back the exit
       # status. The project has no Phalcon, so only the crest of the project
       # shows "not installed" for Phalcon in `about`.
       - name: "Hand-off"
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $project = Join-Path $env:RUNNER_TEMP 'handoff'
@@ -244,6 +248,7 @@ jobs:
       # docker.exe. git.exe is on the PATH of each runner, and docker.exe when
       # the runner image has it.
       - name: "Command lookup"
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $programs = @('git')
