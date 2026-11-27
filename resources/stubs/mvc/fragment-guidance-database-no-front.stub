@@ -1,0 +1,4 @@
+Nothing registers it yet. crest.php names no front controller, so register it
+in the DI of the project:
+
+    $di->register(new \{{ namespace }}\{{ class }}({{ arguments }}));
