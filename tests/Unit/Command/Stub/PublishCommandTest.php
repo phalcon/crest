@@ -415,7 +415,7 @@ final class PublishCommandTest extends TestCase
         $status = $this->runCommand(["action\n"]);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("'action\n' is not a stub name", $this->readStderr());
+        $this->assertStringContainsString("'action" . PHP_EOL . "' is not a stub name", $this->readStderr());
     }
 
     public function testAStubOfAnotherFlavorIsNotPackagedForThisOne(): void

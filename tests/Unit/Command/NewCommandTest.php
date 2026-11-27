@@ -467,7 +467,8 @@ final class NewCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            sprintf("'%s' is not a PHP version; expected major.minor, e.g. 8.4", $version),
+            // The line end inside the value is PHP_EOL too.
+            sprintf("'%s' is not a PHP version; expected major.minor, e.g. 8.4", str_replace("\n", PHP_EOL, $version)),
             $this->readStderr()
         );
     }
@@ -533,7 +534,7 @@ final class NewCommandTest extends TestCase
         $status = $this->runCommand(["my-app\n"]);
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString("'my-app\n' is not a usable project name", $this->readStderr());
+        $this->assertStringContainsString("'my-app" . PHP_EOL . "' is not a usable project name", $this->readStderr());
     }
 
     public function testAProjectStubFromStubPublishIsUsed(): void
@@ -691,7 +692,10 @@ final class NewCommandTest extends TestCase
 
         $this->runWith(new FakeRunner());
 
-        $this->assertStringContainsString("Running: php -r 'echo 1;'" . PHP_EOL, $this->readStdout());
+        // escapeshellarg() quotes with " on Windows.
+        $quoted = 'Windows' === PHP_OS_FAMILY ? '"echo 1;"' : "'echo 1;'";
+
+        $this->assertStringContainsString('Running: php -r ' . $quoted . PHP_EOL, $this->readStdout());
     }
 
     public function testComposerJsonRequiresTheExtensionByDefault(): void
