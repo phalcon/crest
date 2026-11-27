@@ -24,6 +24,8 @@ use function is_file;
 use function proc_close;
 use function proc_open;
 use function sprintf;
+use function str_ends_with;
+use function strtolower;
 
 use const PATH_SEPARATOR;
 
@@ -64,17 +66,19 @@ final class ShellRunner implements Runner
      *
      * Windows: basename() also reads `\` as a separator, so PHP_BINARY is a
      * path. PATHEXT gives the endings to try, so `docker` finds `docker.exe`.
-     * Other systems do not set PATHEXT.
+     * A file with one of these endings is a program, as on Windows itself:
+     * is_executable() there is true only for a binary, not for
+     * `composer.bat`. Other systems do not set PATHEXT.
      *
      * An empty PATH entry is skipped. It does not name the filesystem root.
      */
     private function exists(string $program): bool
     {
-        if (basename($program) !== $program) {
-            return true === is_file($program) && true === is_executable($program);
-        }
-
         $endings = ['', ...explode(';', (string) getenv('PATHEXT'))];
+
+        if (basename($program) !== $program) {
+            return $this->runnable($program, $endings);
+        }
 
         foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
             if ('' === $directory) {
@@ -82,15 +86,34 @@ final class ShellRunner implements Runner
             }
 
             foreach ($endings as $ending) {
-                $candidate = $directory . '/' . $program . $ending;
-
-                if (true === is_file($candidate) && true === is_executable($candidate)) {
+                if (true === $this->runnable($directory . '/' . $program . $ending, $endings)) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Whether the file is a program: it ends with an ending of PATHEXT, in
+     * any case, or it is executable.
+     *
+     * @param list<string> $endings
+     */
+    private function runnable(string $file, array $endings): bool
+    {
+        if (false === is_file($file)) {
+            return false;
+        }
+
+        foreach ($endings as $ending) {
+            if ('' !== $ending && true === str_ends_with(strtolower($file), strtolower($ending))) {
+                return true;
+            }
+        }
+
+        return is_executable($file);
     }
 
     /**
