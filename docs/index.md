@@ -58,6 +58,10 @@ To start, see [Installation](#installation) and [Quick start](#quick-start).
 - PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
 - Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the
   `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
+- On Windows, Crest runs with PHP for Windows: its CI runs the unit tests and the
+  hand-off there (see [The global Crest and the project Crest](#the-global-crest-and-the-project-crest)).
+  `new`, `up` and `down` with docker on Windows (Linux containers) get best effort only.
+  On Windows, the Linux path is the Windows Subsystem for Linux (WSL2)
 
 ## Installation
 
