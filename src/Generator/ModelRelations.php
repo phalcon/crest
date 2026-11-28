@@ -408,8 +408,8 @@ final class ModelRelations
      * fromTable() joins a name (`customer_id` gives Customer). If the key has
      * more than one column, or the column gives no name, the alias comes from
      * the name of the referenced table (`customers` gives Customers), with no
-     * schema (#86). A line of `models.classes` does not change it. An alias is not a class name, so a
-     * reserved word is a correct alias.
+     * schema (#86). A line of `models.classes` does not change it. An alias
+     * is not a class name, so a reserved word is a correct alias.
      */
     private static function keyAlias(ReferenceInterface $reference, ModelNames $names): string
     {

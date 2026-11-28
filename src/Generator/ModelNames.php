@@ -25,6 +25,7 @@ use function array_map;
 use function array_unique;
 use function array_values;
 use function count;
+use function current;
 use function implode;
 use function in_array;
 use function is_array;
@@ -391,10 +392,10 @@ final class ModelNames
      *
      * A table of another schema with no line stops when another name of
      * withTables() gives the same class, without regard to case (#86). The
-     * table of the default schema keeps the class, so the message names only
-     * the name of the call. With no table of the default schema in the
-     * group, one line fixes the clash, so the message names each name with a
-     * schema.
+     * table of the default schema, or a table with a line, keeps the class,
+     * so the message names only the name of the call. With no such table in
+     * the group, one line fixes the clash, so the message names each name
+     * with a schema.
      */
     public function classOf(string $table): string
     {
@@ -410,6 +411,16 @@ final class ModelNames
 
         $group = $this->byClass[strtolower($class)] ?? [];
 
+        // MySQL with lower_case_table_names lists billing.payments, and finds
+        // it for billing.Payments: then the name is the listed name. When the
+        // name is listed, a name in another case is another table
+        // (PostgreSQL).
+        $same = array_filter($group, static fn (string $name): bool => strtolower($name) === strtolower($table));
+
+        if (false === in_array($table, $group, true) && [] !== $same) {
+            $table = (string) current($same);
+        }
+
         if ([] === array_diff($group, [$table])) {
             return $class;
         }
@@ -418,8 +429,11 @@ final class ModelNames
 
         sort($group, SORT_STRING);
 
-        $default = array_filter($group, static fn (string $name): bool => false === str_contains($name, '.'));
-        $named   = [] === $default ? $group : [$table];
+        $keeps = array_filter(
+            $group,
+            fn (string $name): bool => false === str_contains($name, '.') || isset($this->classes[$name])
+        );
+        $named = [] === $keeps ? $group : [$table];
 
         throw new Exception(sprintf(
             'the tables %s give the class %s; add %s to models.classes',

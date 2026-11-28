@@ -99,9 +99,11 @@ use function var_export;
  * make:model again name the option too.
  *
  * With models.schema (#69), crest reads the tables, the columns and the keys
- * of that schema, and the base calls setSchema(). A key to a table of another
- * schema gives a Skipped line. SQLite has no schemas, so there the key stops
- * the command after the boot.
+ * of that schema, and the base calls setSchema(). With a list of schemas
+ * (#86), crest reads each schema of the list, the first is the default, and
+ * a table of another schema is <schema>.<table>. A key to a table of a
+ * schema that is not in the key gives a Skipped line. SQLite has no schemas,
+ * so there the key stops the command after the boot.
  *
  * Not NamedArtifactCommand: the argument is a table, there is no suffix, and
  * there is no guidance.
@@ -355,8 +357,9 @@ final class ModelCommand extends ProjectCommand
         string $command,
         array $written
     ): ?string {
+        // A table of another schema is <schema>.<table> (#86).
         try {
-            $default = ClassName::fromTable($table);
+            $default = ClassName::fromTable($names->tableOf($table));
         } catch (Exception) {
             return null;
         }
