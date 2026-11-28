@@ -196,6 +196,9 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Fixed `make:model`: a foreign key to a table of another schema no longer gives a relation to a model of the wrong table. It gives a `Skipped` line. [#69](https://github.com/phalcon/crest/issues/69)
 - Fixed `make:model <view>` on SQLite: it writes a model, as on the other databases. Phalcon `tableExists()` does not find a view on SQLite, so crest also calls `viewExists()`. `ForeignKeys::read()` also reads the views of `listViews()`. [#88](https://github.com/phalcon/crest/issues/88)
 - Fixed the program search of `ShellRunner` on Windows: a file with an ending of `PATHEXT`, for example `composer.bat`, is a program. Before, `is_executable()` was true there only for a binary, so the commands of the `new` key in `crest.php`, for example `composer install`, did not find `composer.bat`. [#103](https://github.com/phalcon/crest/issues/103)
+- Fixed `make:model` with a list of schemas: a table of another schema that gets a new class from `models.classes` gives the `Note` line for its old files, as a table of the default schema does. [#86](https://github.com/phalcon/crest/issues/86)
+- Fixed `make:model <schema>.<table>` with a list of schemas: a name in another case is the listed table, not another table with the same class. On MySQL with `lower_case_table_names`, the run writes the table; on a server that keeps the case, the table is not found. [#86](https://github.com/phalcon/crest/issues/86)
+- Fixed the class clash error of a list of schemas: a table with a line in `models.classes` keeps its class, so the error does not tell you to add a line for it. [#86](https://github.com/phalcon/crest/issues/86)
 
 ### Removed
 
