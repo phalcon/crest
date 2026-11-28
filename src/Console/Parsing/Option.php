@@ -15,9 +15,6 @@ namespace Crest\Console\Parsing;
 
 /**
  * One declared option.
- *
- * `final class` with readonly properties, not `final readonly class` - the
- * latter is PHP 8.2 and the floor is 8.1.
  */
 final class Option
 {

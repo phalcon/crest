@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Crest\Tests\Unit\Command\Route;
 
+use Crest\ADR\ActionResolver;
 use Crest\Command\Route\ListCommand;
 use Crest\Commands;
 use Crest\Console\Input;
@@ -27,6 +28,8 @@ use PHPUnit\Framework\TestCase;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
+use function rmdir;
+use function substr_count;
 
 use const PHP_EOL;
 
@@ -47,6 +50,52 @@ final class ListCommandTest extends TestCase
     {
         $this->closeStreams();
         $this->removeScratchDirectory();
+    }
+
+    public function testAClassAfterASkippedClassIsListed(): void
+    {
+        // The resolver skips the first class that it is asked about, in the
+        // order of the filesystem, which changes from one machine to the next.
+        // So the test does not depend on the order of the files.
+        $this->writeAction('Health', 'GetHealth', 'App\Action\Health');
+        $this->writeAction('Session', 'PostSession', 'App\Action\Session');
+
+        $resolver = new class () implements ActionResolver {
+            private int $calls = 0;
+
+            public function classFor(string $baseNamespace, string $method, string $path): string
+            {
+                return '';
+            }
+
+            public function methodFor(string $baseNamespace, string $class): string
+            {
+                return 'GET';
+            }
+
+            public function pathFor(string $baseNamespace, string $class): ?string
+            {
+                $this->calls++;
+
+                return 1 === $this->calls ? null : '/' . $class;
+            }
+        };
+        $command  = new ListCommand($resolver);
+
+        $status = $command->handle(
+            new Input(
+                'route:list',
+                $command->define()->merge(Kernel::globals())->bind(['--directory', $this->root])
+            ),
+            new Output($this->stdout, $this->stderr, false)
+        );
+
+        $output = $this->readStdout();
+
+        $this->assertSame(0, $status);
+        $this->assertStringStartsWith('METHOD  PATH', $output);
+        // The header and one row: the class after the skipped one.
+        $this->assertSame(2, substr_count($output, PHP_EOL));
     }
 
     public function testAClassTheConventionWouldNotProduceIsSkipped(): void
@@ -132,6 +181,19 @@ final class ListCommandTest extends TestCase
 
         $this->assertStringContainsString('/health', $output);
         $this->assertStringNotContainsString('notes', $output);
+    }
+
+    public function testReportsWhenTheActionFolderDoesNotExist(): void
+    {
+        rmdir($this->root . '/src/Action');
+
+        $status = $this->runCommand();
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'no actions found in ' . $this->root . '/src/Action' . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testReportsWhenThereAreNoActions(): void

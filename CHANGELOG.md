@@ -107,6 +107,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Added the guide "Moving from devtools" to the docs: the Crest command for each devtools v4 command, `crest init` for a project of devtools, with a front controller that includes `app/config/services.php` for the commands that boot the project, the models, and the Annotations metadata strategy. [#105](https://github.com/phalcon/crest/issues/105)
 - Added a list of schemas to `models.schema`, for example `['public', 'billing']`; the first is the default schema. `make:model`, `make:model --all` and `make:scaffold` read the tables, the columns and the foreign keys of each schema, and each base calls `setSchema()` with the schema of its table. A table of another schema is `<schema>.<table>` in the commands, `--exclude`, `models.classes` and the `RelationAlias` keys, and `<default>.<table>` is the table. A foreign key between two schemas of the list gives a `belongsTo()` and a `hasMany()`. A table name in two schemas keeps its class in the default schema, and the other table stops until `models.classes` gives it a class. [#86](https://github.com/phalcon/crest/issues/86)
 - Added `ModelNames::schemas()`, `isList()`, `tableOf()`, `name()`, `nameOf()` and `withTables()`, `ModelTables::listed()` and `ModelProperties::ofName()`. [#86](https://github.com/phalcon/crest/issues/86)
+- Added a CI job for mutation testing: Infection on PHP 8.4 with `phalcon/phalcon`, for all of `src/`, on each push and pull request, gated at MSI 100. `infection/infection` is a dev dependency. [#16](https://github.com/phalcon/crest/issues/16)
 
 ### Changed
 
@@ -181,6 +182,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed `ForeignKeys::read()`: the third parameter is the `ModelNames` of the run, not the schema. [#86](https://github.com/phalcon/crest/issues/86)
 - Changed the stub `model-base`: the comment gives `make:model {{ name }}`, the name of the table with its schema. `{{ table }}` stays the table for `setSource()`. [#86](https://github.com/phalcon/crest/issues/86)
 - Changed `Crest\Project\Config` to `@internal`: it is not part of the API for a package. A package gets the project from `Project::context()`, as a `ProjectContext`. [#16](https://github.com/phalcon/crest/issues/16)
+- Changed the PHP floor of crest to 8.2 (`^8.2`; it was `^8.1`), the floor of `phalcon/migrations`. `crest new --php` refuses 8.1: the project requires crest as a dev dependency. CI no longer runs PHP 8.1; the quality, database and coverage jobs run on 8.2. The dev dependencies are updated for 8.2. `resources/infection.json5` names `../src`: Infection 0.32, the version for PHP 8.2, reads each path from the folder of the file. [#16](https://github.com/phalcon/crest/issues/16)
 
 ### Fixed
 

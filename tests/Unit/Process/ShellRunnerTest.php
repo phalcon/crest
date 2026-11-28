@@ -85,6 +85,19 @@ final class ShellRunnerTest extends TestCase
         (new ShellRunner())->run([PHP_BINARY, '-r', 'exit(0);'], $this->root . '/missing');
     }
 
+    public function testAMissingPathWithAnEndingOfPathextIsNotAProgram(): void
+    {
+        // The ending alone does not make a program: the file must exist.
+        putenv('PATHEXT=.CMD');
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "'" . $this->root . "/bin/hello.cmd' was not found; install it or add it to the PATH"
+        );
+
+        (new ShellRunner())->run([$this->root . '/bin/hello.cmd'], $this->root . '/missing');
+    }
+
     public function testAMissingProgramIsReportedByName(): void
     {
         putenv('PATH=' . $this->root . '/bin');

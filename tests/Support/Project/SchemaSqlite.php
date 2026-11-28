@@ -18,6 +18,7 @@ use Phalcon\Db\Adapter\Pdo\Sqlite;
 
 use function array_filter;
 use function array_values;
+use function in_array;
 use function str_starts_with;
 use function strtolower;
 
@@ -26,20 +27,28 @@ use function strtolower;
  * BillingMigration::SCHEMA, on the SQLite file of the suite (#69). A read for
  * that schema reads the file. A read for another schema, or for no schema,
  * finds nothing. Its type is mysql, so crest does not stop on the schema.
+ * TwoSchemaSqlite adds a second schema with the same tables (#86).
  *
  * Infection runs only the unit and the SQLite tests, so these tests hold the
  * schema code of make:model there. The server tests show the real behavior.
  */
-final class SchemaSqlite extends Sqlite
+class SchemaSqlite extends Sqlite
 {
+    /**
+     * The schemas whose reads read the file.
+     *
+     * @var list<string>
+     */
+    protected const SCHEMAS = [BillingMigration::SCHEMA];
+
     public function describeColumns(string $table, ?string $schema = null): array
     {
-        return BillingMigration::SCHEMA === $schema ? parent::describeColumns($table) : [];
+        return $this->has($schema) ? parent::describeColumns($table) : [];
     }
 
     public function describeReferences(string $table, ?string $schema = null): array
     {
-        return BillingMigration::SCHEMA === $schema ? parent::describeReferences($table) : [];
+        return $this->has($schema) ? parent::describeReferences($table) : [];
     }
 
     public function getType(): string
@@ -53,7 +62,7 @@ final class SchemaSqlite extends Sqlite
      */
     public function listTables(?string $schemaName = null): array
     {
-        if (BillingMigration::SCHEMA !== $schemaName) {
+        if (false === $this->has($schemaName)) {
             return [];
         }
 
@@ -65,11 +74,16 @@ final class SchemaSqlite extends Sqlite
 
     public function listViews(?string $schemaName = null): array
     {
-        return BillingMigration::SCHEMA === $schemaName ? parent::listViews() : [];
+        return $this->has($schemaName) ? parent::listViews() : [];
     }
 
     public function tableExists(string $tableName, ?string $schemaName = null): bool
     {
-        return BillingMigration::SCHEMA === $schemaName && parent::tableExists($tableName);
+        return $this->has($schemaName) && parent::tableExists($tableName);
+    }
+
+    private function has(?string $schema): bool
+    {
+        return in_array($schema, static::SCHEMAS, true);
     }
 }

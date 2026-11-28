@@ -19,7 +19,7 @@ Crest is a command line application for Phalcon. It generates code, shows inform
 
 ## Requirements
 
-- PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
+- PHP `^8.2`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
 - Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
 
 ## Install

@@ -337,7 +337,12 @@ final class KernelTest extends TestCase
         $status = $this->kernel()->handle(['demo', '--version']);
 
         $this->assertSame(0, $status);
-        $this->assertStringContainsString('demo', $this->readStdout());
+        // Only the banner: no command runs after it.
+        $this->assertMatchesRegularExpression(
+            '/^' . preg_quote(Output::MARK, '/') . ' demo \S+' . preg_quote(PHP_EOL, '/') . '\z/',
+            $this->readStdout()
+        );
+        $this->assertSame('', $this->readStderr());
     }
 
     public function testVersionLineCarriesAResolvedVersion(): void

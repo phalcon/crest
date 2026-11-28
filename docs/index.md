@@ -48,7 +48,7 @@ To start, see [Installation](#installation) and [Quick start](#quick-start).
 
 ## Requirements
 
-- PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
+- PHP `^8.2`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
 - Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
 - On Windows, Crest runs with PHP for Windows: its CI runs the unit tests and the hand-off there (see [The global Crest and the project Crest](#the-global-crest-and-the-project-crest)). `new`, `up` and `down` with docker on Windows (Linux containers) get best effort only. On Windows, the Linux path is the Windows Subsystem for Linux (WSL2)
 
@@ -296,7 +296,7 @@ An MVC project has `public/index.php` (the web entry point) and the front contro
 | `--flavor=mvc\|adr` | the flavor of the project; defaults to `mvc` |
 | `--template-engine=phtml\|volt\|none` | the view engine of an MVC project: `phtml`, the default, `volt` (see [Volt](#volt)), or `none` for a project with no views (see [The MVC project](#the-mvc-project)). An ADR project has no views, so `new` stops when you give it |
 | `--namespace=<name>` | root namespace for the generated code; defaults to `App` |
-| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.1 or later |
+| `--php=<major.minor>` | PHP version for `composer.json` and the Dockerfile; defaults to `8.4`, and must be 8.2 or later |
 | `--phalcon=v5\|v6` | `v5` requires the C extension, 5.18 or later; `v6` the `phalcon/phalcon` package; defaults to `v5` |
 | `--runtime=host\|docker` | where the project commands run (the `runtime` key of `crest.php`); defaults to `docker` |
 | `--service=<name>` | the docker compose service, for `docker`; defaults to `app` |

@@ -269,6 +269,18 @@ final class ScaffoldCommandTest extends AbstractDatabaseTestCase
         );
     }
 
+    public function testAnIntegerKeyIsACastInTheController(): void
+    {
+        // A text key is decoded (testAKeyThatIsNotTheFirstColumnIsTheKeyOfThePages).
+        $this->createTables(ScaffoldUsersMigration::class);
+
+        $this->assertSame(0, $this->scaffold(['users']));
+        $this->assertStringContainsString(
+            "'bind'       => ['id' => (int) \$id],",
+            (string) file_get_contents($this->root . '/src/Controllers/UsersController.php')
+        );
+    }
+
     public function testASchemaStopsOnSqlite(): void
     {
         // SQLite has no schemas (#69). The servers read the schema:

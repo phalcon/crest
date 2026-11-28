@@ -2,7 +2,7 @@
     "$schema": "../vendor/infection/infection/resources/schema.json",
     "source": {
         "directories": [
-            "src"
+            "../src"
         ]
     },
     "logs": {
@@ -204,14 +204,25 @@
                 "Crest\\Command\\Make\\NamedArtifactCommand::replacements"
             ]
         },
+        "ReturnRemoval": {
+            "ignore": [
+                // NO_COLOR and the tty check both yield "undecorated" against
+                // the php://memory streams the suite uses. See FalseValue.
+                "Crest\\Console\\Output::detectDecoration",
+                // The early return only skips discovery: the lookup after it
+                // gives the same name. See Coalesce.
+                "Crest\\Console\\Registry::resolve"
+            ]
+        },
         "Ternary": {
             // draft() writes the property names into 'fields' and
             // 'referenced' of a relation that it keeps. A skipped relation
             // uses only its key. So the first values of the two keys change
-            // nothing. Only this statement is ignored, not the method; it also
-            // has the ternary of the key, which the tests kill.
+            // nothing. Only these two lines are ignored, not the method; it
+            // also has the ternary of the key, which the tests kill. The
+            // regex is for one line of the diff of the mutant.
             "ignoreSourceCodeByRegex": [
-                "\\$relation = \\['kind' => \\$kind, 'fields' => \\$belongsTo \\? \\$keys : \\$referenced, .*"
+                "'(fields|referenced)' +=> \\$belongsTo \\? \\$(keys : \\$referenced|referenced : \\$keys),"
             ]
         },
         "Throw_": {

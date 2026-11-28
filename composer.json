@@ -5,11 +5,12 @@
     "license": "BSD-3-Clause",
     "keywords": ["phalcon", "cli", "console", "generator", "scaffolding"],
     "require": {
-        "php": "^8.1",
+        "php": "^8.2",
         "ext-tokenizer": "*"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3",
+        "infection/infection": "^0.32.6",
         "pds/composer-script-names": "^1",
         "pds/skeleton": "^1",
         "phalcon/code-quality": "^1.0",
@@ -40,7 +41,7 @@
             "pds/skeleton": false,
             "dealerdirect/phpcodesniffer-composer-installer": true
         },
-        "platform": { "php": "8.1.0" }
+        "platform": { "php": "8.2.0" }
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
