@@ -145,10 +145,10 @@ final class NewCommand extends Command
     private const PHP = '/^[1-9]\d*\.(?:0|[1-9]\d*)\z/';
 
     /**
-     * The oldest PHP that runs the generated code. It uses readonly promoted
-     * properties, which need PHP 8.1.
+     * The oldest PHP for a new project. The project requires crest as a dev
+     * dependency, and crest needs PHP 8.2.
      */
-    private const PHP_FLOOR = '8.1';
+    private const PHP_FLOOR = '8.2';
 
     /**
      * The placeholders of #54, and the project stub of each. A copy of a stub
@@ -583,7 +583,7 @@ final class NewCommand extends Command
         if (true === version_compare($version, self::PHP_FLOOR, '<')) {
             throw new Exception(
                 sprintf(
-                    'PHP %s is too old; the generated code needs %s or later',
+                    'PHP %s is too old; crest needs %s or later',
                     $version,
                     self::PHP_FLOOR
                 )

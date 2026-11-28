@@ -28,8 +28,7 @@ final class Skeletons
 {
     /**
      * Flavor => the skeleton of its projects. CLI has no project yet. The
-     * keys are the values of Flavor; a constant cannot read an enum value on
-     * PHP 8.1.
+     * keys are the values of Flavor.
      */
     private const SKELETONS = [
         'mvc' => MvcSkeleton::class,
