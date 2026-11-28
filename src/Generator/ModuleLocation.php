@@ -154,17 +154,13 @@ final class ModuleLocation
      * The folders in the `module` path whose name in lowercase is the key,
      * in byte order. A file is not a module. scandir() sorts with the
      * collation of the locale, so its order alone can change from one
-     * environment to the next. A folder that crest cannot read gives no
-     * folders and no PHP warning, as Survey does.
+     * environment to the next. A folder that does not exist, or that crest
+     * cannot read, gives no folders and no PHP warning, as Survey does.
      *
      * @return list<string>
      */
     private static function folders(string $modules, string $key): array
     {
-        if (false === is_dir($modules)) {
-            return [];
-        }
-
         $found = [];
 
         foreach (@scandir($modules) ?: [] as $entry) {
