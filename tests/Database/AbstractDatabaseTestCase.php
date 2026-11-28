@@ -15,6 +15,7 @@ namespace Crest\Tests\Database;
 
 use Crest\Tests\Support\Migrations\BillingMigration;
 use Crest\Tests\Support\TestDatabase;
+use LogicException;
 use PDO;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Talon\Database\Dialect;
@@ -114,6 +115,20 @@ abstract class AbstractDatabaseTestCase extends TestCase
     }
 
     /**
+     * The default schema of the connection (#86): current_schema() on
+     * PostgreSQL, the database on MySQL and MariaDB.
+     */
+    protected function homeSchema(): string
+    {
+        $statement = $this->getConnection()->getPdo()->query(
+            Dialect::Pgsql === $this->getDialect() ? 'SELECT current_schema()' : 'SELECT DATABASE()'
+        );
+        $home      = false === $statement ? false : $statement->fetchColumn();
+
+        return is_string($home) ? $home : throw new LogicException('The connection has no default schema');
+    }
+
+    /**
      * A migration on the connection of the test. The table does not exist
      * yet, so the migration does not empty it (withClear: false).
      *
@@ -193,6 +208,24 @@ abstract class AbstractDatabaseTestCase extends TestCase
             $this->markTestSkipped(
                 'cphalcon before 5.24.0 lists the MariaDB sequences and the PostgreSQL partitions as tables.'
             );
+        }
+    }
+
+    /**
+     * Skips a test of a key between two schemas on PostgreSQL with cphalcon
+     * before 5.24.0. Its describeReferences() gives the database as the
+     * referenced schema (cphalcon #17816), so with a list of schemas each key
+     * gives a skipped line (#86). The v6 package has the fix. The test runs
+     * again when the CI gets the release with the fix.
+     */
+    protected function skipReferencedSchemaOnOldCphalcon(): void
+    {
+        if (
+            Dialect::Pgsql === $this->getDialect()
+            && extension_loaded('phalcon')
+            && version_compare((string) phpversion('phalcon'), '5.24.0', '<')
+        ) {
+            $this->markTestSkipped('cphalcon before 5.24.0 gives the database as the referenced schema on PostgreSQL.');
         }
     }
 

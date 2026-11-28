@@ -60,7 +60,7 @@ final class ModelCommandTest extends TestCase
     {
         $this->front(FailingFront::class, "['schema' => '']");
 
-        $this->assertStops(['users'], 'crest.php: models.schema must be the name of a schema');
+        $this->assertStops(['users'], 'crest.php: models.schema must be the name of a schema, or a list of names');
     }
 
     public function testAColumnTwoTimesInPropertyStops(): void
@@ -120,6 +120,13 @@ final class ModelCommandTest extends TestCase
             ['users'],
             "make:model does not support the 'adr' flavor of this project; it supports: mvc"
         );
+    }
+
+    public function testANameOfASchemaNotInTheListStopsBeforeTheBoot(): void
+    {
+        $this->front(FailingFront::class, "['schema' => ['public', 'billing']]");
+
+        $this->assertStops(['crm.users'], "the schema 'crm' of 'crm.users' is not in models.schema");
     }
 
     public function testANameThatGivesNoClassStops(): void

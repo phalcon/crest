@@ -512,6 +512,7 @@ final class StubContractsTest extends TestCase
                             Stub::FRAGMENT_PREFIX . 'model-get-set',
                             ['method' => 'Id', 'property' => 'id', 'type' => 'int']
                         ),
+                        'name'       => 'generated.generated',
                         'namespace'  => $namespace . '\\Base',
                         'properties' => "    public ?int \$id = null;\n",
                         'relations'  => $relations,

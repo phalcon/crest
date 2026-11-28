@@ -14,10 +14,12 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Generator;
 
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\ModelNames;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Reference;
 use PHPUnit\Framework\TestCase;
 
+use function array_key_first;
 use function strtolower;
 
 /**
@@ -122,8 +124,10 @@ final class ForeignKeysTest extends TestCase
                 && 'billing' === $schema ? [$key] : []
         );
 
-        $this->assertSame([$key], ForeignKeys::read($adapter, '', 'billing')->of('bills'));
-        $this->assertSame([$key], ForeignKeys::read($adapter, 'Bills', 'billing')->of('Bills'));
+        $names = ModelNames::of(['schema' => 'billing']);
+
+        $this->assertSame([$key], ForeignKeys::read($adapter, '', $names)->of('bills'));
+        $this->assertSame([$key], ForeignKeys::read($adapter, 'Bills', $names)->of('Bills'));
     }
 
     public function testReadKeepsEachKeyOnSqlite(): void
@@ -135,6 +139,22 @@ final class ForeignKeysTest extends TestCase
 
         $this->assertSame([$key], $keys->of('invoices'));
         $this->assertSame([], $keys->elsewhere('invoices'));
+    }
+
+    public function testReadMatchesTheReferencedSchemaWithoutRegardToCase(): void
+    {
+        // MySQL with lower_case_table_names 1 or 2 can give the schema in
+        // another case. The name has the case of the list.
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['receipts'], 'Billing' => ['customers']],
+                ['receipts' => [$this->schemaKey('receipts', 'customer_id', 'BILLING', 'customers')]]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'Billing']])
+        );
+
+        $this->assertSame('Billing.customers', $keys->of('receipts')[0]->getReferencedTable());
     }
 
     public function testReadPutsAKeyToAnotherSchemaElsewhere(): void
@@ -155,6 +175,131 @@ final class ForeignKeysTest extends TestCase
 
         $this->assertSame([$key], $keys->elsewhere('Bills'));
         $this->assertSame([], $keys->of('Bills'));
+    }
+
+    public function testReadWithAListGivesTheKeysOfEachSchema(): void
+    {
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['customers'], 'billing' => ['payments']],
+                ['billing.payments' => [$this->schemaKey('payments', 'customer_id', 'public', 'customers')]]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertCount(1, $keys->of('billing.payments'));
+        $this->assertSame('customers', $keys->of('billing.payments')[0]->getReferencedTable());
+        $this->assertSame([], $keys->elsewhere('billing.payments'));
+        $this->assertSame(['customers', 'billing.payments'], $keys->tables());
+        $this->assertSame(['billing.payments'], $keys->related('customers'));
+    }
+
+    public function testReadWithAListKeepsANumericTableName(): void
+    {
+        // PHP makes the key '2024' an integer. A key with no referenced
+        // schema points to the schema of its table.
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['2024', 'customers'], 'billing' => []],
+                ['2024' => [$this->key('2024', 'customer_id', 'customers')]]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame('customers', $keys->of('2024')[0]->getReferencedTable());
+    }
+
+    public function testReadWithAListNamesATableOfAnotherSchema(): void
+    {
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['receipts'], 'billing' => ['customers']],
+                ['receipts' => [$this->schemaKey('receipts', 'customer_id', 'billing', 'customers')]]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+        $key  = $keys->of('receipts')[0];
+
+        $this->assertSame('billing.customers', $key->getReferencedTable());
+        $this->assertSame('billing', $key->getReferencedSchema());
+        $this->assertSame('receipts_customer_id', $key->getName());
+        $this->assertSame(['customer_id'], $key->getColumns());
+        $this->assertSame(['id'], $key->getReferencedColumns());
+        $this->assertSame('CASCADE', $key->getOnDelete());
+        $this->assertSame('RESTRICT', $key->getOnUpdate());
+        $this->assertSame('crest', $key->getSchemaName());
+        $this->assertSame(['billing.customers'], $keys->related('receipts'));
+    }
+
+    public function testReadWithAListOfOneIsTheStringRead(): void
+    {
+        // Before cphalcon 5.24.0, PostgreSQL gives the database as the
+        // referenced schema. One schema does not use it.
+        $key  = $this->schemaKey('bills', 'vendor_id', 'crest', 'vendors');
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(['billing' => ['bills', 'vendors']], ['bills' => [$key]]),
+            '',
+            ModelNames::of(['schema' => ['billing']])
+        );
+
+        $this->assertSame([$key], $keys->of('bills'));
+        $this->assertSame([], $keys->elsewhere('bills'));
+    }
+
+    public function testReadWithAListPutsAKeyToASchemaNotInTheListElsewhere(): void
+    {
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['receipts'], 'billing' => []],
+                [
+                    'receipts' => [
+                        $this->schemaKey('receipts', 'customer_id', 'crm', 'customers'),
+                        $this->schemaKey('receipts', 'buyer_id', 'billing', 'customers'),
+                    ],
+                ]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        // The key after the key to crm stays a key of the list.
+        $this->assertCount(1, $keys->of('receipts'));
+        $this->assertSame('billing.customers', $keys->of('receipts')[0]->getReferencedTable());
+        $this->assertCount(1, $keys->elsewhere('receipts'));
+        $this->assertSame('crm.customers', $keys->elsewhere('receipts')[0]->getReferencedTable());
+    }
+
+    public function testReadWithAListReadsATypedNameOfAnotherSchema(): void
+    {
+        // A name that listTables() does not give, for example in another
+        // case on MySQL, gets its keys from the server.
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => ['customers'], 'billing' => ['payments']],
+                ['billing.Payments' => [$this->schemaKey('Payments', 'customer_id', 'public', 'customers')]]
+            ),
+            'billing.Payments',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame('customers', $keys->of('billing.Payments')[0]->getReferencedTable());
+    }
+
+    public function testReadWithAListTakesAKeyWithNoReferencedSchemaToItsOwnSchema(): void
+    {
+        $keys = ForeignKeys::read(
+            $this->schemaAdapter(
+                ['public' => [], 'billing' => ['bills', 'vendors']],
+                ['billing.bills' => [$this->key('bills', 'vendor_id', 'vendors')]]
+            ),
+            '',
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame('billing.vendors', $keys->of('billing.bills')[0]->getReferencedTable());
     }
 
     public function testRelatedGivesTheOtherTablesInBothDirections(): void
@@ -272,6 +417,52 @@ final class ForeignKeysTest extends TestCase
                     $this->key('orders', 'customer_id', 'customers'),
                     $this->key('orders', 'billing_id', 'customers'),
                 ],
+            ]
+        );
+    }
+
+    /**
+     * An adapter of PostgreSQL that gives the tables of each schema, and the
+     * keys of each name (<schema>.<table>, or the table for the first
+     * schema).
+     *
+     * @param array<string, list<string>>       $tables
+     * @param array<array-key, list<Reference>> $keys   PHP makes a numeric name an integer key
+     */
+    private function schemaAdapter(array $tables, array $keys): AdapterInterface
+    {
+        $first   = (string) array_key_first($tables);
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $adapter->method('getType')->willReturn('pgsql');
+        $adapter->method('listTables')->willReturnCallback(
+            static fn (?string $schema = null): array => $tables[(string) $schema] ?? []
+        );
+        $adapter->method('listViews')->willReturn([]);
+        $adapter->method('describeReferences')->willReturnCallback(
+            static fn (string $table, ?string $schema = null): array => $keys[
+                $first === $schema ? $table : $schema . '.' . $table
+            ] ?? []
+        );
+
+        return $adapter;
+    }
+
+    /**
+     * A key with one column that points to the id of a table of a schema.
+     */
+    private function schemaKey(string $table, string $column, string $schema, string $referenced): Reference
+    {
+        return new Reference(
+            $table . '_' . $column,
+            [
+                'schema'            => 'crest',
+                'referencedSchema'  => $schema,
+                'referencedTable'   => $referenced,
+                'columns'           => [$column],
+                'referencedColumns' => ['id'],
+                'onDelete'          => 'CASCADE',
+                'onUpdate'          => 'RESTRICT',
             ]
         );
     }

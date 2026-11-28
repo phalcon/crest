@@ -47,6 +47,57 @@ final class ModelTablesTest extends TestCase
         yield 'SQLite does not list the views' => ['sqlite', ['customers', 'invoices']];
     }
 
+    public function testAClashFailsOnlyTheTableOfTheOtherSchema(): void
+    {
+        $tables = ModelTables::of(
+            $this->schemaAdapter(['public' => ['users'], 'audit' => ['users']]),
+            [],
+            ModelNames::of(['schema' => ['public', 'audit']])
+        );
+
+        $this->assertSame(['users' => 'Users'], $tables->classes);
+        $this->assertSame(
+            [
+                'audit.users' => "the tables audit.users and users give the class Users; "
+                    . "add 'audit.users' to models.classes",
+            ],
+            $tables->failed
+        );
+        $this->assertSame(['audit.users', 'users'], $tables->names());
+    }
+
+    public function testAClassesKeyOfASchemaNotInTheListIsANote(): void
+    {
+        // As a line for a table that the database does not have: the map
+        // stays in crest.php after a schema leaves the list.
+        $tables = ModelTables::of(
+            $this->schemaAdapter(['public' => ['users'], 'billing' => ['invoices']]),
+            [],
+            ModelNames::of(['schema' => ['public', 'billing'], 'classes' => ['crm.users' => 'CrmUser']])
+        );
+
+        $this->assertSame(
+            ['Note: models.classes names the table crm.users, which the database does not have'],
+            $tables->notes
+        );
+        $this->assertSame(['billing.invoices', 'users'], $tables->names());
+    }
+
+    public function testAListReadsTheTablesOfEachSchema(): void
+    {
+        $tables = ModelTables::of(
+            $this->schemaAdapter(
+                ['public' => ['users'], 'billing' => ['invoices', 'totals']],
+                ['billing' => ['totals']]
+            ),
+            [],
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame(['billing.invoices', 'users'], $tables->names());
+        $this->assertSame(['billing.invoices' => 'Invoices', 'users' => 'Users'], $tables->classes);
+    }
+
     public function testAMapClassCanFailTheSameClassCheck(): void
     {
         $tables = ModelTables::of(
@@ -154,6 +205,29 @@ final class ModelTablesTest extends TestCase
         $this->assertSame(['customers'], $tables->names());
     }
 
+    public function testAnExcludeNameOfASchemaNotInTheListStops(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage("the schema 'crm' of 'crm.users' is not in models.schema");
+
+        ModelTables::of(
+            $this->schemaAdapter(['public' => ['users'], 'billing' => ['invoices']]),
+            ['crm.users'],
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+    }
+
+    public function testAnExcludeNameWithASchemaSkipsThatTable(): void
+    {
+        $tables = ModelTables::of(
+            $this->schemaAdapter(['public' => ['invoices'], 'billing' => ['invoices', 'bills']]),
+            ['billing.invoices'],
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame(['billing.bills', 'invoices'], $tables->names());
+    }
+
     public function testAnInternalSqliteTableIsNotATable(): void
     {
         // SQLite rejects the prefix in any case, so the check ignores case.
@@ -172,6 +246,27 @@ final class ModelTablesTest extends TestCase
         $this->expectExceptionMessage(self::UNKNOWN);
 
         ModelTables::of($this->failingAdapter(new PDOException(self::UNKNOWN)), [], ModelNames::of([]));
+    }
+
+    public function testASchemaOfTheListThatCannotBeReadStops(): void
+    {
+        $previous = new PDOException(self::UNKNOWN);
+        $adapter  = $this->createStub(AdapterInterface::class);
+        $adapter->method('getType')->willReturn('mysql');
+        $adapter->method('listTables')->willReturnCallback(
+            static fn (?string $schema = null): array => 'billing' === $schema ? throw $previous : ['users']
+        );
+
+        try {
+            ModelTables::of($adapter, [], ModelNames::of(['schema' => ['crest', 'billing']]));
+        } catch (Exception $exception) {
+            $this->assertSame("the schema 'billing' cannot be read: " . self::UNKNOWN, $exception->getMessage());
+            $this->assertSame($previous, $exception->getPrevious());
+
+            return;
+        }
+
+        $this->fail('The schema read did not stop.');
     }
 
     public function testASchemaThatCannotBeReadStops(): void
@@ -246,6 +341,20 @@ final class ModelTablesTest extends TestCase
 
         $this->assertSame(['USERS' => $reason, 'uSers' => $reason, 'users' => $reason], $tables->failed);
         $this->assertSame([], $tables->classes);
+    }
+
+    public function testListedGivesTheNamesOfEachSchema(): void
+    {
+        $this->assertSame(
+            [['users', 'billing.invoices', 'billing.totals'], ['billing.totals']],
+            ModelTables::listed(
+                $this->schemaAdapter(
+                    ['public' => ['users'], 'billing' => ['invoices', 'totals']],
+                    ['billing' => ['totals']]
+                ),
+                ModelNames::of(['schema' => ['public', 'billing']])
+            )
+        );
     }
 
     public function testTablesWithTheSameClassAfterAnotherTableFail(): void
@@ -380,6 +489,27 @@ final class ModelTablesTest extends TestCase
         $adapter = $this->createStub(AdapterInterface::class);
         $adapter->method('getType')->willReturn('mysql');
         $adapter->method('listTables')->willThrowException($exception);
+
+        return $adapter;
+    }
+
+    /**
+     * An adapter of PostgreSQL that gives the tables and the views of each
+     * schema.
+     *
+     * @param array<string, list<string>> $tables
+     * @param array<string, list<string>> $views
+     */
+    private function schemaAdapter(array $tables, array $views = []): AdapterInterface
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('getType')->willReturn('pgsql');
+        $adapter->method('listTables')->willReturnCallback(
+            static fn (?string $schema = null): array => $tables[(string) $schema] ?? []
+        );
+        $adapter->method('listViews')->willReturnCallback(
+            static fn (?string $schema = null): array => $views[(string) $schema] ?? []
+        );
 
         return $adapter;
     }

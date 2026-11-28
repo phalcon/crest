@@ -76,12 +76,28 @@ final class ModelNamesTest extends TestCase
             'crest.php: models.getSet must be true or false',
         ];
 
-        $message = 'crest.php: models.schema must be the name of a schema';
+        $message = 'crest.php: models.schema must be the name of a schema, or a list of names';
 
         yield 'a schema that is not a string' => [['schema' => 1], $message];
         yield 'an empty schema' => [['schema' => ''], $message];
         yield 'a schema of spaces' => [['schema' => '  '], $message];
         yield 'a schema for each table' => [['schema' => ['invoices' => 'billing']], $message];
+        yield 'an empty list' => [
+            ['schema' => []],
+            'crest.php: models.schema is an empty list; give one schema or more',
+        ];
+        yield 'an empty entry' => [
+            ['schema' => ['public', ' ']],
+            'crest.php: models.schema: entry 2 must be the name of a schema',
+        ];
+        yield 'an entry that is not a string' => [
+            ['schema' => ['public', 1]],
+            'crest.php: models.schema: entry 2 must be the name of a schema',
+        ];
+        yield 'a schema two times' => [
+            ['schema' => ['Public', 'billing', 'PUBLIC']],
+            "crest.php: models.schema has the schema 'PUBLIC' two times",
+        ];
     }
 
     /**
@@ -198,6 +214,30 @@ final class ModelNamesTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{array<string, mixed>, string, string}>
+     */
+    public static function namesOfOtherSchemas(): iterable
+    {
+        yield 'a list' => [
+            ['schema' => ['public', 'billing']],
+            'crm.customers',
+            "the schema 'crm' of 'crm.customers' is not in models.schema",
+        ];
+        yield 'a string' => [
+            ['schema' => 'billing'],
+            'crm.customers',
+            "the schema 'crm' of 'crm.customers' is not in models.schema",
+        ];
+        yield 'no key' => [[], 'crm.customers', "the schema 'crm' of 'crm.customers' is not in models.schema"];
+        // The compare keeps the case: PostgreSQL keeps it.
+        yield 'another case' => [
+            ['schema' => ['public', 'billing']],
+            'Billing.invoices',
+            "the schema 'Billing' of 'Billing.invoices' is not in models.schema",
+        ];
+    }
+
+    /**
      * Conflict b of #70 (spec 3.4), for each source of the name. PHP method
      * names are not case-sensitive.
      *
@@ -287,6 +327,23 @@ final class ModelNamesTest extends TestCase
         ModelNames::of([])->withGiven('users', ['firstname' => 'x'])->properties('users', ['id', 'FirstName']);
     }
 
+    public function testALineOfClassesEndsTheClash(): void
+    {
+        $names = ModelNames::of(['classes' => ['audit.users' => 'AuditUser']])
+            ->withTables(['users', 'audit.users']);
+
+        $this->assertSame('AuditUser', $names->classOf('audit.users'));
+        $this->assertSame('Users', $names->classOf('users'));
+
+        // The line takes audit.users out of the group of Users.
+        $this->assertSame(
+            'Users',
+            ModelNames::of(['classes' => ['audit.users' => 'AuditUser']])
+                ->withTables(['audit.users', 'billing.users'])
+                ->classOf('billing.users')
+        );
+    }
+
     public function testAMapLineGivesAClassToANameWithNoClass(): void
     {
         $names = ModelNames::of(['classes' => ['user-profiles' => 'UserProfile', 'list' => 'Listing']]);
@@ -316,6 +373,16 @@ final class ModelNamesTest extends TestCase
         $names->properties('pages', $columns);
     }
 
+    public function testANameWithNoClassDoesNotEndTheTables(): void
+    {
+        $names = ModelNames::of([])->withTables(['user-profiles', 'users', 'audit.users']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('the tables audit.users and users give the class Users');
+
+        $names->classOf('audit.users');
+    }
+
     public function testANullSchemaIsNoSchema(): void
     {
         $names = ModelNames::of(['schema' => null]);
@@ -331,6 +398,32 @@ final class ModelNamesTest extends TestCase
             ['id' => 'id', '2024' => 'year'],
             ModelNames::of([])->withGiven('t', ['2024' => 'year'])->properties('t', ['id', '2024'])
         );
+    }
+
+    public function testASchemaListGivesEachSchema(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame(['public', 'billing'], $names->schemas());
+        $this->assertSame('public', $names->schema());
+        $this->assertTrue($names->isList());
+    }
+
+    public function testAStringIsAListOfOne(): void
+    {
+        $names = ModelNames::of(['schema' => 'billing']);
+
+        $this->assertSame(['billing'], $names->schemas());
+        $this->assertFalse($names->isList());
+        $this->assertFalse(ModelNames::of(['schema' => ['billing']])->isList());
+    }
+
+    public function testATableOfAnotherSchemaGetsTheClassOfItsTable(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing']])->withTables(['invoices', 'billing.invoice_lines']);
+
+        $this->assertSame('InvoiceLines', $names->classOf('billing.invoice_lines'));
+        $this->assertSame('Invoices', ModelNames::of([])->classOf('billing.invoices'));
     }
 
     public function testATableWithNoClassStillStops(): void
@@ -384,6 +477,29 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('first_name', ModelNames::of(['camelCase' => false])->propertyOf('t', 'first_name'));
     }
 
+    public function testCheckNamePassesForASchemaOfTheList(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $names->checkName('billing.invoices');
+        $names->checkName('public.invoices');
+        $names->checkName('invoices');
+        $this->addToAssertionCount(3);
+    }
+
+    /**
+     * @param array<string, mixed> $models
+     *
+     * @dataProvider namesOfOtherSchemas
+     */
+    public function testCheckNameStopsForASchemaNotInTheList(array $models, string $name, string $message): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($message);
+
+        ModelNames::of($models)->checkName($name);
+    }
+
     public function testCheckSchemaPassesOnAServer(): void
     {
         $names = ModelNames::of(['schema' => 'billing']);
@@ -409,6 +525,16 @@ final class ModelNamesTest extends TestCase
         );
 
         ModelNames::of(['schema' => 'billing'])->checkSchema($this->adapter('sqlite'));
+    }
+
+    public function testCheckSchemaStopsOnSqliteWithAList(): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "crest.php: models.schema is 'public, billing', but SQLite has no schemas; remove the key"
+        );
+
+        ModelNames::of(['schema' => ['public', 'billing']])->checkSchema($this->adapter('sqlite'));
     }
 
     public function testDroppedGivesALineForEachColumnThatIsGone(): void
@@ -487,6 +613,16 @@ final class ModelNamesTest extends TestCase
         );
     }
 
+    public function testNameIsBareForTheDefaultSchema(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame('users', $names->name('public', 'users'));
+        $this->assertSame('billing.users', $names->name('billing', 'users'));
+        $this->assertSame('users', ModelNames::of([])->name(null, 'users'));
+        $this->assertSame('users', ModelNames::of(['schema' => 'billing'])->name('billing', 'users'));
+    }
+
     public function testNoMethodCheckRunsWithNoKey(): void
     {
         $this->assertSame(
@@ -504,6 +640,12 @@ final class ModelNamesTest extends TestCase
         $this->assertSame([], $names->mapped());
     }
 
+    public function testNoSchemaKeyHasNoSchemas(): void
+    {
+        $this->assertSame([], ModelNames::of([])->schemas());
+        $this->assertFalse(ModelNames::of([])->isList());
+    }
+
     public function testNoSchemaKeyIsNoSchema(): void
     {
         $names = ModelNames::of([]);
@@ -518,6 +660,48 @@ final class ModelNamesTest extends TestCase
             ['id' => 'id', 'first_name' => 'firstName'],
             ModelNames::of(['camelCase' => true])->properties('users', ['id', 'first_name'])
         );
+    }
+
+    public function testSchemaOfAndTableOfSplitAName(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame('billing', $names->schemaOf('billing.invoices'));
+        $this->assertSame('invoices', $names->tableOf('billing.invoices'));
+        $this->assertSame('public', $names->schemaOf('invoices'));
+        $this->assertSame('invoices', $names->tableOf('invoices'));
+        // Only the first dot splits the name.
+        $this->assertSame('billing', $names->schemaOf('billing.a.b'));
+        $this->assertSame('a.b', $names->tableOf('billing.a.b'));
+    }
+
+    public function testTheDefaultTableKeepsAClassThatAnotherSchemaHas(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'audit']])->withTables(['users', 'audit.users']);
+
+        $this->assertSame('Users', $names->classOf('users'));
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables audit.users and users give the class Users; add 'audit.users' to models.classes"
+        );
+
+        $names->classOf('audit.users');
+    }
+
+    public function testTheDefaultTableNamesOnlyTheTableOfTheCall(): void
+    {
+        // Each table of another schema needs its own line, so the message
+        // names only the table of the call.
+        $names = ModelNames::of([])->withTables(['users', 'audit.users', 'billing.Users']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables audit.users, billing.Users and users give the class Users; "
+            . "add 'billing.Users' to models.classes"
+        );
+
+        $names->classOf('billing.Users');
     }
 
     public function testTheOrderOfTheNames(): void
@@ -561,6 +745,32 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('billing', $names->withGiven('t', [])->schema());
         $this->assertSame('billing', $names->withStored('t', [], '/b.php')->schema());
         $this->assertSame('billing', $names->withFailed('t', 'x')->schema());
+
+        $list = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame(['public', 'billing'], $list->withGiven('t', [])->schemas());
+        $this->assertSame(['public', 'billing'], $list->withStored('t', [], '/b.php')->schemas());
+        $this->assertSame(['public', 'billing'], $list->withFailed('t', 'x')->schemas());
+    }
+
+    public function testTheWithMethodsKeepTheTables(): void
+    {
+        $names = ModelNames::of([])->withTables(['users', 'audit.users']);
+        $calls = [
+            $names->withGiven('t', []),
+            $names->withStored('t', [], '/b.php'),
+            $names->withFailed('t', 'x'),
+            $names->withTables(['users', 'audit.users']),
+        ];
+
+        foreach ($calls as $call) {
+            try {
+                $call->classOf('audit.users');
+                $this->fail('The tables are lost');
+            } catch (Exception $exception) {
+                $this->assertStringStartsWith('the tables audit.users and users', $exception->getMessage());
+            }
+        }
     }
 
     public function testTwoNamesThatDifferOnlyInCasePass(): void
@@ -570,6 +780,19 @@ final class ModelNamesTest extends TestCase
             ['name' => 'name', 'Name' => 'Name'],
             ModelNames::of([])->properties('t', ['name', 'Name'])
         );
+    }
+
+    public function testTwoOtherSchemasWithOneNameNameBothKeys(): void
+    {
+        $names = ModelNames::of([])->withTables(['audit.users', 'billing.users']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables audit.users and billing.users give the class Users; "
+            . "add 'audit.users' or 'billing.users' to models.classes"
+        );
+
+        $names->classOf('audit.users');
     }
 
     /**
