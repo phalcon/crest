@@ -28,6 +28,7 @@ use PHPUnit\Framework\TestCase;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
+use function rmdir;
 use function substr_count;
 
 use const PHP_EOL;
@@ -180,6 +181,19 @@ final class ListCommandTest extends TestCase
 
         $this->assertStringContainsString('/health', $output);
         $this->assertStringNotContainsString('notes', $output);
+    }
+
+    public function testReportsWhenTheActionFolderDoesNotExist(): void
+    {
+        rmdir($this->root . '/src/Action');
+
+        $status = $this->runCommand();
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            'no actions found in ' . $this->root . '/src/Action' . PHP_EOL,
+            $this->readStdout()
+        );
     }
 
     public function testReportsWhenThereAreNoActions(): void
