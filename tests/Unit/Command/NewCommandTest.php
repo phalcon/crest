@@ -484,11 +484,11 @@ final class NewCommandTest extends TestCase
 
     public function testAPhpVersionBelowTheFloorIsRejected(): void
     {
-        $status = $this->runCommand(['my-app', '--php', '8.0']);
+        $status = $this->runCommand(['my-app', '--php', '8.1']);
 
         $this->assertSame(1, $status);
         $this->assertStringContainsString(
-            'PHP 8.0 is too old; the generated code needs 8.1 or later',
+            'PHP 8.1 is too old; crest needs 8.2 or later',
             $this->readStderr()
         );
         $this->assertDirectoryDoesNotExist($this->root . '/my-app');
@@ -1398,7 +1398,7 @@ final class NewCommandTest extends TestCase
 
     public function testThePhpFloorItselfIsAccepted(): void
     {
-        $status = $this->runCommand(['my-app', '--php', '8.1']);
+        $status = $this->runCommand(['my-app', '--php', '8.2']);
 
         $this->assertSame(0, $status);
     }
