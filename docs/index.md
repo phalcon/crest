@@ -1238,7 +1238,7 @@ public function initialize(): void
 }
 ```
 
-The value must be a string that is not empty and not only white space. Crest uses it as you write it: on PostgreSQL, write the name with the case that the server keeps. A `null` value is the same as no value. The schema applies to all the tables of the project, also with `--module`. `config:show` shows it in the `schema` row (see [Names](#names)).
+The value must be a string that is not empty and not only white space, or a list of such names (see **More than one schema** below). Crest uses it as you write it: on PostgreSQL, write the name with the case that the server keeps. A `null` value is the same as no value. The schema applies to all the tables of the project, also with `--module`. `config:show` shows it in the `schema` row, with the names of a list separated by commas (see [Names](#names)).
 
 When you change the value, the next run reads the tables of the new schema, and writes the base of each table of the run with the new value. A table that the new schema does not have stops `make:model`:
 
@@ -1258,7 +1258,62 @@ crest: crest.php: models.schema is 'billing', but SQLite has no schemas; remove 
 
 When `models.schema` has a value, a published `model-base` must have the placeholder `{{ schema }}`. A copy that you published before Crest added this placeholder does not have it, and Crest stops with the message of **Published stubs** in [Names](#names). With no `models.schema`, a published copy works as before.
 
-**A key to another schema.** Crest writes a relation only to a table of the schema that it reads. A foreign key to a table of another schema gives no relation, also with no `models.schema`:
+**More than one schema.** When the tables of the project are in more than one schema, give a list of schemas:
+
+```php
+'models' => [
+    'schema' => ['public', 'billing'],
+],
+```
+
+The first schema is the default schema. `make:model --all` writes a model for each table of each schema, and each base calls `setSchema()` with the schema of its table. A name with no schema is a table of the default schema, and a table of another schema is `<schema>.<table>`. This applies to each name: the table of `make:model` and `make:scaffold`, the names of `--exclude`, the keys of `models.classes`, and the keys of the `RelationAlias` attributes:
+
+```bash
+crest make:model invoices                          # public.invoices
+crest make:model billing.invoices                  # billing.invoices
+crest make:model --all --exclude=billing.audit_log
+```
+
+`--all` prints the name of each table, for example `Table billing.invoices`, and the comment of each base gives the command for its table, for example `run make:model billing.invoices`.
+
+A name can be in the list one time only, without regard to case. A name with a schema that the list does not have stops Crest before it reads the database:
+
+```text
+crest: the schema 'crm' of 'crm.customers' is not in models.schema
+```
+
+A name with no schema that the default schema does not have stops `make:model`. When other schemas of the list have the table, the error gives their names:
+
+```text
+crest: table 'invoices' was not found in the schema 'public' of the 'db' service; did you mean billing.invoices?
+```
+
+The class of a table of another schema comes from the table, with no schema: `billing.invoices` gives `Invoices`. When two tables give one class, the table of the default schema keeps it, and the other table fails until `models.classes` gives it a class:
+
+```text
+Failed: the tables billing.users and users give the class Users; add 'billing.users' to models.classes
+```
+
+```php
+'models' => [
+    'schema'  => ['public', 'billing'],
+    'classes' => ['billing.users' => 'BillingUser'],
+],
+```
+
+When neither table is in the default schema, the error gives both names, and a line for one of them is enough. `make:model billing.users` stops with the same error.
+
+A foreign key to a table of a schema of the list gives a relation in each direction: a `belongsTo()` in the model of the key, and a `hasMany()` in the model of the referenced table. Crest gets the schema of the referenced table from Phalcon (`getReferencedSchema()`). A key to a schema that the list does not have gives a `Skipped` line:
+
+```text
+Skipped the relation belongsTo receipts(customer_id) -> crm.customers(id): the schema crm is not in models.schema
+```
+
+Before cphalcon 5.24.0, on PostgreSQL, Phalcon gives the name of the database as the schema of each key. Thus with a list of schemas, each key gives a `Skipped` line there, also a key in one schema. cphalcon 5.24.0 and `phalcon/phalcon` 6.0.0 have the fix. A string, or no key, reads the keys as before, on each version.
+
+`model-base` has the placeholder `{{ name }}`: the name of the table, with its schema when it is not the default schema, for the comment of the base. `{{ table }}` is the table with no schema, for `setSource()`. A copy that you published before Crest added `{{ name }}` works, and its comment gives the table with no schema.
+
+**A key to another schema.** With a string, or with no key, Crest writes a relation only to a table of the schema that it reads. A foreign key to a table of another schema gives no relation, also with no `models.schema`:
 
 ```text
 Skipped the relation belongsTo invoices(customer_id) -> customers(id): the table customers is in another schema
@@ -1269,7 +1324,7 @@ Crest finds such a key from the list of the tables: the referenced table is not 
 The limits:
 
 - When the schema also has a table or a view with the name of the referenced table, Crest cannot see the difference. It writes the relation to the model of that table or view in the schema.
-- A key from a table of another schema to a table of this schema gives no `hasMany()`: Crest does not read the other schemas.
+- A key from a table of another schema to a table of this schema gives no `hasMany()`: Crest does not read the other schemas. With a list of schemas, Crest reads each schema of the list (see **More than one schema**).
 - On PostgreSQL, two schemas can have the same table with the same key column. If you do not give the keys a name, PostgreSQL gives the two keys the same name, for example `invoices_customer_id_fkey`. Two keys with the same name can point to tables or columns with different names. For such keys, before cphalcon 5.24.0 and before the tag of `phalcon/phalcon` after `v6.0.0RC4`, Phalcon gives one key with the columns of the two keys. Crest then writes a relation with the column two times, or a `Skipped` line, for that key. To fix it, give one of the two keys another name, or use the release with the fix.
 
 ### Getters and setters
