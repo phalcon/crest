@@ -94,6 +94,10 @@ final class ModelNamesTest extends TestCase
             ['schema' => ['public', 1]],
             'crest.php: models.schema: entry 2 must be the name of a schema',
         ];
+        yield 'a table two times in classes' => [
+            ['schema' => ['public', 'billing'], 'classes' => ['users' => 'Person', 'public.users' => 'Member']],
+            "crest.php: models.classes: 'users' and 'public.users' name one table",
+        ];
         yield 'a schema two times' => [
             ['schema' => ['Public', 'billing', 'PUBLIC']],
             "crest.php: models.schema has the schema 'PUBLIC' two times",
@@ -344,6 +348,33 @@ final class ModelNamesTest extends TestCase
         );
     }
 
+    public function testAMapKeyThatIsANumberStaysAKey(): void
+    {
+        // PHP makes the key 2024 an integer.
+        $names = ModelNames::of(['schema' => 'public', 'classes' => ['2024' => 'Year']]);
+
+        $this->assertSame('Year', $names->classOf('2024'));
+    }
+
+    public function testAMapKeyWithTheDefaultSchemaIsTheTable(): void
+    {
+        $names = ModelNames::of(['schema' => ['public', 'billing'], 'classes' => ['public.users' => 'Person']]);
+
+        $this->assertSame('Person', $names->classOf('users'));
+        $this->assertSame(['users'], $names->mapped());
+    }
+
+    public function testAMapKeyWithTheStartOfTheDefaultSchemaKeepsItsSchema(): void
+    {
+        // publicity is not public.
+        $names = ModelNames::of(
+            ['schema' => ['public', 'publicity'], 'classes' => ['publicity.users' => 'PublicityUser']]
+        );
+
+        $this->assertSame(['publicity.users'], $names->mapped());
+        $this->assertSame('PublicityUser', $names->classOf('publicity.users'));
+    }
+
     public function testAMapLineGivesAClassToANameWithNoClass(): void
     {
         $names = ModelNames::of(['classes' => ['user-profiles' => 'UserProfile', 'list' => 'Listing']]);
@@ -477,29 +508,6 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('first_name', ModelNames::of(['camelCase' => false])->propertyOf('t', 'first_name'));
     }
 
-    public function testCheckNamePassesForASchemaOfTheList(): void
-    {
-        $names = ModelNames::of(['schema' => ['public', 'billing']]);
-
-        $names->checkName('billing.invoices');
-        $names->checkName('public.invoices');
-        $names->checkName('invoices');
-        $this->addToAssertionCount(3);
-    }
-
-    /**
-     * @param array<string, mixed> $models
-     *
-     * @dataProvider namesOfOtherSchemas
-     */
-    public function testCheckNameStopsForASchemaNotInTheList(array $models, string $name, string $message): void
-    {
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage($message);
-
-        ModelNames::of($models)->checkName($name);
-    }
-
     public function testCheckSchemaPassesOnAServer(): void
     {
         $names = ModelNames::of(['schema' => 'billing']);
@@ -621,6 +629,31 @@ final class ModelNamesTest extends TestCase
         $this->assertSame('billing.users', $names->name('billing', 'users'));
         $this->assertSame('users', ModelNames::of([])->name(null, 'users'));
         $this->assertSame('users', ModelNames::of(['schema' => 'billing'])->name('billing', 'users'));
+    }
+
+    public function testNameOfGivesTheTableForTheDefaultSchema(): void
+    {
+        // A name with no schema is a table of the default schema (#86), so
+        // the two names are one name.
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame('billing.invoices', $names->nameOf('billing.invoices'));
+        $this->assertSame('invoices', $names->nameOf('public.invoices'));
+        $this->assertSame('invoices', $names->nameOf('invoices'));
+        $this->assertSame('vendors', ModelNames::of(['schema' => 'crest_billing'])->nameOf('crest_billing.vendors'));
+    }
+
+    /**
+     * @param array<string, mixed> $models
+     *
+     * @dataProvider namesOfOtherSchemas
+     */
+    public function testNameOfStopsForASchemaNotInTheList(array $models, string $name, string $message): void
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage($message);
+
+        ModelNames::of($models)->nameOf($name);
     }
 
     public function testNoMethodCheckRunsWithNoKey(): void

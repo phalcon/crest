@@ -228,6 +228,17 @@ final class ModelTablesTest extends TestCase
         $this->assertSame(['billing.bills', 'invoices'], $tables->names());
     }
 
+    public function testAnExcludeNameWithTheDefaultSchemaIsTheTable(): void
+    {
+        $tables = ModelTables::of(
+            $this->schemaAdapter(['public' => ['users', 'invoices'], 'billing' => ['bills']]),
+            ['public.users'],
+            ModelNames::of(['schema' => ['public', 'billing']])
+        );
+
+        $this->assertSame(['billing.bills', 'invoices'], $tables->names());
+    }
+
     public function testAnInternalSqliteTableIsNotATable(): void
     {
         // SQLite rejects the prefix in any case, so the check ignores case.

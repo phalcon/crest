@@ -136,6 +136,19 @@ final class ModelCommandSchemasTest extends AbstractDatabaseTestCase
         $this->assertStringEndsWith('3 tables: 3 models created, 0 kept, 0 failed.' . PHP_EOL, $this->readStdout());
     }
 
+    public function testANameWithTheDefaultSchemaIsTheTable(): void
+    {
+        $this->front(DatabaseFront::class, $this->models());
+        $this->createTables(UsersMigration::class, BillingUsersMigration::class);
+
+        // public.users is users: no clash with crest_billing.users.
+        $this->assertSame(0, $this->runCommand([$this->homeSchema() . '.users']));
+        $this->assertStringContainsString(
+            ' * run make:model users. Put',
+            (string) file_get_contents($this->root . '/src/Models/Base/UsersBase.php')
+        );
+    }
+
     public function testAScaffoldOfATableOfAnotherSchema(): void
     {
         $this->front(DatabaseFront::class, $this->models());

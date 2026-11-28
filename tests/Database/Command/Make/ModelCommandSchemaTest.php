@@ -209,6 +209,29 @@ final class ModelCommandSchemaTest extends AbstractDatabaseTestCase
         );
     }
 
+    public function testATableNameWithTheSchemaKeepsItsRelations(): void
+    {
+        // crest_billing.bills is the table bills of the schema (#86): the run
+        // reads its keys as for bills.
+        $this->front(DatabaseFront::class, self::MODELS);
+        $this->createTables(BillingVendorsMigration::class, BillingBillsMigration::class);
+
+        $this->assertSame(0, $this->runCommand([BillingMigration::SCHEMA . '.bills']));
+        $this->assertSame(0, $this->runCommand([BillingMigration::SCHEMA . '.vendors']));
+        $this->assertStringContainsString(
+            "            \\App\\Models\\Vendors::class,\n",
+            (string) file_get_contents($this->root . '/src/Models/Base/BillsBase.php')
+        );
+        $this->assertStringContainsString(
+            "            \\App\\Models\\Bills::class,\n",
+            (string) file_get_contents($this->root . '/src/Models/Base/VendorsBase.php')
+        );
+        $this->assertStringContainsString(
+            ' * run make:model vendors. Put',
+            (string) file_get_contents($this->root . '/src/Models/Base/VendorsBase.php')
+        );
+    }
+
     public function testATableOnlyInTheDefaultSchemaStops(): void
     {
         $this->front(DatabaseFront::class, self::MODELS);
