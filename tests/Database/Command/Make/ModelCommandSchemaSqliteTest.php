@@ -24,6 +24,8 @@ use Crest\Tests\Support\Migrations\BillingMigration;
 use Crest\Tests\Support\Migrations\MessagesMigration;
 use Crest\Tests\Support\Migrations\UsersMigration;
 use Crest\Tests\Support\Project\SchemaFront;
+use Crest\Tests\Support\Project\TwoSchemaFront;
+use Crest\Tests\Support\Project\TwoSchemaSqlite;
 use Crest\Tests\Support\RunsMakeModel;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Column;
@@ -186,6 +188,23 @@ final class ModelCommandSchemaSqliteTest extends AbstractDatabaseTestCase
 
         $this->assertStringContainsString("        \$this->setSchema('it\\'s');\n", $base);
         $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
+    }
+
+    public function testATableInTwoSchemasStopsBeforeItWrites(): void
+    {
+        // users is in both schemas. The table of the default schema has the
+        // class Users, so a run for the other table must not write over
+        // UsersBase.php (#86).
+        $mirror = TwoSchemaSqlite::MIRROR;
+
+        $this->front(TwoSchemaFront::class, "['schema' => ['" . BillingMigration::SCHEMA . "', '" . $mirror . "']]");
+        $this->createTables(UsersMigration::class);
+
+        $this->assertStops(
+            [$mirror . '.users'],
+            'the tables ' . $mirror . ".users and users give the class Users; add '" . $mirror
+            . ".users' to models.classes"
+        );
     }
 
     public function testATableOfAnotherSchemaGivesTheOldFilesNote(): void
