@@ -141,9 +141,9 @@ final class ScaffoldCommand extends ProjectCommand
         $module = null === $value ? null : ModuleLocation::existing($config, $value);
         $names  = ModelNames::of($config->models());
 
-        // A schema that models.schema does not have stops before the boot
-        // (#86).
-        $names->checkName($table);
+        // A schema that models.schema does not have stops before the boot,
+        // and <default>.<table> is the table (#86).
+        $table = $names->nameOf($table);
 
         $class = $names->classOf($table);
 

@@ -467,9 +467,9 @@ final class ModelCommand extends ProjectCommand
         $names = ModelNames::of($config->models());
         $force = true === $input->option('force');
 
-        // A schema that models.schema does not have stops before the boot
-        // (#86).
-        $names->checkName($table);
+        // A schema that models.schema does not have stops before the boot,
+        // and <default>.<table> is the table (#86).
+        $table = $names->nameOf($table);
 
         if (true === $all) {
             return $this->all($config, $module, $names, $excluded, $force, $views, $output);

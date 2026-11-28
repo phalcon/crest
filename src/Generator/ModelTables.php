@@ -18,6 +18,7 @@ use PDOException;
 use Phalcon\Db\Adapter\AdapterInterface;
 
 use function array_diff;
+use function array_map;
 use function array_unique;
 use function array_values;
 use function count;
@@ -124,10 +125,9 @@ final class ModelTables
         bool $withViews = false
     ): self {
         // A name of --exclude with a schema that the list does not have
-        // stops before a read: with a typo, crest would write the table.
-        foreach ($exclude as $name) {
-            $names->checkName($name);
-        }
+        // stops before a read: with a typo, crest would write the table. The
+        // name <default>.<table> is the table (#86).
+        $exclude = array_map(static fn (string $name): string => $names->nameOf($name), $exclude);
 
         [$listed, $views] = self::listed($adapter, $names);
 

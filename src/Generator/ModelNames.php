@@ -37,6 +37,8 @@ use function property_exists;
 use function sort;
 use function sprintf;
 use function str_contains;
+use function str_starts_with;
+use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
@@ -145,7 +147,9 @@ final class ModelNames
             throw new Exception('crest.php: models.getSet must be true or false');
         }
 
-        return new self(self::classes($classes), $camelCase, self::schemaList($models['schema'] ?? null), $getSet);
+        $schemas = self::schemaList($models['schema'] ?? null);
+
+        return new self(self::defaultKeys(self::classes($classes), $schemas[0] ?? null), $camelCase, $schemas, $getSet);
     }
 
     /**
@@ -224,6 +228,39 @@ final class ModelNames
         }
 
         return $classes;
+    }
+
+    /**
+     * The lines of models.classes with the key <default>.<table> as the key
+     * <table> (#86): a name with no schema is a table of the default schema,
+     * so the two keys name one table, and two lines for it stop.
+     *
+     * @param array<string, string> $classes
+     *
+     * @return array<string, string>
+     */
+    private static function defaultKeys(array $classes, ?string $default): array
+    {
+        $keys  = [];
+        $named = [];
+
+        foreach ($classes as $table => $class) {
+            $table = (string) $table;
+            $key   = null !== $default && true === str_starts_with($table, $default . '.')
+                ? substr($table, strlen($default) + 1)
+                : $table;
+
+            if (true === isset($named[$key])) {
+                throw new Exception(
+                    sprintf("crest.php: models.classes: '%s' and '%s' name one table", $named[$key], $table)
+                );
+            }
+
+            $keys[$key]  = $class;
+            $named[$key] = $table;
+        }
+
+        return $keys;
     }
 
     /**
@@ -331,20 +368,6 @@ final class ModelNames
     public function camelCase(): bool
     {
         return $this->camelCase;
-    }
-
-    /**
-     * Stops when the name has a schema that models.schema does not have
-     * (#86). The list gives the schemas of the project. The compare keeps the
-     * case, because PostgreSQL keeps it.
-     */
-    public function checkName(string $name): void
-    {
-        $schema = $this->schemaOf($name);
-
-        if (true === str_contains($name, '.') && false === in_array($schema, $this->schemas, true)) {
-            throw new Exception(sprintf("the schema '%s' of '%s' is not in models.schema", $schema, $name));
-        }
     }
 
     /**
@@ -487,6 +510,27 @@ final class ModelNames
     public function name(?string $schema, string $table): string
     {
         return null === $schema || $schema === $this->schema() ? $table : $schema . '.' . $table;
+    }
+
+    /**
+     * The name of a name that the user types (#86): <default>.<table> is the
+     * table. Stops when the name has a schema that models.schema does not
+     * have: the list gives the schemas of the project. The compare keeps the
+     * case, because PostgreSQL keeps it.
+     */
+    public function nameOf(string $name): string
+    {
+        if (false === str_contains($name, '.')) {
+            return $name;
+        }
+
+        $schema = $this->schemaOf($name);
+
+        if (false === in_array($schema, $this->schemas, true)) {
+            throw new Exception(sprintf("the schema '%s' of '%s' is not in models.schema", $schema, $name));
+        }
+
+        return $this->name($schema, $this->tableOf($name));
     }
 
     /**
