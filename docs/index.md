@@ -788,6 +788,88 @@ of the models stay public. See [Names](#names) and
 has a `.volt` file, `init` writes `'templateEngine' => 'volt'` (see [Volt](#volt)).
 Else it writes no key, which is `phtml`.
 
+## Moving from devtools
+
+phalcon-devtools is the Phalcon Devtools command line tool (see
+[References](#references)). Crest replaces it. The table gives the Crest command for each
+command of devtools v4. The aliases are in parentheses. The options are not the same: the
+section of each command gives its options.
+
+| devtools v4 | Crest |
+|---|---|
+| `info` (`i`) | `about` (`info`, `i`); see [Command reference](#command-reference) |
+| `commands` (`list`, `enumerate`) | `list` (`commands`, `enumerate`); see [Command reference](#command-reference) |
+| `serve` (`server`) | `serve` (`server`); see [Running a project](#running-a-project) |
+| `project` (`create-project`) | `new`; see [Creating a project](#creating-a-project) |
+| `controller` (`create-controller`) | `make:controller`; see [Generating controllers](#generating-controllers) |
+| `model` (`create-model`) | `make:model`; see [Generating models](#generating-models) |
+| `all-models` (`create-all-models`) | `make:model --all`; see [All the tables](#all-the-tables) |
+| `module` (`create-module`) | `make:module`; see [Generating modules](#generating-modules) |
+| `scaffold` (`create-scaffold`) | `make:scaffold`; see [Generating scaffolds](#generating-scaffolds) |
+| `migration` (`create-migration`) | `vendor/bin/phalcon-migrations`, the command of the package `phalcon/migrations`; see [References](#references) |
+| `console` (`shell`, `psysh`) | not in Crest 1.0. Install PsySH with `composer require --dev psy/psysh`. `vendor/bin/psysh <file>` loads `<file>` first, as `console --include=<file>` did |
+| `webtools` (`create-webtools`) | none: Crest has no web interface |
+
+**A project of devtools.** Crest writes each class with a namespace, and `init` needs a
+psr-4 entry in `composer.json` (see
+[Adding Crest to an existing project](#adding-crest-to-an-existing-project)). devtools
+wrote no `composer.json`: `app/config/loader.php` loads the classes with
+`Phalcon\Loader`. In a `simple` project of devtools, the classes have no namespace. Before
+you run `init`:
+
+1. Add the psr-4 entry to `composer.json`, for example `"App\\": "app/"`.
+2. Give each class the namespace of its folder. With `"App\\": "app/"`, a class in
+   `app/controllers` has the namespace `App\controllers`. For `App\Controllers`, change
+   the name of the folder to `app/Controllers`. A `modules` project of devtools has
+   namespaces already: give each one a psr-4 entry.
+3. Phalcon finds a controller by its namespace. Set the namespace of the controllers with
+   `setDefaultNamespace()` of the `dispatcher` service.
+4. Run `composer dump-autoload`.
+5. Run `crest init`. For the questions of the paths, give the folders of the project, for
+   example `app/controllers`, `app/models` and `app/views`.
+
+**The models.** A model of devtools has its properties. A model of Crest extends a base
+that has the properties, and Crest writes the base again each time you run `make:model`
+(see [Generating models](#generating-models)). Move each model with the steps of "Moving a
+devtools `--get-set` model" (see [Getters and setters](#getters-and-setters)). For a
+model that devtools wrote without `--get-set`, keep `'getSet' => false` in step 1: `init`
+writes it.
+
+**The Annotations strategy.** With `--annotate`, devtools wrote the annotations
+`@Column`, `@Primary` and `@Identity` on the properties. A base of Crest has typed
+properties and no annotations. When the `modelsMetadata` service uses
+`Phalcon\Mvc\Model\MetaData\Strategy\Annotations`, Phalcon reads the columns from these
+annotations, and finds none. The C extension stops with this error:
+
+```text
+No properties with annotations were found in class Users
+```
+
+Do one of these:
+
+- Change to the Introspection strategy, the default of Phalcon: remove the
+  `setStrategy()` call of the `modelsMetadata` service. Phalcon then reads the columns
+  from the database.
+- Keep the Annotations strategy. In each model, declare each property of the base again,
+  with the same visibility, type and default, and put the annotations on it. Crest writes
+  a model one time (only `--force` replaces it), so the annotations stay. When a column
+  changes, change its annotation:
+
+  ```php
+  class Users extends UsersBase
+  {
+      /**
+       * @Primary
+       * @Identity
+       * @Column(column="id", type="integer", nullable=false)
+       */
+      public ?int $id = null;
+  }
+  ```
+
+  On `phalcon/phalcon`, the Annotations strategy also needs the package
+  `phalcon/annotations`.
+
 ## Adding a database
 
 `crest new --database` gives a new project a database (see [The database](#the-database)).
@@ -2834,9 +2916,11 @@ The flavors of each command are in the table of [Overview](#overview).
 - [Crest - GitHub Repository][github]
 - [Crest on Packagist][packagist]
 - [Phalcon Devtools][devtools]
+- [Phalcon Migrations][migrations]
 
 [devtools]: https://docs.phalcon.io/6.0/devtools/
 [github]: https://github.com/phalcon/crest
 [invo]: https://github.com/phalcon/invo
+[migrations]: https://docs.phalcon.io/6.0/db-migrations/
 [packagist]: https://packagist.org/packages/phalcon/crest
 [vokuro]: https://github.com/phalcon/vokuro
