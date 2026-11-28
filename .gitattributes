@@ -1,0 +1,16 @@
+# Not in the package: Packagist gives the zip of GitHub, which reads these
+# lines, not composer.json. Keep the same paths as archive.exclude there.
+/.github export-ignore
+/resources/docker export-ignore
+/resources/phpcs.xml export-ignore
+/resources/phpstan.neon export-ignore
+/resources/php-cs-fixer.php export-ignore
+/resources/phpunit.xml.dist export-ignore
+/resources/full export-ignore
+/resources/phpunit.mariadb.xml export-ignore
+/resources/phpunit.mysql.xml export-ignore
+/resources/phpunit.pgsql.xml export-ignore
+/resources/phpunit.sqlite.xml export-ignore
+/resources/.env.example export-ignore
+/tests export-ignore
+docker-compose.yml export-ignore
