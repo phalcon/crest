@@ -407,10 +407,12 @@ final class ModelNamesTest extends TestCase
     public function testANameInAnotherCaseIsTheListedTable(): void
     {
         // MySQL with lower_case_table_names lists billing.payments, and
-        // finds the table for billing.Payments.
-        $names = ModelNames::of(['schema' => ['public', 'billing']])->withTables(['billing.payments']);
+        // finds the table for billing.Payments. With 2, it lists the name in
+        // the case of its CREATE TABLE.
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
 
-        $this->assertSame('Payments', $names->classOf('billing.Payments'));
+        $this->assertSame('Payments', $names->withTables(['billing.payments'])->classOf('billing.Payments'));
+        $this->assertSame('Payments', $names->withTables(['billing.Payments'])->classOf('billing.payments'));
     }
 
     public function testANameInAnotherCaseNamesTheListedTable(): void
