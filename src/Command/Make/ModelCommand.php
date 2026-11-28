@@ -41,6 +41,7 @@ use function array_diff;
 use function array_filter;
 use function array_keys;
 use function array_map;
+use function array_merge;
 use function array_values;
 use function count;
 use function explode;
@@ -466,6 +467,10 @@ final class ModelCommand extends ProjectCommand
         $names = ModelNames::of($config->models());
         $force = true === $input->option('force');
 
+        // A schema that models.schema does not have stops before the boot,
+        // and <default>.<table> is the table (#86).
+        $table = $names->nameOf($table);
+
         if (true === $all) {
             return $this->all($config, $module, $names, $excluded, $force, $views, $output);
         }
@@ -488,6 +493,12 @@ final class ModelCommand extends ProjectCommand
         ModelNames $names,
         string $table
     ): array {
+        // With a list of schemas, the class of a table of another schema
+        // needs the names of the other tables (#86).
+        if (true === $names->isList()) {
+            $names = $names->withTables(array_merge(...ModelTables::listed($adapter, $names)));
+        }
+
         $class              = $names->classOf($table);
         [$path, $namespace] = self::folder($config, $module);
 
@@ -495,12 +506,12 @@ final class ModelCommand extends ProjectCommand
         // exist, a base that crest cannot read, or a column with no usable
         // property name stops the command before crest reads the keys of
         // each table.
-        $columns  = ModelProperties::of($adapter, $table, $names->schemaOf($table));
+        $columns  = ModelProperties::ofName($adapter, $names, $table);
         $baseFile = self::baseFile($path, $class);
         $base     = BaseAttributes::read($baseFile);
         $names    = $names->withStored($table, $base->properties, $baseFile);
         $final    = $names->properties($table, self::strings($columns));
-        $keys     = ForeignKeys::read($adapter, $table, $names->schema());
+        $keys     = ForeignKeys::read($adapter, $table, $names);
 
         // The relations need the property names of the related tables.
         [$names] = self::bases($names, $keys->related($table), $path);
@@ -552,6 +563,7 @@ final class ModelCommand extends ProjectCommand
                     'class'      => $parts['base'],
                     'columnMap'  => $this->columnMap($config, $parts['map']),
                     'methods'    => $this->methods($config, $parts['properties'], $parts['names'], $parts['getSet']),
+                    'name'       => $parts['table'],
                     'namespace'  => $parts['baseNamespace'],
                     'properties' => $this->properties(
                         $config,
@@ -561,7 +573,7 @@ final class ModelCommand extends ProjectCommand
                     ),
                     'relations'  => $this->relations($config, $relations),
                     'schema'     => $this->schema($config, $parts['schema']),
-                    'table'      => $parts['table'],
+                    'table'      => $parts['source'],
                 ]
             ),
             $parts['baseFile']
@@ -686,17 +698,23 @@ final class ModelCommand extends ProjectCommand
         }
 
         if ([] === $tables->names()) {
-            $output->line(
-                null === $names->schema()
-                    ? 'No tables to write.'
-                    : sprintf("No tables to write in the schema '%s'.", $names->schema())
-            );
+            $output->line(match (true) {
+                null === $names->schema() => 'No tables to write.',
+                $names->isList()          => sprintf(
+                    'No tables to write in the schemas %s.',
+                    implode(
+                        ', ',
+                        array_map(static fn (string $schema): string => "'" . $schema . "'", $names->schemas())
+                    )
+                ),
+                default                   => sprintf("No tables to write in the schema '%s'.", $names->schema()),
+            });
 
             return 0;
         }
 
-        $keys            = ForeignKeys::read($adapter, '', $names->schema());
-        [$names, $bases] = self::bases($names, $keys->tables(), $path);
+        $keys            = ForeignKeys::read($adapter, '', $names);
+        [$names, $bases] = self::bases($names->withTables($keys->tables()), $keys->tables(), $path);
         $written         = self::strings($tables->classes);
         $created         = 0;
         $failed          = [];
@@ -723,7 +741,7 @@ final class ModelCommand extends ProjectCommand
                     throw $base;
                 }
 
-                $columns = ModelProperties::of($adapter, $table, $names->schemaOf($table));
+                $columns = ModelProperties::ofName($adapter, $names, $table);
                 $parts   = $this->read(
                     $config,
                     $names,
@@ -1009,6 +1027,7 @@ final class ModelCommand extends ProjectCommand
                 static fn (string $other): bool => null !== self::classOrNull($names, $other)
             )),
             'schema'        => $schema,
+            'source'        => $names->tableOf($table),
             'table'         => $table,
         ];
     }

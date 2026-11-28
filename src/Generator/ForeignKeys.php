@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Generator;
 
 use Phalcon\Db\Adapter\AdapterInterface;
+use Phalcon\Db\Reference;
 use Phalcon\Db\ReferenceInterface;
 
 use function array_diff;
@@ -43,7 +44,8 @@ use const SORT_STRING;
  * The tables and the keys are those of the schema of the run (#69), or of
  * the default schema. A key whose referenced table is not a table of the run
  * points to a table of another schema: it is in elsewhere(), not in of()
- * (spec 3.6).
+ * (spec 3.6). With a list of schemas (#86), they are those of each schema of
+ * the list, by the names of ModelNames::name().
  */
 final class ForeignKeys
 {
@@ -71,13 +73,22 @@ final class ForeignKeys
      * elsewhere(). The compare is without regard to case: MySQL with
      * lower_case_table_names 1 or 2 can give the referenced table in another
      * case. SQLite has no schemas, so there each key stays. crest does not use
-     * getReferencedSchema(): on PostgreSQL, Phalcon gives the name of the
-     * database there (spec 2.2).
+     * getReferencedSchema() for one schema: on PostgreSQL before cphalcon
+     * 5.24.0, Phalcon gives the name of the database there (spec 2.2). A
+     * list of schemas uses it (readList()).
      *
-     * @param string $table The table name that the user typed, or '' for --all
+     * @param string          $table The name that the user typed, or '' for --all
+     * @param ModelNames|null $names models.schema; null for no key
      */
-    public static function read(AdapterInterface $adapter, string $table = '', ?string $schema = null): self
+    public static function read(AdapterInterface $adapter, string $table = '', ?ModelNames $names = null): self
     {
+        $names ??= ModelNames::of([]);
+
+        if (true === $names->isList()) {
+            return self::readList($adapter, $table, $names);
+        }
+
+        $schema = $names->schema();
         $keys   = [];
         $listed = [...$adapter->listTables($schema), ...$adapter->listViews($schema)];
 
@@ -105,6 +116,83 @@ final class ForeignKeys
                 } else {
                     $elsewhere[$name][] = $reference;
                 }
+            }
+
+            $keys[$name] = $here;
+        }
+
+        return new self($keys, $elsewhere);
+    }
+
+    /**
+     * The reference with another name of the referenced table: crest finds
+     * a table of the list by its name (#86).
+     */
+    private static function named(ReferenceInterface $reference, string $table): Reference
+    {
+        return new Reference(
+            $reference->getName(),
+            [
+                'schema'            => $reference->getSchemaName(),
+                'referencedSchema'  => $reference->getReferencedSchema(),
+                'referencedTable'   => $table,
+                'columns'           => $reference->getColumns(),
+                'referencedColumns' => $reference->getReferencedColumns(),
+                'onDelete'          => $reference->getOnDelete(),
+                'onUpdate'          => $reference->getOnUpdate(),
+            ]
+        );
+    }
+
+    /**
+     * The keys of each schema of the list (#86). The schema of a referenced
+     * table is getReferencedSchema(), compared with the list without regard
+     * to case: MySQL with lower_case_table_names 1 or 2 can give it in
+     * another case. A key with no referenced schema points to the schema of
+     * its table. A key to a schema of the list gets the name of the table
+     * (ModelNames::name()) and goes to of(). A key to another schema gets
+     * <schema>.<table> and goes to elsewhere().
+     */
+    private static function readList(AdapterInterface $adapter, string $table, ModelNames $names): self
+    {
+        $keys    = [];
+        $schemas = [];
+
+        foreach ($names->schemas() as $schema) {
+            $schemas[strtolower($schema)] = $schema;
+
+            foreach ([...$adapter->listTables($schema), ...$adapter->listViews($schema)] as $listed) {
+                $keys[$names->name($schema, $listed)] = $adapter->describeReferences($listed, $schema);
+            }
+        }
+
+        if ('' !== $table && false === isset($keys[$table])) {
+            $keys[$table] = $adapter->describeReferences($names->tableOf($table), $names->schemaOf($table));
+        }
+
+        // Each table gets a list of the keys of the list: the keys of
+        // describeReferences() have the names of the constraints.
+        $elsewhere = [];
+
+        foreach ($keys as $name => $references) {
+            $here = [];
+
+            foreach ($references as $reference) {
+                $referenced = (string) $reference->getReferencedSchema();
+                $schema     = '' === $referenced
+                    ? $names->schemaOf((string) $name)
+                    : $schemas[strtolower($referenced)] ?? null;
+
+                if (null === $schema) {
+                    $elsewhere[$name][] = self::named(
+                        $reference,
+                        $referenced . '.' . $reference->getReferencedTable()
+                    );
+
+                    continue;
+                }
+
+                $here[] = self::named($reference, $names->name($schema, $reference->getReferencedTable()));
             }
 
             $keys[$name] = $here;

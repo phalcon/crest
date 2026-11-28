@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Unit\Generator;
 
 use Crest\Console\Exceptions\Exception;
+use Crest\Generator\ModelNames;
 use Crest\Generator\ModelProperties;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Column;
@@ -48,6 +49,51 @@ final class ModelPropertiesTest extends TestCase
         yield 'decimal keeps its precision' => [Column::TYPE_DECIMAL, 'string'];
         yield 'json' => [Column::TYPE_JSON, 'string'];
         yield 'a type given as a string' => ['custom', 'string'];
+    }
+
+    public function testAMissingTableNamesTheOtherSchemasThatHaveIt(): void
+    {
+        // audit has a view, crm a table, billing neither.
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('tableExists')->willReturnCallback(
+            static fn (string $table, ?string $schema = null): bool => 'invoices' === $table && 'crm' === $schema
+        );
+        $adapter->method('viewExists')->willReturnCallback(
+            static fn (string $view, ?string $schema = null): bool => 'invoices' === $view && 'audit' === $schema
+        );
+
+        $this->assertSame(
+            "table 'invoices' was not found in the schema 'public' of the 'db' service; "
+            . 'did you mean audit.invoices, crm.invoices?',
+            $this->error($adapter, ['public', 'billing', 'audit', 'crm'], 'invoices')
+        );
+    }
+
+    public function testAMissingTableWithNoOtherSchemaHasNoHint(): void
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('tableExists')->willReturn(false);
+        $adapter->method('viewExists')->willReturn(false);
+
+        $this->assertSame(
+            "table 'invoices' was not found in the schema 'public' of the 'db' service",
+            $this->error($adapter, ['public', 'billing'], 'invoices')
+        );
+    }
+
+    public function testANameWithASchemaGetsNoHint(): void
+    {
+        // The name gives the schema, so crest does not look in the others.
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('tableExists')->willReturnCallback(
+            static fn (string $table, ?string $schema = null): bool => 'public' === $schema
+        );
+        $adapter->method('viewExists')->willReturn(false);
+
+        $this->assertSame(
+            "table 'invoices' was not found in the schema 'billing' of the 'db' service",
+            $this->error($adapter, ['public', 'billing'], 'billing.invoices')
+        );
     }
 
     public function testATableThatIsNotFoundWithNoSchemaNamesTheDatabase(): void
@@ -87,6 +133,20 @@ final class ModelPropertiesTest extends TestCase
         $this->assertSame(['name' => 'string'], ModelProperties::of($adapter, 'customer_names', 'billing'));
     }
 
+    public function testOfNameReadsATableOfAnotherSchema(): void
+    {
+        $adapter = $this->createStub(AdapterInterface::class);
+        $adapter->method('tableExists')->willReturnCallback(
+            static fn (string $table, ?string $schema = null): bool => 'invoices' === $table && 'billing' === $schema
+        );
+        $adapter->method('describeColumns')->willReturn([new Column('total', ['type' => Column::TYPE_DECIMAL])]);
+
+        $this->assertSame(
+            ['total' => 'string'],
+            ModelProperties::ofName($adapter, ModelNames::of(['schema' => ['public', 'billing']]), 'billing.invoices')
+        );
+    }
+
     public function testOfReadsTheTableOfTheSchema(): void
     {
         $adapter = $this->createStub(AdapterInterface::class);
@@ -108,5 +168,21 @@ final class ModelPropertiesTest extends TestCase
     public function testTypeMapsAColumnTypeToAPhpType(int | string $type, string $expected): void
     {
         $this->assertSame($expected, ModelProperties::type($type));
+    }
+
+    /**
+     * The message of the error of ofName().
+     *
+     * @param list<string> $schemas
+     */
+    private function error(AdapterInterface $adapter, array $schemas, string $name): string
+    {
+        try {
+            ModelProperties::ofName($adapter, ModelNames::of(['schema' => $schemas]), $name);
+        } catch (Exception $exception) {
+            return $exception->getMessage();
+        }
+
+        $this->fail('ofName() did not stop.');
     }
 }

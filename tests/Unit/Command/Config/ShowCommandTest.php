@@ -107,7 +107,7 @@ final class ShowCommandTest extends TestCase
         ];
         yield 'a schema that is not a name' => [
             "['schema' => '']",
-            'crest.php: models.schema must be the name of a schema',
+            'crest.php: models.schema must be the name of a schema, or a list of names',
         ];
     }
 
@@ -243,6 +243,18 @@ final class ShowCommandTest extends TestCase
 
         $this->assertStringContainsString(
             'getSet false default' . PHP_EOL . 'schema none default' . PHP_EOL,
+            $this->normalized()
+        );
+    }
+
+    public function testASchemaListIsShown(): void
+    {
+        $this->writeModels("['schema' => ['public', 'billing']]");
+
+        $this->runCommand();
+
+        $this->assertStringContainsString(
+            'getSet false default' . PHP_EOL . 'schema public, billing declared' . PHP_EOL,
             $this->normalized()
         );
     }

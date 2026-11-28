@@ -64,9 +64,10 @@ use function ucfirst;
  * With --module, the files go into the module, in its namespace
  * (ModuleLocation). The module must exist: make:module writes it.
  *
- * With models.schema (#69), the pages read the table of that schema. Only the
- * model needs the schema: its base calls setSchema(), and the controller and
- * the form use the model.
+ * With models.schema (#69), the pages read the table of that schema. With a
+ * list of schemas (#86), the name gives the schema: <schema>.<table>, or a
+ * table of the default schema. Only the model needs the schema: its base
+ * calls setSchema(), and the controller and the form use the model.
  */
 final class ScaffoldCommand extends ProjectCommand
 {
@@ -139,7 +140,12 @@ final class ScaffoldCommand extends ProjectCommand
         $value  = $input->optionStringOrNull('module');
         $module = null === $value ? null : ModuleLocation::existing($config, $value);
         $names  = ModelNames::of($config->models());
-        $class  = $names->classOf($table);
+
+        // A schema that models.schema does not have stops before the boot,
+        // and <default>.<table> is the table (#86).
+        $table = $names->nameOf($table);
+
+        $class = $names->classOf($table);
 
         $route  = ControllerRoute::of($table, $class . ControllerRoute::SUFFIX);
 
@@ -159,11 +165,9 @@ final class ScaffoldCommand extends ProjectCommand
 
         $names->checkSchema($adapter);
 
-        $schema = $names->schemaOf($table);
+        ModelProperties::ofName($adapter, $names, $table);
 
-        ModelProperties::of($adapter, $table, $schema);
-
-        $columns = $adapter->describeColumns($table, $schema);
+        $columns = $adapter->describeColumns($names->tableOf($table), $names->schemaOf($table));
 
         $key    = $this->primaryKey($columns, $table);
         $models = new ModelCommand();

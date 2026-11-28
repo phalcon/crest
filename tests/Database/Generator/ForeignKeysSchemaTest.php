@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Crest\Tests\Database\Generator;
 
 use Crest\Generator\ForeignKeys;
+use Crest\Generator\ModelNames;
 use Crest\Tests\Database\AbstractDatabaseTestCase;
 use Crest\Tests\Support\Migrations\BillingCustomersMigration;
 use Crest\Tests\Support\Migrations\BillingInvoicesMigration;
@@ -56,7 +57,7 @@ final class ForeignKeysSchemaTest extends AbstractDatabaseTestCase
     {
         $this->createTables(CustomersMigration::class, BillingPaymentsMigration::class);
 
-        $keys = ForeignKeys::read($this->adapter(), '', BillingMigration::SCHEMA);
+        $keys = ForeignKeys::read($this->adapter(), '', ModelNames::of(['schema' => BillingMigration::SCHEMA]));
 
         $this->assertSame([], $keys->of('payments'));
         $this->assertCount(1, $keys->elsewhere('payments'));
@@ -74,7 +75,7 @@ final class ForeignKeysSchemaTest extends AbstractDatabaseTestCase
             BillingPaymentsMigration::class
         );
 
-        $keys = ForeignKeys::read($this->adapter(), '', BillingMigration::SCHEMA);
+        $keys = ForeignKeys::read($this->adapter(), '', ModelNames::of(['schema' => BillingMigration::SCHEMA]));
 
         $this->assertCount(1, $keys->of('payments'));
         $this->assertSame('customers', $keys->of('payments')[0]->getReferencedTable());
@@ -86,7 +87,7 @@ final class ForeignKeysSchemaTest extends AbstractDatabaseTestCase
         $this->createTables(BillingCustomersMigration::class, BillingInvoicesMigration::class);
 
         $adapter = $this->adapter();
-        $keys    = ForeignKeys::read($adapter, '', BillingMigration::SCHEMA);
+        $keys    = ForeignKeys::read($adapter, '', ModelNames::of(['schema' => BillingMigration::SCHEMA]));
 
         $this->assertSame(array_values($adapter->listTables(BillingMigration::SCHEMA)), $keys->tables());
         $this->assertCount(1, $keys->of('invoices'));
@@ -106,7 +107,7 @@ final class ForeignKeysSchemaTest extends AbstractDatabaseTestCase
         );
 
         foreach ([null, BillingMigration::SCHEMA] as $schema) {
-            $keys = ForeignKeys::read($this->adapter(), '', $schema);
+            $keys = ForeignKeys::read($this->adapter(), '', ModelNames::of(['schema' => $schema]));
 
             $this->assertCount(1, $keys->of('invoices'));
             $this->assertSame(['customer_id'], $keys->of('invoices')[0]->getColumns());

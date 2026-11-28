@@ -50,6 +50,8 @@ final class ModelCommandSchemaSqliteTest extends AbstractDatabaseTestCase
 {
     use RunsMakeModel;
 
+    private const LIST = "['schema' => ['" . BillingMigration::SCHEMA . "', 'crest_audit']]";
+
     private const MODELS = "['schema' => '" . BillingMigration::SCHEMA . "']";
 
     protected function setUp(): void
@@ -67,6 +69,22 @@ final class ModelCommandSchemaSqliteTest extends AbstractDatabaseTestCase
         parent::tearDown();
     }
 
+    public function testAListRunsOneTableOfTheDefaultSchema(): void
+    {
+        // With a list (#86), the run gives the names of the tables of each
+        // schema to the class check first.
+        $this->front(SchemaFront::class, self::LIST);
+        $this->createTables(UsersMigration::class);
+
+        $status = $this->runCommand(['users']);
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString(
+            "        \$this->setSchema('" . BillingMigration::SCHEMA . "');\n",
+            (string) file_get_contents($this->root . '/src/Models/Base/UsersBase.php')
+        );
+    }
+
     public function testAllReadsTheTablesOfTheSchema(): void
     {
         $this->createTables(UsersMigration::class, MessagesMigration::class);
@@ -78,6 +96,19 @@ final class ModelCommandSchemaSqliteTest extends AbstractDatabaseTestCase
         $this->assertStringContainsString(
             '\\App\\Models\\Users::class',
             (string) file_get_contents($this->root . '/src/Models/Base/MessagesBase.php')
+        );
+    }
+
+    public function testAllWithAListAndNoTablesNamesTheSchemas(): void
+    {
+        $this->front(SchemaFront::class, self::LIST);
+
+        $status = $this->runCommand(['--all']);
+
+        $this->assertSame(0, $status);
+        $this->assertSame(
+            "No tables to write in the schemas '" . BillingMigration::SCHEMA . "', 'crest_audit'." . PHP_EOL,
+            $this->readStdout()
         );
     }
 

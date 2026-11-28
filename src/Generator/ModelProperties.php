@@ -17,7 +17,9 @@ use Crest\Console\Exceptions\Exception;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Db\Column;
 
+use function implode;
 use function sprintf;
+use function str_contains;
 
 /**
  * The properties of a model that make:model writes: the columns of its table,
@@ -57,6 +59,48 @@ final class ModelProperties
         }
 
         return $properties;
+    }
+
+    /**
+     * of() for a name of ModelNames (#86): <schema>.<table>, or a table of
+     * the default schema. With a list of schemas, a name with no schema that
+     * the default schema does not have gets a hint: the names of the other
+     * schemas of the list that have the table.
+     *
+     * @return array<string, string>
+     */
+    public static function ofName(AdapterInterface $adapter, ModelNames $names, string $name): array
+    {
+        $table  = $names->tableOf($name);
+        $schema = $names->schemaOf($name);
+
+        try {
+            return self::of($adapter, $table, $schema);
+        } catch (Exception $exception) {
+            if (false === $names->isList() || true === str_contains($name, '.')) {
+                throw $exception;
+            }
+
+            $found = [];
+
+            foreach ($names->schemas() as $other) {
+                if (
+                    $other !== $schema
+                    && (true === $adapter->tableExists($table, $other) || true === $adapter->viewExists($table, $other))
+                ) {
+                    $found[] = $names->name($other, $table);
+                }
+            }
+
+            if ([] === $found) {
+                throw $exception;
+            }
+
+            throw new Exception(
+                $exception->getMessage() . '; did you mean ' . implode(', ', $found) . '?',
+                previous: $exception
+            );
+        }
     }
 
     /**
