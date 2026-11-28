@@ -188,6 +188,29 @@ final class ModelCommandSchemaSqliteTest extends AbstractDatabaseTestCase
         $this->assertNotEmpty(token_get_all($base, TOKEN_PARSE));
     }
 
+    public function testATableOfAnotherSchemaGivesTheOldFilesNote(): void
+    {
+        // The class of the table now comes from models.classes, so the old
+        // files of Users stay (#71). The default schema has no tables.
+        $list = "['schema' => ['crest_audit', '" . BillingMigration::SCHEMA . "']";
+        $name = BillingMigration::SCHEMA . '.users';
+
+        $this->front(SchemaFront::class, $list . ']');
+        $this->createTables(UsersMigration::class);
+
+        $this->assertSame(0, $this->runCommand([$name]));
+
+        $this->front(SchemaFront::class, $list . ", 'classes' => ['" . $name . "' => 'Member']]");
+        $this->freshStreams();
+
+        $this->assertSame(0, $this->runCommand([$name]));
+        $this->assertStringContainsString(
+            'Note: the old files of ' . $name . ' stay: ' . $this->root . '/src/Models/Users.php and '
+            . $this->root . '/src/Models/Base/UsersBase.php; move your code to Member, delete them' . PHP_EOL,
+            $this->readStdout()
+        );
+    }
+
     public function testMakeScaffoldReadsTheSchema(): void
     {
         $this->createTables(UsersMigration::class);
