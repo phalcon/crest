@@ -556,8 +556,40 @@ phalcon-devtools is the Phalcon Devtools command line tool (see [References](#re
 1. Add the psr-4 entry to `composer.json`, for example `"App\\": "app/"`.
 2. Give each class the namespace of its folder. With `"App\\": "app/"`, a class in `app/controllers` has the namespace `App\controllers`. For `App\Controllers`, change the name of the folder to `app/Controllers`. A `modules` project of devtools has namespaces already: give each one a psr-4 entry.
 3. Phalcon finds a controller by its namespace. Set the namespace of the controllers with `setDefaultNamespace()` of the `dispatcher` service.
-4. Run `composer dump-autoload`.
-5. Run `crest init`. For the questions of the paths, give the folders of the project, for example `app/controllers`, `app/models` and `app/views`.
+4. Add a front controller for Crest. `make:model` and `make:scaffold` read the `db` service, so Crest starts the class of the `bootstrap` key (see [Commands that boot the project](#commands-that-boot-the-project)). A project of devtools has no such class: `public/index.php` defines `BASE_PATH` and `APP_PATH`, and includes `app/config/services.php`, which registers the `db` service. This is the same in the `simple`, `micro` and `modules` projects. Add `app/AppFront.php`, which does the same and returns the container. `public/index.php` does not change:
+
+   ```php
+   <?php
+
+   declare(strict_types=1);
+
+   namespace App;
+
+   use Phalcon\Di\DiInterface;
+   use Phalcon\Di\FactoryDefault;
+
+   final class AppFront
+   {
+       public function __construct(private string $root)
+       {
+       }
+
+       public function boot(): DiInterface
+       {
+           defined('BASE_PATH') || define('BASE_PATH', $this->root);
+           defined('APP_PATH') || define('APP_PATH', BASE_PATH . '/app');
+
+           $di = new FactoryDefault();
+
+           include APP_PATH . '/config/services.php';
+
+           return $di;
+       }
+   }
+   ```
+
+5. Run `composer dump-autoload`.
+6. Run `crest init`. For the front controller, `init` proposes `App\AppFront`. For the questions of the paths, give the folders of the project, for example `app/controllers`, `app/models` and `app/views`.
 
 **The models.** A model of devtools has its properties. A model of Crest extends a base that has the properties, and Crest writes the base again each time you run `make:model` (see [Generating models](#generating-models)). Move each model with the steps of "Moving a devtools `--get-set` model" (see [Getters and setters](#getters-and-setters)). For a model that devtools wrote without `--get-set`, keep `'getSet' => false` in step 1: `init` writes it.
 
