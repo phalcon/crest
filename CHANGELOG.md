@@ -180,6 +180,7 @@ All notable changes are documented here. The format is based on [Keep a Changelo
 - Changed the message of a `models.schema` that is not valid to `models.schema must be the name of a schema, or a list of names`. [#86](https://github.com/phalcon/crest/issues/86)
 - Changed `ForeignKeys::read()`: the third parameter is the `ModelNames` of the run, not the schema. [#86](https://github.com/phalcon/crest/issues/86)
 - Changed the stub `model-base`: the comment gives `make:model {{ name }}`, the name of the table with its schema. `{{ table }}` stays the table for `setSource()`. [#86](https://github.com/phalcon/crest/issues/86)
+- Changed `Crest\Project\Config` to `@internal`: it is not part of the API for a package. A package gets the project from `Project::context()`, as a `ProjectContext`. [#16](https://github.com/phalcon/crest/issues/16)
 
 ### Fixed
 
