@@ -136,6 +136,19 @@ final class ModelCommandSchemasTest extends AbstractDatabaseTestCase
         $this->assertStringEndsWith('3 tables: 3 models created, 0 kept, 0 failed.' . PHP_EOL, $this->readStdout());
     }
 
+    public function testANameInAnotherCaseIsNotAClash(): void
+    {
+        // The servers of the tests keep the case of a name, so the table is
+        // not found. It is not another table that gives the class Vendors.
+        $this->front(DatabaseFront::class, $this->models());
+        $this->createTables(BillingVendorsMigration::class);
+
+        $this->assertStops(
+            [BillingMigration::SCHEMA . '.Vendors'],
+            "table 'Vendors' was not found in the schema '" . BillingMigration::SCHEMA . "' of the 'db' service"
+        );
+    }
+
     public function testANameWithTheDefaultSchemaIsTheTable(): void
     {
         $this->front(DatabaseFront::class, $this->models());
@@ -209,6 +222,8 @@ final class ModelCommandSchemasTest extends AbstractDatabaseTestCase
         $this->freshStreams();
 
         $this->assertSame(0, $this->runCommand(['--all']));
+        // UsersBase.php is the base of users, not an old file (#71).
+        $this->assertStringNotContainsString('Note: the old file', $this->readStdout());
         $this->assertStringContainsString(
             "        \$this->setSource('users');\n        \$this->setSchema('" . BillingMigration::SCHEMA . "');\n",
             (string) file_get_contents($this->root . '/src/Models/Base/BillingUserBase.php')

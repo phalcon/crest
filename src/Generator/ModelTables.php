@@ -37,10 +37,10 @@ use const SORT_STRING;
  * --exclude. With --views (#88), the views too. With models.schema (#69), the
  * tables and the views are those of the schema. With a list of schemas (#86),
  * they are those of each schema, and a table of a schema that is not the
- * default is <schema>.<table>. Each table gets its class here, before crest writes a file. A
- * table that gives no class, or that gives the class of another table,
- * fails: crest writes the other tables, and lists the failed tables at the
- * end.
+ * default is <schema>.<table>. Each table gets its class here, before crest
+ * writes a file. A table that gives no class, or that gives the class of
+ * another table, fails: crest writes the other tables, and lists the failed
+ * tables at the end.
  */
 final class ModelTables
 {

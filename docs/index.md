@@ -1305,7 +1305,7 @@ Failed: the tables billing.users and users give the class Users; add 'billing.us
 ],
 ```
 
-When neither table is in the default schema, the error gives both names, and a line for one of them is enough. `make:model billing.users` stops with the same error.
+When neither table is in the default schema, the error gives both names, and a line for one of them is enough. A table with a line in `models.classes` keeps its class, as the table of the default schema does: the error then gives only the other table. `make:model billing.users` stops with the same error.
 
 A foreign key to a table of a schema of the list gives a relation in each direction: a `belongsTo()` in the model of the key, and a `hasMany()` in the model of the referenced table. Crest gets the schema of the referenced table from Phalcon (`getReferencedSchema()`). A key to a schema that the list does not have gives a `Skipped` line:
 

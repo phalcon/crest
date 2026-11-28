@@ -404,6 +404,32 @@ final class ModelNamesTest extends TestCase
         $names->properties('pages', $columns);
     }
 
+    public function testANameInAnotherCaseIsTheListedTable(): void
+    {
+        // MySQL with lower_case_table_names lists billing.payments, and
+        // finds the table for billing.Payments. With 2, it lists the name in
+        // the case of its CREATE TABLE.
+        $names = ModelNames::of(['schema' => ['public', 'billing']]);
+
+        $this->assertSame('Payments', $names->withTables(['billing.payments'])->classOf('billing.Payments'));
+        $this->assertSame('Payments', $names->withTables(['billing.Payments'])->classOf('billing.payments'));
+    }
+
+    public function testANameInAnotherCaseNamesTheListedTable(): void
+    {
+        // The line of models.classes must have the listed name, which --all
+        // uses.
+        $names = ModelNames::of(['schema' => ['public', 'billing']])->withTables(['payments', 'billing.payments']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables billing.payments and payments give the class Payments; "
+            . "add 'billing.payments' to models.classes"
+        );
+
+        $names->classOf('billing.Payments');
+    }
+
     public function testANameWithNoClassDoesNotEndTheTables(): void
     {
         $names = ModelNames::of([])->withTables(['user-profiles', 'users', 'audit.users']);
@@ -455,6 +481,20 @@ final class ModelNamesTest extends TestCase
 
         $this->assertSame('InvoiceLines', $names->classOf('billing.invoice_lines'));
         $this->assertSame('Invoices', ModelNames::of([])->classOf('billing.invoices'));
+    }
+
+    public function testATableWithALineKeepsTheClass(): void
+    {
+        // audit.users has its line, so only billing.users needs one.
+        $names = ModelNames::of(['classes' => ['audit.users' => 'Users']])
+            ->withTables(['audit.users', 'billing.users']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables audit.users and billing.users give the class Users; add 'billing.users' to models.classes"
+        );
+
+        $names->classOf('billing.users');
     }
 
     public function testATableWithNoClassStillStops(): void
@@ -804,6 +844,22 @@ final class ModelNamesTest extends TestCase
                 $this->assertStringStartsWith('the tables audit.users and users', $exception->getMessage());
             }
         }
+    }
+
+    public function testTwoListedNamesThatDifferOnlyInCaseStop(): void
+    {
+        // PostgreSQL keeps the case of a quoted name: these are two tables,
+        // and PHP sees one class.
+        $names = ModelNames::of(['schema' => ['public', 'billing']])
+            ->withTables(['billing.Payments', 'billing.payments']);
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            "the tables billing.Payments and billing.payments give the class Payments; "
+            . "add 'billing.Payments' or 'billing.payments' to models.classes"
+        );
+
+        $names->classOf('billing.Payments');
     }
 
     public function testTwoNamesThatDifferOnlyInCasePass(): void
