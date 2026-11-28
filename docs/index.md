@@ -1274,13 +1274,17 @@ crest make:model billing.invoices                  # billing.invoices
 crest make:model --all --exclude=billing.audit_log
 ```
 
+A name with the default schema is the table: `public.invoices` is `invoices`. This is also true for a string, for example `billing.invoices` with `'schema' => 'billing'`.
+
 `--all` prints the name of each table, for example `Table billing.invoices`, and the comment of each base gives the command for its table, for example `run make:model billing.invoices`.
 
-A name can be in the list one time only, without regard to case. A name with a schema that the list does not have stops Crest before it reads the database:
+A name can be in the list one time only, without regard to case. In a command and in `--exclude`, a name with a schema that the list does not have stops Crest before it reads the database:
 
 ```text
 crest: the schema 'crm' of 'crm.customers' is not in models.schema
 ```
+
+A `models.classes` key for such a schema gives a note with `--all`, as a key for a table that the database does not have. Two `models.classes` keys for one table, for example `users` and `public.users`, stop Crest.
 
 A name with no schema that the default schema does not have stops `make:model`. When other schemas of the list have the table, the error gives their names:
 
