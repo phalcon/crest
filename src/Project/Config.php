@@ -39,6 +39,8 @@ use function trim;
  *
  * crest.php marks a crest project, and it is required (D07). The project root
  * is the folder of the crest.php that the root rule finds (see file()).
+ *
+ * @internal A package uses ProjectContext, from Project::context().
  */
 final class Config implements ProjectContext
 {
