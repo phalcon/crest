@@ -124,7 +124,14 @@ final class ModelRelations
                 $stored,
                 $file,
                 '',
-                sprintf('the table %s is in another schema', $reference->getReferencedTable())
+                // With a list of schemas (#86), the key points to a schema
+                // that the list does not have.
+                true === $names->isList()
+                    ? sprintf(
+                        'the schema %s is not in models.schema',
+                        $names->schemaOf($reference->getReferencedTable())
+                    )
+                    : sprintf('the table %s is in another schema', $reference->getReferencedTable())
             );
         }
 
@@ -140,7 +147,7 @@ final class ModelRelations
             foreach ($references as $reference) {
                 // More than one key to this table: the alias of each key
                 // makes the aliases different.
-                $by = 1 < count($references) ? 'By' . self::keyAlias($reference) : '';
+                $by = 1 < count($references) ? 'By' . self::keyAlias($reference, $names) : '';
 
                 $drafts[] = self::draft(
                     self::HAS_MANY,
@@ -335,7 +342,7 @@ final class ModelRelations
             return self::skip($relation, $exception->getMessage());
         }
 
-        $rules                  = $belongsTo ? self::keyAlias($reference) : $class . $by;
+        $rules                  = $belongsTo ? self::keyAlias($reference, $names) : $class . $by;
         $relation['fields']     = $belongsTo ? $keyNames : $otherNames;
         $relation['class']      = '\\' . $namespace . '\\' . $class;
         $relation['referenced'] = $belongsTo ? $otherNames : $keyNames;
@@ -400,11 +407,11 @@ final class ModelRelations
      * The alias of a belongsTo() (spec 3.2): the key column without `_id`, as
      * fromTable() joins a name (`customer_id` gives Customer). If the key has
      * more than one column, or the column gives no name, the alias comes from
-     * the name of the referenced table (`customers` gives Customers). A line
-     * of `models.classes` does not change it. An alias is not a class name, so a
+     * the name of the referenced table (`customers` gives Customers), with no
+     * schema (#86). A line of `models.classes` does not change it. An alias is not a class name, so a
      * reserved word is a correct alias.
      */
-    private static function keyAlias(ReferenceInterface $reference): string
+    private static function keyAlias(ReferenceInterface $reference, ModelNames $names): string
     {
         $keys = array_values($reference->getColumns());
 
@@ -416,7 +423,7 @@ final class ModelRelations
             }
         }
 
-        return ClassName::studly($reference->getReferencedTable());
+        return ClassName::studly($names->tableOf($reference->getReferencedTable()));
     }
 
     /**

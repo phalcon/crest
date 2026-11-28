@@ -24,6 +24,7 @@ use Crest\Project\Config;
 use Crest\Project\Flavor;
 use Crest\Project\Locator;
 
+use function implode;
 use function is_array;
 use function ksort;
 use function sort;
@@ -151,7 +152,7 @@ final class ShowCommand extends ProjectCommand
         // A null value counts as no value, as in ModelNames::of() (#53, #70).
         $declared = static fn (string $key): bool => true === is_array($models) && true === isset($models[$key]);
 
-        $schema = $names->schema();
+        $schema = [] === $names->schemas() ? null : implode(', ', $names->schemas());
 
         return [
             [

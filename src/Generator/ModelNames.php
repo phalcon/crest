@@ -17,10 +17,15 @@ use Crest\Console\Exceptions\Exception;
 use Phalcon\Db\Adapter\AdapterInterface;
 use Phalcon\Mvc\Model;
 
+use function array_diff;
+use function array_filter;
+use function array_is_list;
 use function array_keys;
 use function array_map;
+use function array_unique;
 use function array_values;
 use function count;
+use function implode;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -31,7 +36,10 @@ use function preg_match;
 use function property_exists;
 use function sort;
 use function sprintf;
+use function str_contains;
+use function strpos;
 use function strtolower;
+use function substr;
 use function trim;
 
 use const SORT_STRING;
@@ -53,9 +61,10 @@ use const SORT_STRING;
  * the bases (withStored()). ModelTables and ModelRelations get the names
  * here, so the relations use the property names of both tables.
  *
- * models.schema (#69) is the schema of each table of the project. The reads
- * get it through schemaOf() for one table, and through schema() for the
- * list of the tables.
+ * models.schema (#69, #86) is one schema or a list of schemas. The first is
+ * the default schema. A name with no schema is a table of the default schema,
+ * and a table of another schema is <schema>.<table> (name()). The reads get
+ * the schema of a name through schemaOf(), and its table through tableOf().
  *
  * @phpstan-import-type Names from GeneratorTypes
  */
@@ -70,7 +79,8 @@ final class ModelNames
 
     /**
      * @param array<string, string>                   $classes models.classes: the table and its class
-     * @param string|null                             $schema  models.schema: the schema of the tables, or null
+     * @param list<string>                            $schemas models.schema: the schemas, the first is the
+     *                                                         default; empty for no key
      * @param bool                                    $getSet  models.getSet: a getter and a setter for each
      *                                                         property (#70)
      * @param array<string, Names>                    $stored  The PropertyName attributes of each base, by table
@@ -78,16 +88,19 @@ final class ModelNames
      * @param array<string, array<array-key, string>> $given   --property: the column and its name, by table
      * @param array<string, string>                   $failed  The reason, by table, for a base that crest cannot
      *                                                         read
+     * @param array<string, list<string>>             $byClass The names of withTables(), by the class of each
+     *                                                         name in lowercase (#86)
      */
     private function __construct(
         private readonly array $classes,
         private readonly bool $camelCase,
-        private readonly ?string $schema,
+        private readonly array $schemas,
         private readonly bool $getSet,
         private readonly array $stored = [],
         private readonly array $files = [],
         private readonly array $given = [],
         private readonly array $failed = [],
+        private readonly array $byClass = [],
     ) {
     }
 
@@ -132,15 +145,7 @@ final class ModelNames
             throw new Exception('crest.php: models.getSet must be true or false');
         }
 
-        // A null value counts as no value. Crest keeps the value as the file
-        // gives it.
-        $schema = $models['schema'] ?? null;
-
-        if (null !== $schema && (false === is_string($schema) || '' === trim($schema))) {
-            throw new Exception('crest.php: models.schema must be the name of a schema');
-        }
-
-        return new self(self::classes($classes), $camelCase, $schema, $getSet);
+        return new self(self::classes($classes), $camelCase, self::schemaList($models['schema'] ?? null), $getSet);
     }
 
     /**
@@ -239,6 +244,53 @@ final class ModelNames
     }
 
     /**
+     * Checks models.schema (#86): a name, or a list of names with no name two
+     * times. A null value counts as no value. Crest keeps each name as the
+     * file gives it. The compare of two names is without regard to case: two
+     * names that differ only in case are a mistake.
+     *
+     * @return list<string>
+     */
+    private static function schemaList(mixed $schema): array
+    {
+        if (null === $schema) {
+            return [];
+        }
+
+        if (true === is_string($schema) && '' !== trim($schema)) {
+            return [$schema];
+        }
+
+        if (false === is_array($schema) || false === array_is_list($schema)) {
+            throw new Exception('crest.php: models.schema must be the name of a schema, or a list of names');
+        }
+
+        if ([] === $schema) {
+            throw new Exception('crest.php: models.schema is an empty list; give one schema or more');
+        }
+
+        $seen = [];
+
+        foreach ($schema as $index => $entry) {
+            if (false === is_string($entry) || '' === trim($entry)) {
+                throw new Exception(
+                    sprintf('crest.php: models.schema: entry %d must be the name of a schema', $index + 1)
+                );
+            }
+
+            $lower = strtolower($entry);
+
+            if (true === in_array($lower, $seen, true)) {
+                throw new Exception(sprintf("crest.php: models.schema has the schema '%s' two times", $entry));
+            }
+
+            $seen[] = $lower;
+        }
+
+        return $schema;
+    }
+
+    /**
      * A property name that the base can declare: an identifier, and not a
      * property of the Phalcon model. A typed property with the name of a
      * property of the model is a fatal error, also when that property is
@@ -282,27 +334,76 @@ final class ModelNames
     }
 
     /**
+     * Stops when the name has a schema that models.schema does not have
+     * (#86). The list gives the schemas of the project. The compare keeps the
+     * case, because PostgreSQL keeps it.
+     */
+    public function checkName(string $name): void
+    {
+        $schema = $this->schemaOf($name);
+
+        if (true === str_contains($name, '.') && false === in_array($schema, $this->schemas, true)) {
+            throw new Exception(sprintf("the schema '%s' of '%s' is not in models.schema", $schema, $name));
+        }
+    }
+
+    /**
      * Stops when models.schema has a value and the db service is SQLite,
      * which has no schemas (spec 3.4). The check needs the adapter, so it
      * runs after the boot.
      */
     public function checkSchema(AdapterInterface $adapter): void
     {
-        if (null !== $this->schema && 'sqlite' === $adapter->getType()) {
+        if ([] !== $this->schemas && 'sqlite' === $adapter->getType()) {
             throw new Exception(sprintf(
                 "crest.php: models.schema is '%s', but SQLite has no schemas; remove the key",
-                $this->schema
+                implode(', ', $this->schemas)
             ));
         }
     }
 
     /**
-     * The line of models.classes, else ClassName::fromTable(), which stops
-     * for a table that gives no usable class.
+     * The line of models.classes, else ClassName::fromTable() of the table
+     * part of the name, which stops for a table that gives no usable class.
+     *
+     * A table of another schema with no line stops when another name of
+     * withTables() gives the same class, without regard to case (#86). The
+     * table of the default schema keeps the class, so the message names only
+     * the name of the call. With no table of the default schema in the
+     * group, one line fixes the clash, so the message names each name with a
+     * schema.
      */
     public function classOf(string $table): string
     {
-        return $this->classes[$table] ?? ClassName::fromTable($table);
+        if (true === isset($this->classes[$table])) {
+            return $this->classes[$table];
+        }
+
+        $class = ClassName::fromTable($this->tableOf($table));
+
+        if (false === str_contains($table, '.')) {
+            return $class;
+        }
+
+        $group = $this->byClass[strtolower($class)] ?? [];
+
+        if ([] === array_diff($group, [$table])) {
+            return $class;
+        }
+
+        $group = array_unique([...$group, $table]);
+
+        sort($group, SORT_STRING);
+
+        $default = array_filter($group, static fn (string $name): bool => false === str_contains($name, '.'));
+        $named   = [] === $default ? $group : [$table];
+
+        throw new Exception(sprintf(
+            'the tables %s give the class %s; add %s to models.classes',
+            Sentence::join($group),
+            $class,
+            implode(' or ', array_map(static fn (string $name): string => "'" . $name . "'", $named))
+        ));
     }
 
     /**
@@ -358,6 +459,15 @@ final class ModelNames
     }
 
     /**
+     * Two schemas or more (#86). Then the reads use getReferencedSchema() for
+     * the schema of a key. One schema, or no key, gives the reads of #69.
+     */
+    public function isList(): bool
+    {
+        return 1 < count($this->schemas);
+    }
+
+    /**
      * The tables of models.classes, as strings: for the notes of --all
      * (ModelTables), for config:show, and for the old files of make:model
      * (#71).
@@ -367,6 +477,16 @@ final class ModelNames
     public function mapped(): array
     {
         return array_map(static fn (int | string $table): string => (string) $table, array_keys($this->classes));
+    }
+
+    /**
+     * The name of a table of a schema (#86): the table for the default
+     * schema, else <schema>.<table>. A null schema is the default schema of
+     * the connection.
+     */
+    public function name(?string $schema, string $table): string
+    {
+        return null === $schema || $schema === $this->schema() ? $table : $schema . '.' . $table;
     }
 
     /**
@@ -440,23 +560,45 @@ final class ModelNames
     }
 
     /**
-     * The schema of the run, for the reads that list the tables (spec 3.2),
-     * or null for the default schema of the connection.
+     * The default schema: the first schema of models.schema, or null for the
+     * default schema of the connection.
      */
     public function schema(): ?string
     {
-        return $this->schema;
+        return $this->schemas[0] ?? null;
     }
 
     /**
-     * The schema of one table, or null for the default schema of the
-     * connection. For now each table has the one schema of models.schema,
-     * so the table is not used. A later issue gives each table its own
-     * schema here (spec 3.12).
+     * The schema of a name: the text before the first dot of
+     * <schema>.<table>, else the default schema (#86).
      */
-    public function schemaOf(string $table): ?string
+    public function schemaOf(string $name): ?string
     {
-        return $this->schema;
+        $dot = strpos($name, '.');
+
+        return false === $dot ? $this->schema() : substr($name, 0, $dot);
+    }
+
+    /**
+     * The schemas of models.schema, in the order of the file. Empty for no
+     * key.
+     *
+     * @return list<string>
+     */
+    public function schemas(): array
+    {
+        return $this->schemas;
+    }
+
+    /**
+     * The table of a name: the text after the first dot of <schema>.<table>,
+     * else the name.
+     */
+    public function tableOf(string $name): string
+    {
+        $dot = strpos($name, '.');
+
+        return false === $dot ? $name : substr($name, $dot + 1);
     }
 
     /**
@@ -471,12 +613,13 @@ final class ModelNames
         return new self(
             $this->classes,
             $this->camelCase,
-            $this->schema,
+            $this->schemas,
             $this->getSet,
             $this->stored,
             $this->files,
             $this->given,
-            $failed
+            $failed,
+            $this->byClass
         );
     }
 
@@ -493,12 +636,13 @@ final class ModelNames
         return new self(
             $this->classes,
             $this->camelCase,
-            $this->schema,
+            $this->schemas,
             $this->getSet,
             $this->stored,
             $this->files,
             $all,
-            $this->failed
+            $this->failed,
+            $this->byClass
         );
     }
 
@@ -518,12 +662,48 @@ final class ModelNames
         return new self(
             $this->classes,
             $this->camelCase,
-            $this->schema,
+            $this->schemas,
             $this->getSet,
             $all,
             $files,
             $this->given,
-            $this->failed
+            $this->failed,
+            $this->byClass
+        );
+    }
+
+    /**
+     * The names of the tables of the database (#86): ModelTables and
+     * ForeignKeys give them. classOf() uses them to find two tables that give
+     * one class. A name that gives no class is not in the map: classOf()
+     * stops for it.
+     *
+     * @param list<string> $names
+     */
+    public function withTables(array $names): self
+    {
+        $byClass = [];
+
+        foreach ($names as $name) {
+            try {
+                $class = $this->classes[$name] ?? ClassName::fromTable($this->tableOf($name));
+            } catch (Exception) {
+                continue;
+            }
+
+            $byClass[strtolower($class)][] = $name;
+        }
+
+        return new self(
+            $this->classes,
+            $this->camelCase,
+            $this->schemas,
+            $this->getSet,
+            $this->stored,
+            $this->files,
+            $this->given,
+            $this->failed,
+            $byClass
         );
     }
 

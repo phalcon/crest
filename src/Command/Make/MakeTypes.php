@@ -39,6 +39,7 @@ use Crest\Generator\ModelRelations;
  *     renamed: array<string, array{string, string}>|null,
  *     run: list<string>,
  *     schema: string|null,
+ *     source: string,
  *     table: string
  * }
  */

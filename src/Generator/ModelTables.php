@@ -34,7 +34,9 @@ use const SORT_STRING;
  * The tables that make:model --all writes (#52, spec 3.2): the tables of the
  * database, with no views, no internal tables of SQLite, and no tables of
  * --exclude. With --views (#88), the views too. With models.schema (#69), the
- * tables and the views are those of the schema. Each table gets its class here, before crest writes a file. A
+ * tables and the views are those of the schema. With a list of schemas (#86),
+ * they are those of each schema, and a table of a schema that is not the
+ * default is <schema>.<table>. Each table gets its class here, before crest writes a file. A
  * table that gives no class, or that gives the class of another table,
  * fails: crest writes the other tables, and lists the failed tables at the
  * end.
@@ -65,6 +67,48 @@ final class ModelTables
     }
 
     /**
+     * The names of the tables and of the views of each schema of
+     * models.schema (#86), by ModelNames::name(). With no key, those of the
+     * default schema of the connection. MySQL and PostgreSQL also list the
+     * views as tables, SQLite does not.
+     *
+     * @return array{list<string>, list<string>} The tables, and the views
+     */
+    public static function listed(AdapterInterface $adapter, ModelNames $names): array
+    {
+        $listed = [];
+        $views  = [];
+
+        foreach ([] === $names->schemas() ? [null] : $names->schemas() as $schema) {
+            // MySQL and MariaDB throw for a schema that does not exist.
+            // PostgreSQL gives no tables (spec 3.7). With no schema, the
+            // error does not change.
+            try {
+                $found = $adapter->listTables($schema);
+            } catch (PDOException $exception) {
+                if (null === $schema) {
+                    throw $exception;
+                }
+
+                throw new Exception(
+                    sprintf("the schema '%s' cannot be read: %s", $schema, $exception->getMessage()),
+                    previous: $exception
+                );
+            }
+
+            foreach ($found as $table) {
+                $listed[] = $names->name($schema, $table);
+            }
+
+            foreach ($adapter->listViews($schema) as $view) {
+                $views[] = $names->name($schema, $view);
+            }
+        }
+
+        return [$listed, $views];
+    }
+
+    /**
      * The tables of the database for --all. A name of --exclude that the
      * database does not have stops crest before it writes a file: with a
      * typo, crest would write the table that the user wants to skip.
@@ -79,25 +123,14 @@ final class ModelTables
         ModelNames $names,
         bool $withViews = false
     ): self {
-        $schema = $names->schema();
-
-        // MySQL and MariaDB throw for a schema that does not exist.
-        // PostgreSQL gives no tables (spec 3.7). With no schema, the error
-        // does not change.
-        try {
-            $listed = $adapter->listTables($schema);
-        } catch (PDOException $exception) {
-            if (null === $schema) {
-                throw $exception;
-            }
-
-            throw new Exception(
-                sprintf("the schema '%s' cannot be read: %s", $schema, $exception->getMessage()),
-                previous: $exception
-            );
+        // A name of --exclude with a schema that the list does not have
+        // stops before a read: with a typo, crest would write the table.
+        foreach ($exclude as $name) {
+            $names->checkName($name);
         }
 
-        $views  = $adapter->listViews($schema);
+        [$listed, $views] = self::listed($adapter, $names);
+
         $sqlite = 'sqlite' === $adapter->getType();
         $tables = [];
 
@@ -156,7 +189,7 @@ final class ModelTables
 
         sort($tables, SORT_STRING);
 
-        [$classes, $failed] = self::classes($tables, $names);
+        [$classes, $failed] = self::classes($tables, $names->withTables([...$listed, ...$views]));
 
         return new self($classes, $failed, $notes, $tables);
     }
