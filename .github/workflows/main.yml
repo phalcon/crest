@@ -543,16 +543,47 @@ jobs:
           DATA_POSTGRES_SCHEMA: public
         run: composer test-db-pgsql
 
-  # Mutation testing is not a job here yet. Infection runs locally only, and is
-  # not a dependency: `composer require --dev infection/infection`, then
-  # `composer infection` (gated at MSI 100 by resources/infection.json5), then
-  # `composer remove --dev infection/infection`.
-  #
-  # The blocker is the PHP floor: at ^8.1 composer can only resolve
-  # thecodingmachine/safe to dev-master, which eagerly autoloads its function
-  # files and floods 8.4+ runs with deprecation notices. Once the floor moves
-  # past 8.1 a stable Safe release becomes resolvable and this becomes a
-  # standard job alongside the others.
+  # Mutation testing of all of src/, on each push and pull request, gated at
+  # MSI 100 by resources/infection.json5. PHP 8.4 with phalcon/phalcon (v6), so
+  # no extension; the config runs resources/full, the unit and the SQLite
+  # tests. It waits only for the quality job, not for the slower test jobs.
+  infection:
+    name: "Mutation tests (PHP 8.4, Phalcon v6)"
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    needs:
+      - quality
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.4'
+          extensions: ${{ env.EXTENSIONS }}
+          coverage: pcov
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Install dependencies with Composer"
+        uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
+        with:
+          composer-options: "--prefer-dist"
+
+      # --logger-github puts each escaped mutant on its line.
+      - name: "Infection"
+        run: composer infection -- --logger-github --no-progress
+
   coverage:
     name: "Coverage, SonarQube and octocov"
 
