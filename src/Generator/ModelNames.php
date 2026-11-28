@@ -25,7 +25,6 @@ use function array_map;
 use function array_unique;
 use function array_values;
 use function count;
-use function current;
 use function implode;
 use function in_array;
 use function is_array;
@@ -415,10 +414,12 @@ final class ModelNames
         // it for billing.Payments: then the name is the listed name. When the
         // name is listed, a name in another case is another table
         // (PostgreSQL).
-        $same = array_filter($group, static fn (string $name): bool => strtolower($name) === strtolower($table));
-
-        if (false === in_array($table, $group, true) && [] !== $same) {
-            $table = (string) current($same);
+        if (false === in_array($table, $group, true)) {
+            foreach ($group as $name) {
+                if (strtolower($name) === strtolower($table)) {
+                    $table = $name;
+                }
+            }
         }
 
         if ([] === array_diff($group, [$table])) {
