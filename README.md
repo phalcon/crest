@@ -15,22 +15,16 @@
 [![OpenCollective Backers][oc-backers-badge]][oc-backers-link]
 [![OpenCollective Sponsors][oc-sponsors-badge]][oc-sponsors-link]
 
-Crest is a command line application for Phalcon. It generates code, shows information
-about a project, and creates and runs projects. For the two flavors of project that Crest
-works with, MVC (Model-View-Controller) and ADR (Action-Domain-Responder), see
-[Overview](docs/index.md#overview).
+Crest is a command line application for Phalcon. It generates code, shows information about a project, and creates and runs projects. For the two flavors of project that Crest works with, MVC (Model-View-Controller) and ADR (Action-Domain-Responder), see [Overview](docs/index.md#overview).
 
 ## Requirements
 
 - PHP `^8.1`, with the `tokenizer` extension (`ext-tokenizer`; PHP turns it on by default)
-- Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the
-  `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
+- Phalcon v5, the `ext-phalcon` C extension (`^5.18`), or Phalcon v6, the `phalcon/phalcon` PHP implementation (`^6`). Crest itself needs neither of them to run
 
 ## Install
 
-Crest has no tagged release yet. Packagist has only the version `dev-master`, and the
-default `minimum-stability` of composer is `stable`. Thus give the version in the
-`composer require` command.
+Crest has no tagged release yet. Packagist has only the version `dev-master`, and the default `minimum-stability` of composer is `stable`. Thus give the version in the `composer require` command.
 
 In a project, install Crest as a dev dependency:
 
@@ -38,12 +32,9 @@ In a project, install Crest as a dev dependency:
 composer require --dev phalcon/crest:dev-master
 ```
 
-This copy is the project Crest, in `vendor/bin/crest`. It runs the commands that work on
-the project, for example the generators (the `make:*` commands). See
-[The global Crest and the project Crest](docs/index.md#the-global-crest-and-the-project-crest).
+This copy is the project Crest, in `vendor/bin/crest`. It runs the commands that work on the project, for example the generators (the `make:*` commands). See [The global Crest and the project Crest](docs/index.md#the-global-crest-and-the-project-crest).
 
-To create projects, also install Crest globally. This copy is the global Crest. The global
-composer `vendor/bin` folder must be in your `PATH`:
+To create projects, also install Crest globally. This copy is the global Crest. The global composer `vendor/bin` folder must be in your `PATH`:
 
 ```bash
 composer global require phalcon/crest:dev-master
@@ -51,22 +42,16 @@ composer global require phalcon/crest:dev-master
 
 ## Quick start
 
-`crest new` creates a project (see [Creating a project](docs/index.md#creating-a-project)). Run it with
-the global Crest of [Install](#install). On a host with docker and no PHP, use
-[With Docker only](#with-docker-only) instead.
+`crest new` creates a project (see [Creating a project](docs/index.md#creating-a-project)). Run it with the global Crest of [Install](#install). On a host with docker and no PHP, use [With Docker only](#with-docker-only) instead.
 
 ```bash
 crest new my-app                      # create an MVC project
 crest new my-app --flavor=adr         # create an ADR project
 ```
 
-In a terminal, `new` asks for each value that no option gives. An empty answer takes the
-default (see [Creating a project](docs/index.md#creating-a-project)).
+In a terminal, `new` asks for each value that no option gives. An empty answer takes the default (see [Creating a project](docs/index.md#creating-a-project)).
 
-For an MVC project with no database, the output of `new` gives two ways to run the
-project. With docker, you use `./crest`, a script that `crest new` writes into the project
-(see [The launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next
-two sections explain each way. The output is:
+For an MVC project with no database, the output of `new` gives two ways to run the project. With docker, you use `./crest`, a script that `crest new` writes into the project (see [The launcher](docs/index.md#the-launcher)). With PHP on the host, you use `crest serve`. The next two sections explain each way. The output is:
 
 ```text
 Created my-app/
@@ -96,15 +81,11 @@ cd my-app
 ./crest install
 ```
 
-`./crest up` starts the containers. `./crest install` installs the composer dependencies
-(see [The launcher](docs/index.md#the-launcher)). A v5 project compiles the Phalcon extension in
-`./crest up`. This takes some minutes. Then `GET /` answers on http://localhost:8080/.
+`./crest up` starts the containers. `./crest install` installs the composer dependencies (see [The launcher](docs/index.md#the-launcher)). A v5 project compiles the Phalcon extension in `./crest up`. This takes some minutes. Then `GET /` answers on http://localhost:8080/.
 
 ### With PHP on the host
 
-Without docker, create the project with `crest new my-app --runtime=host`: the project
-Crest then runs with the PHP of the host (see [The runtime](docs/index.md#the-runtime)). With PHP and
-composer on the host, run:
+Without docker, create the project with `crest new my-app --runtime=host`: the project Crest then runs with the PHP of the host (see [The runtime](docs/index.md#the-runtime)). With PHP and composer on the host, run:
 
 ```bash
 cd my-app
@@ -112,38 +93,29 @@ composer install
 crest serve
 ```
 
-`crest serve` starts PHP's built-in web server for the project (see
-[Running a project](docs/index.md#running-a-project)). By default, `crest serve` listens on
-`127.0.0.1:8080`.
+`crest serve` starts PHP's built-in web server for the project (see [Running a project](docs/index.md#running-a-project)). By default, `crest serve` listens on `127.0.0.1:8080`.
 
 ### With Docker only
 
-On a host with docker and no PHP, one command creates a project, starts it and installs
-it, as in [With Docker](#with-docker). The command downloads the
-[`crest-setup` script](docs/index.md#the-setup-script) and runs it. `my-app` is the name of the
-project:
+On a host with docker and no PHP, one command creates a project, starts it and installs it, as in [With Docker](#with-docker). The command downloads the [`crest-setup` script](docs/index.md#the-setup-script) and runs it. `my-app` is the name of the project:
 
 ```bash
 curl -fsSL https://phalcon.io/crest-setup | sh -s -- my-app
 ```
 
-Then `GET /` answers on http://localhost:8080/. On Windows, run the command in the
-Windows Subsystem for Linux (WSL2).
+Then `GET /` answers on http://localhost:8080/. On Windows, run the command in the Windows Subsystem for Linux (WSL2).
 
-For another port, set `APP_PORT`. The script writes it into the project `.env`, the file
-of settings that docker compose reads (see [The launcher](docs/index.md#the-launcher)):
+For another port, set `APP_PORT`. The script writes it into the project `.env`, the file of settings that docker compose reads (see [The launcher](docs/index.md#the-launcher)):
 
 ```bash
 curl -fsSL https://phalcon.io/crest-setup | APP_PORT=9000 sh -s -- my-app
 ```
 
-[The setup script](docs/index.md#the-setup-script) gives the details: the options, the errors, and how
-to read the script before it runs.
+[The setup script](docs/index.md#the-setup-script) gives the details: the options, the errors, and how to read the script before it runs.
 
 ## Documentation
 
-The full documentation is in [docs/index.md](docs/index.md). The same text is on the
-Phalcon site: <https://docs.phalcon.io/6.0/crest/>.
+The full documentation is in [docs/index.md](docs/index.md). The same text is on the Phalcon site: <https://docs.phalcon.io/6.0/crest/>.
 
 ## Development
 
@@ -155,33 +127,22 @@ docker exec crest-app composer cs
 docker exec crest-app composer analyze
 ```
 
-Set `PHALCON_VARIANT=v6` in `.env` and rebuild to test against `phalcon/phalcon` instead
-of the C extension.
+Set `PHALCON_VARIANT=v6` in `.env` and rebuild to test against `phalcon/phalcon` instead of the C extension.
 
 ### Database tests
 
-`make:model` reads the database of the project. Its tests are in `tests/Database`, and they run on
-SQLite, MySQL 8.4, MariaDB 11.4 and PostgreSQL 18. `docker compose up -d` starts the servers as the
-services `mysql`, `mariadb` and `postgres`. The `DATA_*` lines of `resources/.env.example` tell the
-tests where the servers are: copy them into `.env`, then run
-`docker compose up -d --build --force-recreate`, so that `crest-app` gets the new values.
+`make:model` reads the database of the project. Its tests are in `tests/Database`, and they run on SQLite, MySQL 8.4, MariaDB 11.4 and PostgreSQL 18. `docker compose up -d` starts the servers as the services `mysql`, `mariadb` and `postgres`. The `DATA_*` lines of `resources/.env.example` tell the tests where the servers are: copy them into `.env`, then run `docker compose up -d --build --force-recreate`, so that `crest-app` gets the new values.
 
 ```bash
 docker exec crest-app composer test-db
 docker exec crest-app composer test-db-sqlite
 ```
 
-`test-db` runs the four suites. `test-db-sqlite`, `test-db-mysql`, `test-db-mariadb` and
-`test-db-pgsql` run one suite. `composer test` runs no database test. `composer test-coverage` and
-Infection run the unit tests and the SQLite tests in one run (`resources/full/phpunit.xml`).
+`test-db` runs the four suites. `test-db-sqlite`, `test-db-mysql`, `test-db-mariadb` and `test-db-pgsql` run one suite. `composer test` runs no database test. `composer test-coverage` and Infection run the unit tests and the SQLite tests in one run (`resources/full/phpunit.xml`).
 
-**Warning:** a database suite removes each table of its database, before and after each test. The
-`DATA_*` values must name a database that only the tests use. Run one suite at a time on a database.
-A MySQL, MariaDB or PostgreSQL suite stops when its `DATA_*_NAME` value is not set.
+**Warning:** a database suite removes each table of its database, before and after each test. The `DATA_*` values must name a database that only the tests use. Run one suite at a time on a database. A MySQL, MariaDB or PostgreSQL suite stops when its `DATA_*_NAME` value is not set.
 
-A container built with `PHALCON_VARIANT=v6` has no C extension, so the commands above run the v6
-path. To run the v6 path in the v5 container, use `php -n`. `php -n` does not load the C extension,
-`pdo_mysql` or `pdo_pgsql`, so load the PDO driver with `-d extension=`:
+A container built with `PHALCON_VARIANT=v6` has no C extension, so the commands above run the v6 path. To run the v6 path in the v5 container, use `php -n`. `php -n` does not load the C extension, `pdo_mysql` or `pdo_pgsql`, so load the PDO driver with `-d extension=`:
 
 ```bash
 docker exec crest-app php -n vendor/bin/phpunit -c resources/phpunit.sqlite.xml
