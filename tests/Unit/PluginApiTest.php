@@ -21,6 +21,7 @@ use Crest\Console\Exceptions\Exception;
 use Crest\Console\Input;
 use Crest\Console\Output;
 use Crest\Console\Parsing\Definition;
+use Crest\Project\Config;
 use Crest\Project\ProjectContext;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -79,6 +80,12 @@ final class PluginApiTest extends TestCase
     public function testTheMethodsOfProject(): void
     {
         $this->assertSame(['context'], $this->published(Project::class));
+    }
+
+    public function testTheProjectConfigIsInternal(): void
+    {
+        // A package reads the project through ProjectContext, the API.
+        $this->assertStringContainsString('@internal', $this->docblock(Config::class));
     }
 
     /**

@@ -2020,7 +2020,7 @@ These types are the API for a package. Each type has `@api` in its docblock:
 
 `Project::context()` finds the project as the other commands do (see [The project file](#the-project-file)). Without `crest.php`, the command stops with the `crest init` hint.
 
-A public element with `@internal` in its docblock is not part of the API, and it can change in any release. Tools that read the tag, for example an IDE or a rule of a static analyzer, can report its use from another package. Do not extend `Crest\Command\ProjectCommand`: it is the base of the commands of Crest, and it changes with them.
+A public element with `@internal` in its docblock is not part of the API, and it can change in any release. Tools that read the tag, for example an IDE or a rule of a static analyzer, can report its use from another package. Do not extend `Crest\Command\ProjectCommand`: it is the base of the commands of Crest, and it changes with them. Do not use `Crest\Project\Config`: `Project::context()` gives the project as a `ProjectContext`.
 
 ## Command reference
 
